@@ -1,0 +1,44 @@
+name: Feature request
+description: اقترح ميزة مرتبطة بمشكلة مثبتة وقيمة قابلة للقياس.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: المشكلة الحالية
+      description: من المتأثر، وكيف تُحل المشكلة الآن، وما تكلفتها؟
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: النتيجة المطلوبة
+      description: صف النتيجة للمستخدم، لا الحل التقني المفترض.
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: معيار النجاح
+      description: ما القياس الذي يثبت أن الميزة حققت قيمة؟
+    validations:
+      required: true
+  - type: dropdown
+    id: persona
+    attributes:
+      label: المستخدم الأساسي
+      options:
+        - Owner / Admin
+        - Teacher
+        - Receptionist / Accountant
+        - Student
+        - Guardian
+    validations:
+      required: true
+  - type: textarea
+    id: exclusions
+    attributes:
+      label: خارج النطاق
+      description: ما الذي لا يجب أن تتضمنه النسخة الأولى؟

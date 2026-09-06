@@ -1,0 +1,45 @@
+name: Database migration
+description: خطط لتغيير Schema أو RLS أو بيانات مرجعية بأمان.
+title: "db: "
+labels:
+  - database
+body:
+  - type: textarea
+    id: change
+    attributes:
+      label: التغيير المطلوب
+      description: الجداول أو القيود أو السياسات المتأثرة وسبب التغيير.
+    validations:
+      required: true
+  - type: textarea
+    id: tenant_isolation
+    attributes:
+      label: Tenant isolation وRLS
+      description: اذكر سياسات الوصول واختبارات العزل الموجبة والسالبة.
+    validations:
+      required: true
+  - type: textarea
+    id: rollout
+    attributes:
+      label: خطة التطبيق
+      description: ترتيب Preview ثم Production، والتوافق مع الكود القديم والجديد.
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: خطة التعافي
+      description: كيف نوقف الأثر أو نستعيد الخدمة دون تعديل migration مطبقة؟
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: بوابة الأمان
+      options:
+        - label: سأضيف migration جديدة forward-only.
+          required: true
+        - label: لن أضع IDs مولدة أو أسرارًا داخل migration.
+          required: true
+        - label: سأراجع Security وPerformance Advisors بعد التطبيق.
+          required: true

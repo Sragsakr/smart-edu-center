@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: خطة التنفيذ
+    url: https://github.com/Sragsakr/smart-edu-center/blob/main/docs/TECHNICAL_EXECUTION_BACKLOG.md
+    about: راجع التاسك الحالية وترتيب الاعتماديات قبل فتح Issue.

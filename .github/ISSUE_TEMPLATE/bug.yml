@@ -1,0 +1,51 @@
+name: Bug report
+description: بلّغ عن سلوك خاطئ أو Regression قابل لإعادة الإنتاج.
+title: "fix: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: المشكلة
+      description: ما الذي حدث، وما الأثر على المستخدم أو التشغيل؟
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: خطوات إعادة الإنتاج
+      placeholder: |
+        1. افتح...
+        2. نفّذ...
+        3. لاحظ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: السلوك المتوقع
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: البيئة
+      options:
+        - Development
+        - Preview
+        - Production
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: الأدلة
+      description: رسائل الخطأ أو logs منقّحة من البيانات الحساسة، ولقطات الشاشة عند الحاجة.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: فحص الخصوصية
+      options:
+        - label: أزلت كلمات المرور والمفاتيح والبيانات الشخصية من البلاغ.
+          required: true
