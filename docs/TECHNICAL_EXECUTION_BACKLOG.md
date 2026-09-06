@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_TECHNICAL_EPIC: FND-008 — CI/CD
-CURRENT_TECHNICAL_TASK: FND-008-04 — ربط Preview Deployment بالـPR
-NEXT_TECHNICAL_TASK: FND-008-05 — إضافة Dependency وSecret scanning
+CURRENT_TECHNICAL_TASK: FND-008-05 — إضافة Dependency وSecret scanning
+NEXT_TECHNICAL_TASK: FND-009-01 — إضافة PR وIssue templates
 ```
 
 ## قواعد التشغيل
@@ -61,7 +61,7 @@ NEXT_TECHNICAL_TASK: FND-008-05 — إضافة Dependency وSecret scanning
 - [x] `FND-008-01` إضافة GitHub Action بـNode pinned و`npm ci`.
 - [x] `FND-008-02` تشغيل lint/typecheck/build في Jobs واضحة.
 - [x] `FND-008-03` إضافة Migration drift/check وعدم تطبيق DB من PR غير معتمد.
-- [ ] `FND-008-04` ربط Preview Deployment بالـPR وحفظ URL كـCheck.
+- [x] `FND-008-04` ربط Preview Deployment بالـPR وحفظ URL كـCheck.
 - [ ] `FND-008-05` إضافة Dependency وSecret scanning.
 
 **Acceptance:** PR مكسور لا يندمج، وPR سليم ينتج Preview قابلًا للمراجعة.
@@ -381,3 +381,4 @@ NEXT_TECHNICAL_TASK: FND-008-05 — إضافة Dependency وSecret scanning
 | 2026-09-06 | FND-008-01 | `ci: add reproducible dependency install` | npm 10.9.8 ci + full local quality gate | FND-008-02 |
 | 2026-09-06 | FND-008-02 | `ci: run independent quality checks` | lint/typecheck/test/build + client scan jobs | FND-008-03 |
 | 2026-09-06 | FND-008-03 | `ci: enforce append-only migrations` | 10 tests + migration safety job without DB credentials | FND-008-04 |
+| 2026-09-06 | FND-008-04 | PR #1 | Vercel Preview Ready + all 7 PR checks passed | FND-008-05 |

@@ -58,7 +58,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 ## أوامر الجودة
 
-يشغّل GitHub Actions على كل Pull Request وعلى تحديث `main` وظائف مستقلة للـlint وtypecheck والاختبارات والبناء مع فحص Client bundle. توجد وظيفة Migration Safety تتحقق من أسماء وtransaction boundaries للـmigrations وتمنع تعديل أو حذف الملفات القائمة مقارنة بفرع الأساس؛ تعمل بلا بيانات اعتماد ولا تطبق أي تغيير على قاعدة بيانات. تستخدم الوظائف Node.js المحدد في `.nvmrc` و`npm ci`، ولا تتصل بقواعد Supabase لأن قيم البناء placeholders عامة فقط.
+يشغّل GitHub Actions على كل Pull Request وعلى تحديث `main` وظائف مستقلة للـlint وtypecheck والاختبارات والبناء مع فحص Client bundle. توجد وظيفة Migration Safety تتحقق من أسماء وtransaction boundaries للـmigrations وتمنع تعديل أو حذف الملفات القائمة مقارنة بفرع الأساس؛ تعمل بلا بيانات اعتماد ولا تطبق أي تغيير على قاعدة بيانات. تستخدم الوظائف Node.js المحدد في `.nvmrc` و`npm ci`، ولا تتصل بقواعد Supabase لأن قيم البناء placeholders عامة فقط. ينشئ تكامل Vercel Git نسخة Preview لكل Pull Request ويضيف رابطها وحالتها ضمن Checks الخاصة بالـPR.
 
 ```bash
 npm run lint
