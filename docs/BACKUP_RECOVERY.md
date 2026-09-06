@@ -17,6 +17,33 @@
 | كود التطبيق والمigrations | عالية | صفر تغييرات مدمجة | ساعتان | GitHub هو المصدر؛ الاستعادة من Commit معروف وإعادة نشر Vercel. |
 | إعدادات Vercel وSupabase | عالية | منذ آخر تغيير موثق | 4 ساعات | لا تُحفظ القيم السرية في Git؛ يُعاد إدخالها من لوحة الخدمة بواسطة المالك. |
 
+## سياسة Supabase الحالية
+
+المؤسسة على خطة Free. وفق [توثيق Supabase للنسخ الاحتياطي](https://supabase.com/docs/guides/platform/backups):
+
+| الخطة | النسخ المتاحة من المنصة | الاحتفاظ |
+|---|---|---:|
+| Free | لا نعتمد على نسخة تلقائية قابلة للاستعادة؛ يلزم logical export دوري خارج Supabase | حسب النسخ التي يديرها المالك |
+| Pro | Daily Backups تلقائية | آخر 7 أيام |
+| Team | Daily Backups تلقائية | آخر 14 يومًا |
+| Enterprise | Daily Backups تلقائية | حتى 30 يومًا |
+| Pro/Team/Enterprise + PITR | نقاط استعادة تعتمد WAL؛ RPO في أسوأ حالة دقيقتان | حسب مدة الإضافة المدفوعة |
+
+حتى تتم الترقية، السياسة المطلوبة لـProduction هي export كل 24 ساعة كحد أقصى باستخدام أوامر Supabase الرسمية المنفصلة للـroles والـschema والـdata، ثم حفظ الناتج مشفرًا خارج مشروع Supabase. لا تُوضع connection strings أو كلمات مرور أو ملفات dump داخل Git.
+
+[دليل Supabase للنسخ والاستعادة عبر CLI](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore) يحدد المخرجات التالية:
+
+```bash
+supabase db dump --db-url "$DATABASE_URL" -f roles.sql --role-only
+supabase db dump --db-url "$DATABASE_URL" -f schema.sql
+supabase db dump --db-url "$DATABASE_URL" -f data.sql --use-copy --data-only \
+  -x "storage.buckets_vectors" -x "storage.vector_indexes"
+```
+
+Database backups تشمل بيانات PostgreSQL و`auth.users`، لكنها لا تشمل محتوى ملفات Supabase Storage؛ تحتوي القاعدة metadata فقط. لذلك يلزم نسخ objects منفصلًا، كما يجب إعادة إدخال كلمات مرور custom roles وإعدادات Auth providers وSMTP وdomains يدويًا عند الاستعادة إذا استُخدمت.
+
+حذف مشروع Supabase يحذف بياناته ونسخه نهائيًا؛ النسخة المقبولة يجب أن تكون خارج المشروع نفسه. تُراجع هذه السياسة عند الانتقال لخطة مدفوعة وقبل تشغيل مدفوعات حقيقية لتحديد الحاجة إلى PITR.
+
 ## حدود الخدمة المقبولة
 
 - الأولوية الأولى هي إيقاف الكتابة عند الشك في سلامة البيانات، ثم حماية الدليل قبل الاستعادة.

@@ -16,7 +16,7 @@
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
 CURRENT_TASK: FND-010 — Backup & Recovery
-LAST_COMPLETED: FND-010-01 — أهداف RPO/RTO الأولية
+LAST_COMPLETED: FND-010-02 — سياسة Supabase Backup حسب الخطة
 DEFERRED: FND-009-03 بقرار المالك، وFND-009-04 حتى انضمام فريق
 ```
 
