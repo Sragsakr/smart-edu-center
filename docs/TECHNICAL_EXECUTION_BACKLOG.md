@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_TECHNICAL_EPIC: FND-007 — فصل البيئات ومتغيرات التشغيل
-CURRENT_TECHNICAL_TASK: FND-007-03 — إنشاء بيئتي Supabase وVercel للإنتاج
-NEXT_TECHNICAL_TASK: FND-007-04 — توثيق Development/Preview/Production
+CURRENT_TECHNICAL_TASK: FND-007-04 — توثيق Development/Preview/Production
+NEXT_TECHNICAL_TASK: FND-007-05 — منع تسرب الأسرار إلى Client bundle
 ```
 
 ## قواعد التشغيل
@@ -48,7 +48,7 @@ NEXT_TECHNICAL_TASK: FND-007-04 — توثيق Development/Preview/Production
 
 - [x] `FND-007-01` إنشاء `src/lib/env.ts` بعقد typed للمتغيرات العامة والخادمة وفشل واضح عند النقص.
 - [x] `FND-007-02` ضبط Supabase URL وPublishable Key في Vercel Preview فقط.
-- [ ] `FND-007-03` إنشاء Supabase/Vercel Production منفصلين قبل أول إطلاق عام.
+- [x] `FND-007-03` إنشاء Supabase/Vercel Production منفصلين قبل أول إطلاق عام.
 - [ ] `FND-007-04` توثيق Development/Preview/Production في README دون قيم سرية.
 - [ ] `FND-007-05` إضافة فحص يمنع Service Role أو Secrets من الوصول إلى Client bundle.
 
@@ -375,3 +375,4 @@ NEXT_TECHNICAL_TASK: FND-007-04 — توثيق Development/Preview/Production
 | 2026-09-06 | FND-001..006, IAM-001..002 | راجع Git history | lint/typecheck/build + Supabase Advisors | FND-007-01 |
 | 2026-09-06 | FND-007-01 | `feat: validate environment configuration` | lint/typecheck/test (4)/build + missing-env failure | FND-007-02 |
 | 2026-09-06 | FND-007-02 | `chore: configure Vercel preview environment` | Preview Ready + negative sign-in reached Supabase | FND-007-03 |
+| 2026-09-06 | FND-007-03 | `chore: provision production environment` | 13 RLS tables + Security Advisor clean + Production Ready | FND-007-04 |

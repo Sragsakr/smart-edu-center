@@ -16,7 +16,7 @@
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
 CURRENT_TASK: FND-007 — فصل البيئات ومتغيرات التشغيل
-LAST_COMPLETED: FND-007-02 — ربط Vercel Preview بمشروع Supabase Preview
+LAST_COMPLETED: FND-007-03 — إنشاء Supabase Production وربطه بـVercel Production
 ```
 
 ## مبادئ ثابتة

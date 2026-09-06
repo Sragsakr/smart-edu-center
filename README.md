@@ -8,7 +8,7 @@
 - واجهة عربية RTL متجاوبة وقابلة للتثبيت كـPWA.
 - Vertical slice أولي: لوحة الإدارة، الطلاب، البحث، وحالة السداد.
 - مخطط Supabase متعدد المستأجرين مع RLS في `supabase/migrations`.
-- بيئة Vercel Preview متصلة بمشروع Supabase المخصص حاليًا في Frankfurt؛ إعداد Production المنفصل لم يُنشأ بعد.
+- بيئتا Preview وProduction منفصلتان في Vercel، ولكل منهما مشروع Supabase مستقل في Frankfurt.
 
 ## التشغيل المحلي
 
@@ -33,13 +33,13 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 يعرّف `src/lib/env.ts` العقد العام typed ويتحقق منه عند بدء Next.js أو البناء. يفشل التشغيل برسالة تجمع المتغيرات الناقصة أو غير الصالحة بدل تمرير قيم غير معرّفة إلى Supabase. استخدم هذا العقد بدل قراءة `process.env` مباشرة داخل التطبيق.
 
-في Vercel، المتغيران مضبوطان كـConfig لبيئة Preview فقط ويرتبطان بمشروع Supabase الحالي في Frankfurt. لا تنسخ قيم Preview إلى Production؛ إعداد Production المنفصل جزء من `FND-007-03`.
+في Vercel، المتغيران مضبوطان كـConfig بقيم مستقلة لكل من Preview وProduction. يرتبط كل نطاق بمشروع Supabase منفصل في Frankfurt؛ لا تنسخ القيم بين النطاقين.
 
 لا تستخدم `service_role` في المتصفح أو في متغير يبدأ بـ`NEXT_PUBLIC_`. لا توجد متغيرات خادمية خاصة مطلوبة حاليًا؛ عند إضافتها يجب إبقاؤها في module يحمل `server-only` وعدم تصديرها عبر العقد العام.
 
 ## قاعدة البيانات
 
-طبّق ملفات `supabase/migrations` بالترتيب على مشروع Supabase المرتبط. كل جداول الأعمال تحتوي `tenant_id` ومحمية بـRLS. بعد التطبيق شغّل مستشاري Database/Security في Supabase وتحقق من عدم وجود جداول مكشوفة بلا RLS.
+طبّق ملفات `supabase/migrations` بالترتيب على مشروع Supabase المرتبط. طُبقت migrations الحالية على مشروعي Preview وProduction. كل جداول الأعمال تحتوي `tenant_id` ومحمية بـRLS. بعد أي migration جديدة، طبّقها على كل بيئة بالترتيب وشغّل مستشاري Database/Security في Supabase وتحقق من عدم وجود جداول مكشوفة بلا RLS.
 
 ## أوامر الجودة
 
