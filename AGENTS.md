@@ -10,6 +10,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Smart Edu Center — Agent Guide
 
+## Current task protocol
+
+After reading this file and `README.md`, open `docs/MASTER_DELIVERY_PLAN.md`. Work only on its `CURRENT_TASK`. When the task satisfies its acceptance and quality gates, mark it complete and advance `CURRENT_TASK` to the first unblocked task. Never skip dependencies or leave the plan stale.
+
 ## Mission
 
 Build a production-minded, Arabic-first multi-tenant center operating system. Optimize for a fast Egyptian tutoring-center pilot, not a broad generic LMS or marketplace.

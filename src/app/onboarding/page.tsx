@@ -1,0 +1,11 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { createCenter } from "./actions";
+
+export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  const params = await searchParams;
+  return <main className="grid min-h-dvh place-items-center bg-[#f6f5fb] p-4" dir="rtl"><form action={createCenter} className="w-full max-w-lg space-y-5 rounded-3xl bg-white p-8 shadow-xl shadow-purple-100/60"><div><h1 className="text-2xl font-extrabold">أنشئ مساحة العمل</h1><p className="mt-2 text-sm text-[#777386]">اختر نموذج عملك، وستبقى بياناتك مستقلة ومعزولة.</p></div>{params.error&&<p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{params.error}</p>}<fieldset><legend className="mb-2 text-sm font-bold">نوع الحساب</legend><div className="grid grid-cols-2 gap-3"><label className="cursor-pointer rounded-xl border p-4 text-sm has-[:checked]:border-[#6547d9] has-[:checked]:bg-[#f5f2ff]"><input className="ml-2" type="radio" name="account_type" value="center" defaultChecked/>سنتر تعليمي<span className="mt-1 block text-xs text-[#777386]">فروع، موظفون وعدة مدرسين</span></label><label className="cursor-pointer rounded-xl border p-4 text-sm has-[:checked]:border-[#6547d9] has-[:checked]:bg-[#f5f2ff]"><input className="ml-2" type="radio" name="account_type" value="independent_teacher"/>مدرس مستقل<span className="mt-1 block text-xs text-[#777386]">مجموعات وطلاب تحت اسمك</span></label></div></fieldset><label className="block text-sm font-bold">اسم السنتر أو المدرس<input name="name" minLength={2} maxLength={120} required className="mt-2 w-full rounded-xl border p-3 font-normal" placeholder="سنتر التفوق أو أ/ أحمد"/></label><label className="block text-sm font-bold">الرابط المختصر<input name="slug" pattern="[a-z0-9-]{3,60}" required className="mt-2 w-full rounded-xl border p-3 text-left font-normal" placeholder="center-or-teacher-name" dir="ltr"/></label><button className="w-full rounded-xl bg-[#6547d9] py-3 font-bold text-white">إنشاء وفتح لوحة الإدارة</button></form></main>;
+}
