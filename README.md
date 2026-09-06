@@ -22,9 +22,15 @@ npm run dev
 
 ثم افتح `http://localhost:3000`.
 
-## متغيرات البيئة
+## البيئات ومتغيرات التشغيل
 
-انسخ `.env.example` إلى `.env.local` واضبط:
+| البيئة | مصدر الكود والتشغيل | إعداد المتغيرات | مشروع البيانات |
+|---|---|---|---|
+| Development | نسخة المطور المحلية عبر `npm run dev` | `.env.local` غير المتتبع في Git | مشروع Supabase Preview وبيانات اختبار غير إنتاجية حاليًا |
+| Preview | أي فرع أو Pull Request غير `main` على Vercel | نطاق Vercel Preview | مشروع Supabase `smart-edu-center` في Frankfurt |
+| Production | فرع `main` والدومين الإنتاجي على Vercel | نطاق Vercel Production | مشروع Supabase `smart-edu-center-production` في Frankfurt |
+
+انسخ `.env.example` إلى `.env.local` للتشغيل المحلي واضبط المتغيرين العامين بالقيم غير الإنتاجية المناسبة:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
@@ -33,13 +39,21 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 يعرّف `src/lib/env.ts` العقد العام typed ويتحقق منه عند بدء Next.js أو البناء. يفشل التشغيل برسالة تجمع المتغيرات الناقصة أو غير الصالحة بدل تمرير قيم غير معرّفة إلى Supabase. استخدم هذا العقد بدل قراءة `process.env` مباشرة داخل التطبيق.
 
-في Vercel، المتغيران مضبوطان كـConfig بقيم مستقلة لكل من Preview وProduction. يرتبط كل نطاق بمشروع Supabase منفصل في Frankfurt؛ لا تنسخ القيم بين النطاقين.
+المتغيران من نوع Vercel Config لأنهما معلنان للمتصفح، لكن يجب أن تبقى قيم Preview وProduction منفصلة. لا توجّه Development إلى Production، ولا تنسخ القيم بين النطاقات، ولا تضع قيمة فعلية في Git أو في `.env.example`.
 
 لا تستخدم `service_role` في المتصفح أو في متغير يبدأ بـ`NEXT_PUBLIC_`. لا توجد متغيرات خادمية خاصة مطلوبة حاليًا؛ عند إضافتها يجب إبقاؤها في module يحمل `server-only` وعدم تصديرها عبر العقد العام.
 
-## قاعدة البيانات
+## قاعدة البيانات والترقية بين البيئات
 
-طبّق ملفات `supabase/migrations` بالترتيب على مشروع Supabase المرتبط. طُبقت migrations الحالية على مشروعي Preview وProduction. كل جداول الأعمال تحتوي `tenant_id` ومحمية بـRLS. بعد أي migration جديدة، طبّقها على كل بيئة بالترتيب وشغّل مستشاري Database/Security في Supabase وتحقق من عدم وجود جداول مكشوفة بلا RLS.
+طُبقت migrations الحالية على مشروعي Preview وProduction. كل جداول الأعمال تحتوي `tenant_id` ومحمية بـRLS. عند إضافة migration جديدة:
+
+1. أنشئ ملفًا جديدًا forward-only داخل `supabase/migrations`؛ لا تعدّل migration مطبقة.
+2. طبّقها على Preview أولًا وشغّل اختبارات العزل وSecurity وPerformance Advisors.
+3. راجع Preview Deployment والرحلات المتأثرة قبل لمس Production.
+4. طبّق نفس migrations بالترتيب على Production، ثم ادمج الفرع إلى `main`.
+5. تحقق من Production Deployment ومسارات التشغيل المتأثرة وسجّل النتيجة في خطة التنفيذ.
+
+لا تُنسخ بيانات Preview إلى Production تلقائيًا، ولا تُستخدم بيانات مستخدمين حقيقية في Development أو Preview.
 
 ## أوامر الجودة
 
@@ -78,4 +92,4 @@ npm run check
 
 ## النشر
 
-المصدر على GitHub، الواجهة على Vercel، والبيانات والمصادقة والتخزين على Supabase. أضف متغيرات البيئة في Vercel لكل من Preview وProduction قبل أول نشر متصل بالبيانات.
+المصدر على GitHub، والواجهة على Vercel، والبيانات والمصادقة والتخزين على Supabase. رفع فرع غير `main` ينشئ Preview Deployment، بينما تحديث `main` ينشئ Production Deployment. تأكد دائمًا من نطاق متغيرات Vercel ومن تطبيق migrations على قاعدة البيانات المقابلة قبل الترقية.
