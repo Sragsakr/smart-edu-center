@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_TECHNICAL_EPIC: FND-008 — CI/CD
-CURRENT_TECHNICAL_TASK: FND-008-02 — تشغيل lint/typecheck/build في Jobs واضحة
-NEXT_TECHNICAL_TASK: FND-008-03 — فحص Migration drift ومنع التطبيق من PR
+CURRENT_TECHNICAL_TASK: FND-008-03 — فحص Migration drift ومنع التطبيق من PR
+NEXT_TECHNICAL_TASK: FND-008-04 — ربط Preview Deployment بالـPR
 ```
 
 ## قواعد التشغيل
@@ -59,7 +59,7 @@ NEXT_TECHNICAL_TASK: FND-008-03 — فحص Migration drift ومنع التطبي
 **Dependencies:** FND-007.
 
 - [x] `FND-008-01` إضافة GitHub Action بـNode pinned و`npm ci`.
-- [ ] `FND-008-02` تشغيل lint/typecheck/build في Jobs واضحة.
+- [x] `FND-008-02` تشغيل lint/typecheck/build في Jobs واضحة.
 - [ ] `FND-008-03` إضافة Migration drift/check وعدم تطبيق DB من PR غير معتمد.
 - [ ] `FND-008-04` ربط Preview Deployment بالـPR وحفظ URL كـCheck.
 - [ ] `FND-008-05` إضافة Dependency وSecret scanning.
@@ -379,3 +379,4 @@ NEXT_TECHNICAL_TASK: FND-008-03 — فحص Migration drift ومنع التطبي
 | 2026-09-06 | FND-007-04 | `docs: document environment promotion flow` | README environment matrix + lint/typecheck/test/build | FND-007-05 |
 | 2026-09-06 | FND-007-05 | `ci: prevent secrets in client bundles` | 7 tests + build + client secret scan | FND-008-01 |
 | 2026-09-06 | FND-008-01 | `ci: add reproducible dependency install` | npm 10.9.8 ci + full local quality gate | FND-008-02 |
+| 2026-09-06 | FND-008-02 | `ci: run independent quality checks` | lint/typecheck/test/build + client scan jobs | FND-008-03 |

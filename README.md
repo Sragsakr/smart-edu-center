@@ -58,6 +58,8 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 ## أوامر الجودة
 
+يشغّل GitHub Actions على كل Pull Request وعلى تحديث `main` وظائف مستقلة للـlint وtypecheck والاختبارات والبناء مع فحص Client bundle. تستخدم الوظائف Node.js المحدد في `.nvmrc` و`npm ci`، ولا تتصل بقواعد Supabase لأن قيم البناء placeholders عامة فقط.
+
 ```bash
 npm run lint
 npm run typecheck
