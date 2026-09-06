@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_TECHNICAL_EPIC: FND-009 — Git Governance
-CURRENT_TECHNICAL_TASK: FND-009-02 — تعريف Branch naming وConventional Commits
-NEXT_TECHNICAL_TASK: FND-009-03 — حماية main وفرض PR وchecks
+CURRENT_TECHNICAL_TASK: FND-009-03 — حماية main وفرض PR وchecks
+NEXT_TECHNICAL_TASK: FND-009-04 — إضافة CODEOWNERS عند انضمام فريق
 ```
 
 ## قواعد التشغيل
@@ -69,7 +69,7 @@ NEXT_TECHNICAL_TASK: FND-009-03 — حماية main وفرض PR وchecks
 ### FND-009 — Git Governance
 
 - [x] `FND-009-01` إضافة PR template وIssue templates للBug/Feature/Migration.
-- [ ] `FND-009-02` تعريف Branch naming وConventional Commits.
+- [x] `FND-009-02` تعريف Branch naming وConventional Commits.
 - [ ] `FND-009-03` حماية `main`: PR required وchecks required ومنع force push.
 - [ ] `FND-009-04` إضافة CODEOWNERS عند انضمام فريق.
 
@@ -384,3 +384,4 @@ NEXT_TECHNICAL_TASK: FND-009-03 — حماية main وفرض PR وchecks
 | 2026-09-06 | FND-008-04 | PR #1 | Vercel Preview Ready + all 7 PR checks passed | FND-008-05 |
 | 2026-09-06 | FND-008-05 | `ci: add dependency and secret scanning` | 15 tests + npm audit + repository/client scans | FND-009-01 |
 | 2026-09-06 | FND-009-01 | `chore: add contribution templates` | PR + Bug/Feature/Migration issue forms validated | FND-009-02 |
+| 2026-09-06 | FND-009-02 | `docs: define git contribution workflow` | branch/commit/PR rules + full quality gate | FND-009-03 |

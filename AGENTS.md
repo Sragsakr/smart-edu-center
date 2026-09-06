@@ -48,7 +48,7 @@ Build a production-minded, Arabic-first multi-tenant center operating system. Op
 
 ## Working method
 
-Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`.
+Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`. Follow `CONTRIBUTING.md` for branch names, Conventional Commits, and the PR workflow.
 
 1. Read `README.md`, this file, and relevant local Next.js docs.
 2. Inspect existing changes; never overwrite unrelated user work.

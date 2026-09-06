@@ -16,7 +16,7 @@
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
 CURRENT_TASK: FND-009 — حوكمة Git وPull Requests
-LAST_COMPLETED: FND-009-01 — قوالب Pull Request وBug وFeature وMigration
+LAST_COMPLETED: FND-009-02 — أسماء الفروع وConventional Commits
 ```
 
 ## مبادئ ثابتة
