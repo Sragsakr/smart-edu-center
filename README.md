@@ -12,10 +12,11 @@
 
 ## التشغيل المحلي
 
-يتطلب Node.js 20.9 أو أحدث.
+يستخدم المشروع Node.js `22.23.2` كما هو مثبت في `.nvmrc` وCI.
 
 ```bash
-npm install
+nvm use
+npm ci
 cp .env.example .env.local
 npm run dev
 ```

@@ -16,7 +16,7 @@
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
 CURRENT_TASK: FND-008 — CI لفحص الجودة على كل Pull Request
-LAST_COMPLETED: FND-007 — فصل البيئات ومتغيرات التشغيل
+LAST_COMPLETED: FND-008-01 — GitHub Action بـNode مثبت وnpm ci
 ```
 
 ## مبادئ ثابتة
