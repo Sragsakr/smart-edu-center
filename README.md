@@ -8,7 +8,7 @@
 - واجهة عربية RTL متجاوبة وقابلة للتثبيت كـPWA.
 - Vertical slice أولي: لوحة الإدارة، الطلاب، البحث، وحالة السداد.
 - مخطط Supabase متعدد المستأجرين مع RLS في `supabase/migrations`.
-- وضع Demo للواجهة حتى تُضبط متغيرات Supabase.
+- بيئة Vercel Preview متصلة بمشروع Supabase المخصص حاليًا في Frankfurt؛ إعداد Production المنفصل لم يُنشأ بعد.
 
 ## التشغيل المحلي
 
@@ -32,6 +32,8 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ```
 
 يعرّف `src/lib/env.ts` العقد العام typed ويتحقق منه عند بدء Next.js أو البناء. يفشل التشغيل برسالة تجمع المتغيرات الناقصة أو غير الصالحة بدل تمرير قيم غير معرّفة إلى Supabase. استخدم هذا العقد بدل قراءة `process.env` مباشرة داخل التطبيق.
+
+في Vercel، المتغيران مضبوطان كـConfig لبيئة Preview فقط ويرتبطان بمشروع Supabase الحالي في Frankfurt. لا تنسخ قيم Preview إلى Production؛ إعداد Production المنفصل جزء من `FND-007-03`.
 
 لا تستخدم `service_role` في المتصفح أو في متغير يبدأ بـ`NEXT_PUBLIC_`. لا توجد متغيرات خادمية خاصة مطلوبة حاليًا؛ عند إضافتها يجب إبقاؤها في module يحمل `server-only` وعدم تصديرها عبر العقد العام.
 
