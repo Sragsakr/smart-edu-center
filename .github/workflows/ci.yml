@@ -38,6 +38,17 @@ jobs:
       - uses: ./.github/actions/setup
       - run: npm run test
 
+  migrations:
+    name: Migration safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: ./.github/actions/setup
+      - name: Check append-only migrations without database credentials
+        env:
+          MIGRATION_BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: npm run check:migrations
+
   build:
     name: Build and client-secret scan
     runs-on: ubuntu-latest

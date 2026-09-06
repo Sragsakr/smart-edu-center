@@ -9,8 +9,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check:migrations": "node scripts/check-migrations.mjs",
     "check:client-secrets": "node scripts/check-client-secrets.mjs",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build && npm run check:client-secrets"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run check:migrations && npm run build && npm run check:client-secrets"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.6",
