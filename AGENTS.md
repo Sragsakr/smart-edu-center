@@ -12,7 +12,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Current task protocol
 
-After reading this file and `README.md`, open `docs/MASTER_DELIVERY_PLAN.md`. Work only on its `CURRENT_TASK`. When the task satisfies its acceptance and quality gates, mark it complete and advance `CURRENT_TASK` to the first unblocked task. Never skip dependencies or leave the plan stale.
+After reading this file and `README.md`, open `docs/MASTER_DELIVERY_PLAN.md` and `docs/TECHNICAL_EXECUTION_BACKLOG.md`. For engineering work, execute only `CURRENT_TECHNICAL_TASK`. When it satisfies acceptance and quality gates, mark it complete, append the commit/test result to the execution log, and advance both task pointers. Never skip dependencies or leave either plan stale.
 
 ## Mission
 
