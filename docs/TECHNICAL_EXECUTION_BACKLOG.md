@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_TECHNICAL_EPIC: FND-010 — Backup & Recovery
-CURRENT_TECHNICAL_TASK: FND-010-01 — تعريف RPO/RTO مبدئيين
-NEXT_TECHNICAL_TASK: FND-010-02 — توثيق Supabase backup policy
+CURRENT_TECHNICAL_TASK: FND-010-02 — توثيق Supabase backup policy
+NEXT_TECHNICAL_TASK: FND-010-03 — إنشاء runbook للاستعادة وStorage
 ```
 
 ## قواعد التشغيل
@@ -75,7 +75,7 @@ NEXT_TECHNICAL_TASK: FND-010-02 — توثيق Supabase backup policy
 
 ### FND-010 — Backup & Recovery
 
-- [ ] `FND-010-01` تعريف RPO/RTO مبدئيين كافتراض قابل للمراجعة.
+- [x] `FND-010-01` تعريف RPO/RTO مبدئيين كافتراض قابل للمراجعة.
 - [ ] `FND-010-02` توثيق Supabase backup policy لكل خطة.
 - [ ] `FND-010-03` إنشاء runbook للاستعادة ونسخ ملفات Storage.
 - [ ] `FND-010-04` تنفيذ restore drill وتسجيل الزمن والنتيجة.
@@ -386,3 +386,4 @@ NEXT_TECHNICAL_TASK: FND-010-02 — توثيق Supabase backup policy
 | 2026-09-06 | FND-009-01 | `chore: add contribution templates` | PR + Bug/Feature/Migration issue forms validated | FND-009-02 |
 | 2026-09-06 | FND-009-02 | `docs: define git contribution workflow` | branch/commit/PR rules + full quality gate | FND-009-03 |
 | 2026-09-06 | FND-009-03..04 | قرار المالك | main protection deferred؛ لا فريق لـCODEOWNERS | FND-010-01 |
+| 2026-09-06 | FND-010-01 | `docs: define recovery objectives` | RPO/RTO targets and review triggers documented | FND-010-02 |

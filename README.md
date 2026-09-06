@@ -54,7 +54,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 4. طبّق نفس migrations بالترتيب على Production، ثم ادمج الفرع إلى `main`.
 5. تحقق من Production Deployment ومسارات التشغيل المتأثرة وسجّل النتيجة في خطة التنفيذ.
 
-لا تُنسخ بيانات Preview إلى Production تلقائيًا، ولا تُستخدم بيانات مستخدمين حقيقية في Development أو Preview.
+لا تُنسخ بيانات Preview إلى Production تلقائيًا، ولا تُستخدم بيانات مستخدمين حقيقية في Development أو Preview. أهداف RPO/RTO وحدود الاستعادة موثقة في [`docs/BACKUP_RECOVERY.md`](docs/BACKUP_RECOVERY.md).
 
 ## أوامر الجودة
 
