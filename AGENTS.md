@@ -31,6 +31,7 @@ Build a production-minded, Arabic-first multi-tenant center operating system. Op
 - Add `"use client"` only at the smallest interactive boundary.
 - Reads belong in a server-only Data Access Layer; UI mutations use Server Actions; external webhooks use Route Handlers.
 - Supabase provides Auth, PostgreSQL and Storage. Never expose a service-role key.
+- Read public environment variables through the typed contract in `src/lib/env.ts`, not directly from `process.env`. Future private variables belong in a `server-only` module and must never be re-exported to client code.
 - Every business table must have `tenant_id`, RLS enabled, and deny access unless an active membership exists.
 - Never authorize from `user_metadata`; membership and role data must come from protected database tables or trusted app metadata.
 - Prefer a modular monolith. Do not add Redis, queues, microservices, payment or messaging vendors until a demonstrated requirement needs them.
@@ -49,7 +50,7 @@ Build a production-minded, Arabic-first multi-tenant center operating system. Op
 1. Read `README.md`, this file, and relevant local Next.js docs.
 2. Inspect existing changes; never overwrite unrelated user work.
 3. Implement the smallest complete vertical slice.
-4. Run `npm run lint`, `npm run typecheck`, and `npm run build`.
+4. Run `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`.
 5. Visually verify changed screens at mobile and desktop sizes.
 6. Update README/migrations/tests when behavior or setup changes.
 

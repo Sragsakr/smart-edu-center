@@ -24,12 +24,16 @@ npm run dev
 
 ## متغيرات البيئة
 
+انسخ `.env.example` إلى `.env.local` واضبط:
+
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ```
 
-لا تستخدم `service_role` في المتصفح أو في متغير يبدأ بـ`NEXT_PUBLIC_`.
+يعرّف `src/lib/env.ts` العقد العام typed ويتحقق منه عند بدء Next.js أو البناء. يفشل التشغيل برسالة تجمع المتغيرات الناقصة أو غير الصالحة بدل تمرير قيم غير معرّفة إلى Supabase. استخدم هذا العقد بدل قراءة `process.env` مباشرة داخل التطبيق.
+
+لا تستخدم `service_role` في المتصفح أو في متغير يبدأ بـ`NEXT_PUBLIC_`. لا توجد متغيرات خادمية خاصة مطلوبة حاليًا؛ عند إضافتها يجب إبقاؤها في module يحمل `server-only` وعدم تصديرها عبر العقد العام.
 
 ## قاعدة البيانات
 
@@ -40,13 +44,17 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ```bash
 npm run lint
 npm run typecheck
+npm run test
 npm run build
+# أو شغّلها كلها بالترتيب:
+npm run check
 ```
 
 ## المعمارية
 
 - `src/app`: المسارات وmetadata والـmanifest.
 - `src/components`: مكونات الواجهة التفاعلية.
+- `src/lib/env.ts`: عقد متغيرات البيئة العامة والتحقق المبكر منها.
 - `src/lib/supabase`: عملاء Supabase للمتصفح والخادم.
 - `supabase/migrations`: المخطط والسياسات والوظائف.
 - `public/sw.js`: Service Worker بسيط للـApp Shell.

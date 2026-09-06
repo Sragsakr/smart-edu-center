@@ -16,7 +16,7 @@
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
 CURRENT_TASK: FND-007 — فصل البيئات ومتغيرات التشغيل
-LAST_COMPLETED: FND-006 وIAM-002 — الأساس التقني ومساحة سنتر/مدرس
+LAST_COMPLETED: FND-007-01 — عقد Environment Variables typed والتحقق المبكر
 ```
 
 ## مبادئ ثابتة
