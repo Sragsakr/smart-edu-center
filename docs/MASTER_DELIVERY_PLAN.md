@@ -16,7 +16,7 @@
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
 CURRENT_TASK: FND-008 — CI لفحص الجودة على كل Pull Request
-LAST_COMPLETED: FND-008-03 — فحص migrations بلا بيانات اعتماد أو تطبيق DB
+LAST_COMPLETED: FND-008-04 — Preview Deployment ورابط Vercel داخل PR
 ```
 
 ## مبادئ ثابتة
