@@ -15,8 +15,8 @@
 
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
-CURRENT_TASK: FND-008 — CI لفحص الجودة على كل Pull Request
-LAST_COMPLETED: FND-008-04 — Preview Deployment ورابط Vercel داخل PR
+CURRENT_TASK: FND-009 — حوكمة Git وPull Requests
+LAST_COMPLETED: FND-008 — CI/CD وفحوص الجودة والأمان
 ```
 
 ## مبادئ ثابتة
@@ -58,7 +58,7 @@ LAST_COMPLETED: FND-008-04 — Preview Deployment ورابط Vercel داخل PR
 - [x] `FND-005` تفعيل RLS وAudit Log وفحص Security Advisor.
 - [x] `FND-006` إضافة نوع مساحة العمل: سنتر أو مدرس مستقل.
 - [x] `FND-007` فصل Development/Preview/Production ومتغيرات البيئة.
-- [ ] `FND-008` CI لفحص lint/typecheck/build على كل Pull Request.
+- [x] `FND-008` CI لفحص lint/typecheck/build على كل Pull Request.
 - [ ] `FND-009` حماية فرع `main` واعتماد Conventional Commits وPR checklist.
 - [ ] `FND-010` إعداد Backup/Restore واختبار استعادة أولي.
 - [x] `IAM-001` تسجيل الحساب والدخول والخروج وتجديد جلسة SSR.

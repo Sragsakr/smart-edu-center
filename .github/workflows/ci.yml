@@ -61,6 +61,18 @@ jobs:
           MIGRATION_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: npm run check:migrations
 
+  security:
+    name: Dependency and secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run check:secrets
+
   build:
     name: Build and client-secret scan
     runs-on: ubuntu-latest
