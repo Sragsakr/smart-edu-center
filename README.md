@@ -64,6 +64,8 @@ npm run build
 
 راجع [`docs/MASTER_DELIVERY_PLAN.md`](docs/MASTER_DELIVERY_PLAN.md). يحتوي على `CURRENT_TASK` والمراحل والاعتماديات وبوابات الجودة للمشروع الكامل، وهو المصدر الوحيد لاختيار التاسك التالية.
 
+التنفيذ الهندسي التفصيلي موجود في [`docs/TECHNICAL_EXECUTION_BACKLOG.md`](docs/TECHNICAL_EXECUTION_BACKLOG.md)، ويحتوي على `CURRENT_TECHNICAL_TASK` والـSchema وRLS وServer Actions والواجهات والاختبارات ومعايير القبول.
+
 ## النشر
 
 المصدر على GitHub، الواجهة على Vercel، والبيانات والمصادقة والتخزين على Supabase. أضف متغيرات البيئة في Vercel لكل من Preview وProduction قبل أول نشر متصل بالبيانات.
