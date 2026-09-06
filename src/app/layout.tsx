@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cairo } from "next/font/google";
+import type { ReactNode } from "react";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import "./globals.css";
 
@@ -11,6 +12,6 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Smart Edu" },
 };
 export const viewport: Viewport = { themeColor: "#6547d9", colorScheme: "light" };
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return <html lang="ar" dir="rtl" className={cairo.variable}><body>{children}<ServiceWorkerRegistration /></body></html>;
 }
