@@ -61,7 +61,7 @@ NEXT_TECHNICAL_TASK: FND-008-05 — إضافة Dependency وSecret scanning
 - [x] `FND-008-01` إضافة GitHub Action بـNode pinned و`npm ci`.
 - [x] `FND-008-02` تشغيل lint/typecheck/build في Jobs واضحة.
 - [x] `FND-008-03` إضافة Migration drift/check وعدم تطبيق DB من PR غير معتمد.
-- [ ] `FND-008-04` ربط Preview Deployment بالـPR وحفظ URL كـCheck.
+- [-] `FND-008-04` ربط Preview Deployment بالـPR وحفظ URL كـCheck.
 - [ ] `FND-008-05` إضافة Dependency وSecret scanning.
 
 **Acceptance:** PR مكسور لا يندمج، وPR سليم ينتج Preview قابلًا للمراجعة.
