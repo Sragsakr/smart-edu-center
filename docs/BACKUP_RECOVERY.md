@@ -44,6 +44,59 @@ Database backups تشمل بيانات PostgreSQL و`auth.users`، لكنها ل
 
 حذف مشروع Supabase يحذف بياناته ونسخه نهائيًا؛ النسخة المقبولة يجب أن تكون خارج المشروع نفسه. تُراجع هذه السياسة عند الانتقال لخطة مدفوعة وقبل تشغيل مدفوعات حقيقية لتحديد الحاجة إلى PITR.
 
+## Runbook أخذ نسخة يدوية
+
+1. أعلن نافذة النسخ وقلل الكتابات المتزامنة؛ أوقف العمليات الحساسة إذا كان الاتساق يتطلب ذلك.
+2. أنشئ مجلد عمل مؤقتًا بصلاحية `0700` خارج المستودع، ومرر connection string من secret manager أو إدخال تفاعلي لا من command history.
+3. نفّذ dumps الثلاثة (`roles.sql`, `schema.sql`, `data.sql`) بالأوامر الرسمية أعلاه.
+4. تحقق أن الملفات غير فارغة، وابحث في stderr عن فشل، ثم أنشئ SHA-256 لكل ملف.
+5. شفّر الملفات قبل نقلها واحفظ النسخة والchecksums في موقع off-site لا يعتمد على مشروع Supabase نفسه.
+6. سجل وقت البداية والنهاية، project/environment، حجم الملفات، checksum، والمشغّل دون تسجيل credentials.
+7. احذف الملفات النصية غير المشفرة ومجلد العمل المؤقت بعد إثبات وجود النسخة المشفرة.
+
+النسخة غير مقبولة إذا فشل أي dump، أو غاب checksum، أو بقيت فقط على جهاز واحد، أو لم تُختبر قابليتها للاستعادة وفق الجدول الدوري.
+
+## Runbook Supabase Storage
+
+Database dump يحفظ metadata فقط. لكل bucket مستخدم في Production:
+
+1. صدّر inventory يتضمن bucket، المسار الكامل، الحجم، MIME، وآخر تعديل إن توفر.
+2. نزّل كل object باستخدام صلاحية خادمية مؤقتة، واحفظه تحت نفس bucket/path خارج Supabase.
+3. أنشئ checksum لكل object وقارن عدد الملفات وإجمالي الحجم بالـinventory.
+4. شفّر الأرشيف واحفظه off-site مع نسخة الـdatabase المطابقة زمنيًا.
+5. عند الاستعادة، أنشئ buckets بنفس public/private وMIME/size policies، ثم ارفع objects إلى المسارات نفسها.
+6. قارن العدد والحجم والchecksums، واختبر signed URL لملف خاص بدل تحويل bucket إلى public.
+
+تُمرر Service Role keys عبر environment مؤقتة فقط إلى أداة نسخ إدارية موثوقة؛ لا تُكتب داخل script أو terminal history أو logs. عند عدم وجود buckets أو objects، يُسجل inventory فارغ بدل ادعاء نسخ ملفات.
+
+**Inventory baseline — 2026-09-06:** مشروع Production لا يحتوي Storage buckets أو objects؛ لا توجد ملفات مطلوبة للنسخ في هذه المرحلة.
+
+## Runbook الاستعادة
+
+1. أعلن الحادث، أوقف writes أو ضع التطبيق في maintenance إذا كان استمرار الكتابة قد يفاقم التلف، واحفظ logs والدليل.
+2. اختر أحدث نسخة سليمة تسبق الحادث واحسب الفقد المتوقع مقابل RPO.
+3. أنشئ مشروع Supabase معزولًا في المنطقة المطلوبة بعد اعتماد أي تكلفة؛ لا تستعد فوق Production مباشرة.
+4. فعّل extensions والإعدادات غير الافتراضية المطلوبة، ثم استعد داخل transaction واحدة تتوقف عند أول خطأ:
+
+```bash
+psql \
+  --single-transaction \
+  --variable ON_ERROR_STOP=1 \
+  --file roles.sql \
+  --file schema.sql \
+  --command 'SET session_replication_role = replica' \
+  --file data.sql \
+  --dbname "$RECOVERY_DATABASE_URL"
+```
+
+5. استعد أي تغييرات مخصصة في `auth` و`storage` schemas، ثم انسخ Storage objects وفق الـinventory.
+6. أعد إعداد Auth providers وredirect URLs وSMTP وwebhooks وdomains، ودوّر API keys أو passwords المتأثرة.
+7. تحقق من migration history، وعدد الصفوف، والقيود، وRLS، ووظائف `private.is_tenant_member` و`private.has_tenant_role`.
+8. نفّذ اختبارين بعزل تام: مستخدم داخل Tenant ينجح، ومحاولة cross-tenant تفشل. اختبر تسجيل الدخول وقراءة/كتابة مصرح بها وملف Storage خاص.
+9. حدّث Vercel Production URL وPublishable Key فقط بعد نجاح التحقق، ثم أنشئ Deployment واختبره قبل تحويل المستخدمين.
+10. راقب الأخطاء، وأبقِ المشروع القديم دون حذف حتى اعتماد النتيجة. عند الفشل أعد Vercel إلى القيم السابقة وحقق في نسخة الاستعادة.
+11. سجل RPO/RTO الفعليين، البيانات المفقودة، نتائج الفحوص، والقرارات، ثم احذف الموارد المؤقتة بعد الموافقة.
+
 ## حدود الخدمة المقبولة
 
 - الأولوية الأولى هي إيقاف الكتابة عند الشك في سلامة البيانات، ثم حماية الدليل قبل الاستعادة.

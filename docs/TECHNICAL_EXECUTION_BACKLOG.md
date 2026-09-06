@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_TECHNICAL_EPIC: FND-010 — Backup & Recovery
-CURRENT_TECHNICAL_TASK: FND-010-03 — إنشاء runbook للاستعادة وStorage
-NEXT_TECHNICAL_TASK: FND-010-04 — تنفيذ restore drill وتسجيل النتيجة
+CURRENT_TECHNICAL_TASK: FND-010-04 — تنفيذ restore drill وتسجيل النتيجة
+NEXT_TECHNICAL_TASK: IAM-003-01 — صفحة طلب إعادة تعيين كلمة المرور
 ```
 
 ## قواعد التشغيل
@@ -77,7 +77,7 @@ NEXT_TECHNICAL_TASK: FND-010-04 — تنفيذ restore drill وتسجيل الن
 
 - [x] `FND-010-01` تعريف RPO/RTO مبدئيين كافتراض قابل للمراجعة.
 - [x] `FND-010-02` توثيق Supabase backup policy لكل خطة.
-- [ ] `FND-010-03` إنشاء runbook للاستعادة ونسخ ملفات Storage.
+- [x] `FND-010-03` إنشاء runbook للاستعادة ونسخ ملفات Storage.
 - [ ] `FND-010-04` تنفيذ restore drill وتسجيل الزمن والنتيجة.
 
 ---
@@ -388,3 +388,4 @@ NEXT_TECHNICAL_TASK: FND-010-04 — تنفيذ restore drill وتسجيل الن
 | 2026-09-06 | FND-009-03..04 | قرار المالك | main protection deferred؛ لا فريق لـCODEOWNERS | FND-010-01 |
 | 2026-09-06 | FND-010-01 | `docs: define recovery objectives` | RPO/RTO targets and review triggers documented | FND-010-02 |
 | 2026-09-06 | FND-010-02 | `docs: document Supabase backup policy` | Free/paid/PITR/Storage limits sourced from Supabase docs | FND-010-03 |
+| 2026-09-06 | FND-010-03 | `docs: add backup and restore runbook` | database/Storage/cutover steps + empty Production Storage inventory | FND-010-04 |
