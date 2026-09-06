@@ -15,8 +15,8 @@
 
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
-CURRENT_TASK: FND-007 — فصل البيئات ومتغيرات التشغيل
-LAST_COMPLETED: FND-007-04 — توثيق Development/Preview/Production ومسار الترقية
+CURRENT_TASK: FND-008 — CI لفحص الجودة على كل Pull Request
+LAST_COMPLETED: FND-007 — فصل البيئات ومتغيرات التشغيل
 ```
 
 ## مبادئ ثابتة
@@ -57,7 +57,7 @@ LAST_COMPLETED: FND-007-04 — توثيق Development/Preview/Production ومس�
 - [x] `FND-004` إنشاء Supabase Frankfurt وتأسيس 13 جدولًا.
 - [x] `FND-005` تفعيل RLS وAudit Log وفحص Security Advisor.
 - [x] `FND-006` إضافة نوع مساحة العمل: سنتر أو مدرس مستقل.
-- [ ] `FND-007` فصل Development/Preview/Production ومتغيرات البيئة.
+- [x] `FND-007` فصل Development/Preview/Production ومتغيرات البيئة.
 - [ ] `FND-008` CI لفحص lint/typecheck/build على كل Pull Request.
 - [ ] `FND-009` حماية فرع `main` واعتماد Conventional Commits وPR checklist.
 - [ ] `FND-010` إعداد Backup/Restore واختبار استعادة أولي.

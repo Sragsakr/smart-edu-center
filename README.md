@@ -41,7 +41,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 المتغيران من نوع Vercel Config لأنهما معلنان للمتصفح، لكن يجب أن تبقى قيم Preview وProduction منفصلة. لا توجّه Development إلى Production، ولا تنسخ القيم بين النطاقات، ولا تضع قيمة فعلية في Git أو في `.env.example`.
 
-لا تستخدم `service_role` في المتصفح أو في متغير يبدأ بـ`NEXT_PUBLIC_`. لا توجد متغيرات خادمية خاصة مطلوبة حاليًا؛ عند إضافتها يجب إبقاؤها في module يحمل `server-only` وعدم تصديرها عبر العقد العام.
+لا تستخدم `service_role` في المتصفح أو في متغير يبدأ بـ`NEXT_PUBLIC_`. لا توجد متغيرات خادمية خاصة مطلوبة حاليًا؛ عند إضافتها يجب إبقاؤها في module يحمل `server-only` وعدم تصديرها عبر العقد العام. يفحص `npm run check:client-secrets` أسماء المتغيرات العامة وملفات `.next/static` بعد البناء، وهو جزء من `npm run check`.
 
 ## قاعدة البيانات والترقية بين البيئات
 
@@ -62,6 +62,7 @@ npm run lint
 npm run typecheck
 npm run test
 npm run build
+npm run check:client-secrets
 # أو شغّلها كلها بالترتيب:
 npm run check
 ```
