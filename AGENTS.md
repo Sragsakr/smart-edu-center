@@ -32,7 +32,7 @@ Build a production-minded, Arabic-first multi-tenant center operating system. Op
 - Reads belong in a server-only Data Access Layer; UI mutations use Server Actions; external webhooks use Route Handlers.
 - Supabase provides Auth, PostgreSQL and Storage. Never expose a service-role key.
 - Read public environment variables through the typed contract in `src/lib/env.ts`, not directly from `process.env`. Future private variables belong in a `server-only` module and must never be re-exported to client code; `npm run check:client-secrets` enforces the client-bundle boundary.
-- Treat the environment matrix and promotion runbook in `README.md` as canonical: Development and Preview use non-production data, `main` targets Production, and migrations reach Preview before Production. Existing migration files are immutable; CI may validate them but never receives database credentials or applies them.
+- Treat the environment matrix and promotion runbook in `README.md` as canonical. Development, Preview and Production currently share one Supabase project by owner decision; avoid destructive or synthetic writes outside controlled flows. Existing migration files are immutable; CI may validate them but never receives database credentials or applies them.
 - Every business table must have `tenant_id`, RLS enabled, and deny access unless an active membership exists.
 - Never authorize from `user_metadata`; membership and role data must come from protected database tables or trusted app metadata.
 - Prefer a modular monolith. Do not add Redis, queues, microservices, payment or messaging vendors until a demonstrated requirement needs them.

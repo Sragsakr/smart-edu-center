@@ -5,9 +5,9 @@
 ## مؤشر التنفيذ التقني
 
 ```text
-CURRENT_TECHNICAL_EPIC: FND-010 — Backup & Recovery
-CURRENT_TECHNICAL_TASK: FND-010-04 — تنفيذ restore drill وتسجيل النتيجة
-NEXT_TECHNICAL_TASK: IAM-003-01 — صفحة طلب إعادة تعيين كلمة المرور
+CURRENT_TECHNICAL_EPIC: IAM-003 — البريد وكلمة المرور
+CURRENT_TECHNICAL_TASK: IAM-003-01 — صفحة طلب إعادة تعيين كلمة المرور Server Action
+NEXT_TECHNICAL_TASK: IAM-003-02 — Callback آمن وتحقق من next المحلي
 ```
 
 ## قواعد التشغيل
@@ -48,7 +48,7 @@ NEXT_TECHNICAL_TASK: IAM-003-01 — صفحة طلب إعادة تعيين كلم
 
 - [x] `FND-007-01` إنشاء `src/lib/env.ts` بعقد typed للمتغيرات العامة والخادمة وفشل واضح عند النقص.
 - [x] `FND-007-02` ضبط Supabase URL وPublishable Key في Vercel Preview فقط.
-- [x] `FND-007-03` إنشاء Supabase/Vercel Production منفصلين قبل أول إطلاق عام.
+- [!] `FND-007-03` إنشاء Supabase/Vercel Production منفصلين قبل أول إطلاق عام — أُلغي مشروع Supabase المنفصل بقرار المالك؛ مشروع Vercel واحد وSupabase واحد لكل البيئات.
 - [x] `FND-007-04` توثيق Development/Preview/Production في README دون قيم سرية.
 - [x] `FND-007-05` إضافة فحص يمنع Service Role أو Secrets من الوصول إلى Client bundle.
 
@@ -78,7 +78,7 @@ NEXT_TECHNICAL_TASK: IAM-003-01 — صفحة طلب إعادة تعيين كلم
 - [x] `FND-010-01` تعريف RPO/RTO مبدئيين كافتراض قابل للمراجعة.
 - [x] `FND-010-02` توثيق Supabase backup policy لكل خطة.
 - [x] `FND-010-03` إنشاء runbook للاستعادة ونسخ ملفات Storage.
-- [ ] `FND-010-04` تنفيذ restore drill وتسجيل الزمن والنتيجة.
+- [!] `FND-010-04` تنفيذ restore drill وتسجيل الزمن والنتيجة — لم يُنفذ: يحتاج مورد استعادة معزولًا ورفض المالك أي تكلفة أو مشروع إضافي.
 
 ---
 
@@ -389,3 +389,4 @@ NEXT_TECHNICAL_TASK: IAM-003-01 — صفحة طلب إعادة تعيين كلم
 | 2026-09-06 | FND-010-01 | `docs: define recovery objectives` | RPO/RTO targets and review triggers documented | FND-010-02 |
 | 2026-09-06 | FND-010-02 | `docs: document Supabase backup policy` | Free/paid/PITR/Storage limits sourced from Supabase docs | FND-010-03 |
 | 2026-09-06 | FND-010-03 | `docs: add backup and restore runbook` | database/Storage/cutover steps + empty Production Storage inventory | FND-010-04 |
+| 2026-09-06 | FND-007-03/FND-010-04 | قرار المالك | Vercel Production re-linked to shared Supabase; extra project deleted; restore drill deferred | IAM-003-01 |

@@ -8,7 +8,7 @@
 - واجهة عربية RTL متجاوبة وقابلة للتثبيت كـPWA.
 - Vertical slice أولي: لوحة الإدارة، الطلاب، البحث، وحالة السداد.
 - مخطط Supabase متعدد المستأجرين مع RLS في `supabase/migrations`.
-- بيئتا Preview وProduction منفصلتان في Vercel، ولكل منهما مشروع Supabase مستقل في Frankfurt.
+- مشروع Vercel واحد ومشروع Supabase واحد باسم `smart-edu-center` يخدمان Development وPreview وProduction دون تكلفة مشروع بيانات إضافي.
 
 ## التشغيل المحلي
 
@@ -27,9 +27,9 @@ npm run dev
 
 | البيئة | مصدر الكود والتشغيل | إعداد المتغيرات | مشروع البيانات |
 |---|---|---|---|
-| Development | نسخة المطور المحلية عبر `npm run dev` | `.env.local` غير المتتبع في Git | مشروع Supabase Preview وبيانات اختبار غير إنتاجية حاليًا |
-| Preview | أي فرع أو Pull Request غير `main` على Vercel | نطاق Vercel Preview | مشروع Supabase `smart-edu-center` في Frankfurt |
-| Production | فرع `main` والدومين الإنتاجي على Vercel | نطاق Vercel Production | مشروع Supabase `smart-edu-center-production` في Frankfurt |
+| Development | نسخة المطور المحلية عبر `npm run dev` | `.env.local` غير المتتبع في Git | مشروع Supabase `smart-edu-center` المشترك |
+| Preview | أي فرع أو Pull Request غير `main` على Vercel | نطاق Vercel Preview | مشروع Supabase `smart-edu-center` المشترك |
+| Production | فرع `main` والدومين الإنتاجي على Vercel | نطاق Vercel Production | مشروع Supabase `smart-edu-center` المشترك |
 
 انسخ `.env.example` إلى `.env.local` للتشغيل المحلي واضبط المتغيرين العامين بالقيم غير الإنتاجية المناسبة:
 
@@ -40,21 +40,21 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 يعرّف `src/lib/env.ts` العقد العام typed ويتحقق منه عند بدء Next.js أو البناء. يفشل التشغيل برسالة تجمع المتغيرات الناقصة أو غير الصالحة بدل تمرير قيم غير معرّفة إلى Supabase. استخدم هذا العقد بدل قراءة `process.env` مباشرة داخل التطبيق.
 
-المتغيران من نوع Vercel Config لأنهما معلنان للمتصفح، لكن يجب أن تبقى قيم Preview وProduction منفصلة. لا توجّه Development إلى Production، ولا تنسخ القيم بين النطاقات، ولا تضع قيمة فعلية في Git أو في `.env.example`.
+المتغيران من نوع Vercel Config لأنهما معلنان للمتصفح. نطاقا Preview وProduction في Vercel يستخدمان حاليًا القيم نفسها لمشروع Supabase المشترك بقرار المالك لتجنب تكلفة مشروع إضافي. هذا يعني أن البيانات ليست معزولة بين البيئات؛ لا تشغّل اختبارات مدمرة أو seed تجريبي من Development/Preview، ولا تضع قيمة فعلية في Git أو في `.env.example`.
 
 لا تستخدم `service_role` في المتصفح أو في متغير يبدأ بـ`NEXT_PUBLIC_`. لا توجد متغيرات خادمية خاصة مطلوبة حاليًا؛ عند إضافتها يجب إبقاؤها في module يحمل `server-only` وعدم تصديرها عبر العقد العام. يفحص `npm run check:client-secrets` أسماء المتغيرات العامة وملفات `.next/static` بعد البناء، وهو جزء من `npm run check`.
 
 ## قاعدة البيانات والترقية بين البيئات
 
-طُبقت migrations الحالية على مشروعي Preview وProduction. كل جداول الأعمال تحتوي `tenant_id` ومحمية بـRLS. عند إضافة migration جديدة:
+طُبقت migrations الحالية على مشروع Supabase المشترك. كل جداول الأعمال تحتوي `tenant_id` ومحمية بـRLS. عند إضافة migration جديدة:
 
 1. أنشئ ملفًا جديدًا forward-only داخل `supabase/migrations`؛ لا تعدّل migration مطبقة.
-2. طبّقها على Preview أولًا وشغّل اختبارات العزل وSecurity وPerformance Advisors.
-3. راجع Preview Deployment والرحلات المتأثرة قبل لمس Production.
-4. طبّق نفس migrations بالترتيب على Production، ثم ادمج الفرع إلى `main`.
-5. تحقق من Production Deployment ومسارات التشغيل المتأثرة وسجّل النتيجة في خطة التنفيذ.
+2. تحقق منها محليًا وداخل CI دون بيانات اعتماد أو تطبيق تلقائي على قاعدة البيانات.
+3. راجع أثرها وخطة rollback، ثم طبّقها مرة واحدة على مشروع Supabase المشترك في نافذة معلنة.
+4. شغّل اختبارات العزل وSecurity وPerformance Advisors فور التطبيق.
+5. راجع Preview Deployment، ثم ادمج الفرع إلى `main` وتحقق من Production.
 
-لا تُنسخ بيانات Preview إلى Production تلقائيًا، ولا تُستخدم بيانات مستخدمين حقيقية في Development أو Preview. أهداف RPO/RTO وحدود الاستعادة موثقة في [`docs/BACKUP_RECOVERY.md`](docs/BACKUP_RECOVERY.md).
+بسبب مشاركة قاعدة البيانات، أي كتابة من Development أو Preview تصل إلى البيانات نفسها التي تستخدمها Production. أهداف RPO/RTO وحدود الاستعادة موثقة في [`docs/BACKUP_RECOVERY.md`](docs/BACKUP_RECOVERY.md).
 
 ## أوامر الجودة
 
@@ -102,4 +102,4 @@ npm run check
 
 ## النشر
 
-المصدر على GitHub، والواجهة على Vercel، والبيانات والمصادقة والتخزين على Supabase. رفع فرع غير `main` ينشئ Preview Deployment، بينما تحديث `main` ينشئ Production Deployment. تأكد دائمًا من نطاق متغيرات Vercel ومن تطبيق migrations على قاعدة البيانات المقابلة قبل الترقية.
+المصدر على GitHub، والواجهة داخل مشروع Vercel واحد، والبيانات والمصادقة والتخزين داخل مشروع Supabase واحد. رفع فرع غير `main` ينشئ Preview Deployment، بينما تحديث `main` ينشئ Production Deployment؛ كلاهما يتصل بقاعدة البيانات المشتركة حاليًا.
