@@ -15,7 +15,7 @@
 
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
-CURRENT_TASK: FND-009 — حوكمة Git وPull Requests
+CURRENT_TASK: FND-009-03 — حماية main (متوقفة بانتظار تأكيد 2FA من المستخدم)
 LAST_COMPLETED: FND-009-02 — أسماء الفروع وConventional Commits
 ```
 

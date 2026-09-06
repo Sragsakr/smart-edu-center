@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_TECHNICAL_EPIC: FND-009 — Git Governance
-CURRENT_TECHNICAL_TASK: FND-009-03 — حماية main وفرض PR وchecks
-NEXT_TECHNICAL_TASK: FND-009-04 — إضافة CODEOWNERS عند انضمام فريق
+CURRENT_TECHNICAL_TASK: FND-009-03 — حماية main (متوقفة بانتظار تأكيد GitHub 2FA)
+NEXT_TECHNICAL_TASK: — (FND-010-01 بعد اكتمال FND-009-03)
 ```
 
 ## قواعد التشغيل
@@ -70,8 +70,8 @@ NEXT_TECHNICAL_TASK: FND-009-04 — إضافة CODEOWNERS عند انضمام ف
 
 - [x] `FND-009-01` إضافة PR template وIssue templates للBug/Feature/Migration.
 - [x] `FND-009-02` تعريف Branch naming وConventional Commits.
-- [ ] `FND-009-03` حماية `main`: PR required وchecks required ومنع force push.
-- [ ] `FND-009-04` إضافة CODEOWNERS عند انضمام فريق.
+- [!] `FND-009-03` حماية `main`: PR required وchecks required ومنع force push — متوقفة: يتطلب تأكيد 2FA من جهاز المستخدم (GitHub Mobile/Passkey/Password) ولم يكتمل إنشاء ruleset.
+- [!] `FND-009-04` إضافة CODEOWNERS عند انضمام فريق — متوقفة: لا أعضاء أو فرق آخرون حاليًا.
 
 ### FND-010 — Backup & Recovery
 
