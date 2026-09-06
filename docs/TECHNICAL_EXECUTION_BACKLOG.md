@@ -5,9 +5,9 @@
 ## مؤشر التنفيذ التقني
 
 ```text
-CURRENT_TECHNICAL_EPIC: FND-008 — CI/CD
-CURRENT_TECHNICAL_TASK: FND-008-05 — إضافة Dependency وSecret scanning
-NEXT_TECHNICAL_TASK: FND-009-01 — إضافة PR وIssue templates
+CURRENT_TECHNICAL_EPIC: FND-009 — Git Governance
+CURRENT_TECHNICAL_TASK: FND-009-01 — إضافة PR وIssue templates
+NEXT_TECHNICAL_TASK: FND-009-02 — تعريف Branch naming وConventional Commits
 ```
 
 ## قواعد التشغيل
@@ -62,7 +62,7 @@ NEXT_TECHNICAL_TASK: FND-009-01 — إضافة PR وIssue templates
 - [x] `FND-008-02` تشغيل lint/typecheck/build في Jobs واضحة.
 - [x] `FND-008-03` إضافة Migration drift/check وعدم تطبيق DB من PR غير معتمد.
 - [x] `FND-008-04` ربط Preview Deployment بالـPR وحفظ URL كـCheck.
-- [ ] `FND-008-05` إضافة Dependency وSecret scanning.
+- [x] `FND-008-05` إضافة Dependency وSecret scanning.
 
 **Acceptance:** PR مكسور لا يندمج، وPR سليم ينتج Preview قابلًا للمراجعة.
 
@@ -382,3 +382,4 @@ NEXT_TECHNICAL_TASK: FND-009-01 — إضافة PR وIssue templates
 | 2026-09-06 | FND-008-02 | `ci: run independent quality checks` | lint/typecheck/test/build + client scan jobs | FND-008-03 |
 | 2026-09-06 | FND-008-03 | `ci: enforce append-only migrations` | 10 tests + migration safety job without DB credentials | FND-008-04 |
 | 2026-09-06 | FND-008-04 | PR #1 | Vercel Preview Ready + all 7 PR checks passed | FND-008-05 |
+| 2026-09-06 | FND-008-05 | `ci: add dependency and secret scanning` | 15 tests + npm audit + repository/client scans | FND-009-01 |
