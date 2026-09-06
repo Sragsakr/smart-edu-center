@@ -5,9 +5,9 @@
 ## مؤشر التنفيذ التقني
 
 ```text
-CURRENT_TECHNICAL_EPIC: FND-009 — Git Governance
-CURRENT_TECHNICAL_TASK: FND-009-03 — حماية main (متوقفة بانتظار تأكيد GitHub 2FA)
-NEXT_TECHNICAL_TASK: — (FND-010-01 بعد اكتمال FND-009-03)
+CURRENT_TECHNICAL_EPIC: FND-010 — Backup & Recovery
+CURRENT_TECHNICAL_TASK: FND-010-01 — تعريف RPO/RTO مبدئيين
+NEXT_TECHNICAL_TASK: FND-010-02 — توثيق Supabase backup policy
 ```
 
 ## قواعد التشغيل
@@ -70,7 +70,7 @@ NEXT_TECHNICAL_TASK: — (FND-010-01 بعد اكتمال FND-009-03)
 
 - [x] `FND-009-01` إضافة PR template وIssue templates للBug/Feature/Migration.
 - [x] `FND-009-02` تعريف Branch naming وConventional Commits.
-- [!] `FND-009-03` حماية `main`: PR required وchecks required ومنع force push — متوقفة: يتطلب تأكيد 2FA من جهاز المستخدم (GitHub Mobile/Passkey/Password) ولم يكتمل إنشاء ruleset.
+- [!] `FND-009-03` حماية `main`: PR required وchecks required ومنع force push — مؤجلة بقرار المالك؛ لم يُنشأ أي ruleset.
 - [!] `FND-009-04` إضافة CODEOWNERS عند انضمام فريق — متوقفة: لا أعضاء أو فرق آخرون حاليًا.
 
 ### FND-010 — Backup & Recovery
@@ -385,3 +385,4 @@ NEXT_TECHNICAL_TASK: — (FND-010-01 بعد اكتمال FND-009-03)
 | 2026-09-06 | FND-008-05 | `ci: add dependency and secret scanning` | 15 tests + npm audit + repository/client scans | FND-009-01 |
 | 2026-09-06 | FND-009-01 | `chore: add contribution templates` | PR + Bug/Feature/Migration issue forms validated | FND-009-02 |
 | 2026-09-06 | FND-009-02 | `docs: define git contribution workflow` | branch/commit/PR rules + full quality gate | FND-009-03 |
+| 2026-09-06 | FND-009-03..04 | قرار المالك | main protection deferred؛ لا فريق لـCODEOWNERS | FND-010-01 |

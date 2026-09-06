@@ -15,8 +15,9 @@
 
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
-CURRENT_TASK: FND-009-03 — حماية main (متوقفة بانتظار تأكيد 2FA من المستخدم)
+CURRENT_TASK: FND-010 — Backup & Recovery
 LAST_COMPLETED: FND-009-02 — أسماء الفروع وConventional Commits
+DEFERRED: FND-009-03 بقرار المالك، وFND-009-04 حتى انضمام فريق
 ```
 
 ## مبادئ ثابتة
@@ -59,7 +60,7 @@ LAST_COMPLETED: FND-009-02 — أسماء الفروع وConventional Commits
 - [x] `FND-006` إضافة نوع مساحة العمل: سنتر أو مدرس مستقل.
 - [x] `FND-007` فصل Development/Preview/Production ومتغيرات البيئة.
 - [x] `FND-008` CI لفحص lint/typecheck/build على كل Pull Request.
-- [ ] `FND-009` حماية فرع `main` واعتماد Conventional Commits وPR checklist.
+- [!] `FND-009` حماية فرع `main` واعتماد Conventional Commits وPR checklist — القواعد والقوالب مكتملة؛ حماية `main` مؤجلة بقرار المالك.
 - [ ] `FND-010` إعداد Backup/Restore واختبار استعادة أولي.
 - [x] `IAM-001` تسجيل الحساب والدخول والخروج وتجديد جلسة SSR.
 - [x] `IAM-002` Onboarding ينشئ سنترًا أو مساحة مدرس مستقل وعضوية Owner.
@@ -244,4 +245,5 @@ LAST_COMPLETED: FND-009-02 — أسماء الفروع وConventional Commits
 
 | التاريخ | Task | العائق | القرار/المالك |
 |---|---|---|---|
-| — | — | لا يوجد | — |
+| 2026-09-06 | FND-009-03 | حماية `main` مؤجلة بقرار المالك | المالك |
+| 2026-09-06 | FND-009-04 | لا يوجد فريق لتعيينه في CODEOWNERS | المالك |
