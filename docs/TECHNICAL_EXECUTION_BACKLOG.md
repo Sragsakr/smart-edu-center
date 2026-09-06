@@ -5,9 +5,9 @@
 ## مؤشر التنفيذ التقني
 
 ```text
-CURRENT_TECHNICAL_EPIC: IAM-003 — البريد وكلمة المرور
-CURRENT_TECHNICAL_TASK: IAM-003-01 — صفحة طلب إعادة تعيين كلمة المرور Server Action
-NEXT_TECHNICAL_TASK: IAM-003-02 — Callback آمن وتحقق من next المحلي
+CURRENT_TECHNICAL_EPIC: LANDING-001 — Landing page للمنتج
+CURRENT_TECHNICAL_TASK: PLATFORM-ADMIN-001 — Platform Dashboard (Overview) كامل
+NEXT_TECHNICAL_TASK: (التوالي يلي Platform Dashboard)
 ```
 
 ## قواعد التشغيل
@@ -80,20 +80,30 @@ NEXT_TECHNICAL_TASK: IAM-003-02 — Callback آمن وتحقق من next الم�
 - [x] `FND-010-03` إنشاء runbook للاستعادة ونسخ ملفات Storage.
 - [!] `FND-010-04` تنفيذ restore drill وتسجيل الزمن والنتيجة — لم يُنفذ: يحتاج مورد استعادة معزولًا ورفض المالك أي تكلفة أو مشروع إضافي.
 
----
-
 ## Stream B — Identity, Tenancy & Authorization
+
+### LANDING-001 — Landing page
+
+- [x] `LANDING-001-01` Landing عامة RTL في جذر `/` للزائر غير المسجّل، بأقسام Hero/المميزات/النموذجين/الأسعار/كيف أبدأ، ودعوة للتسجيل، وقسم أسعار (تجربة مجانية 7 أيام). متجاوبة وAccessibility نظيف.
+
+### IAM-002A — موافقة إدارة المنصة على الحسابات
+
+**Dependencies:** IAM-001..002. **Output:** لا يُنشأ Tenant أو Owner جديد قبل موافقة Platform Admin.
+
+- [-] `IAM-002A-01` Vertical slice لطلب مساحة العمل، حالة الانتظار/الرفض، لوحة مراجعة Platform Admin، قبول ذري ينشئ Tenant وOwner، وLoading لكل الإجراءات.
+
+**Acceptance:** التسجيل لا يرسل رسالة تأكيد؛ الطلب يتضمن موبايل وواتساب بكود الدولة ثم يسجل المستخدم خروجًا؛ الحساب المعلق لا يدخل قبل القبول؛ غير المشرف لا يقرأ أو يراجع طلبات غيره؛ القبول ينشئ Tenant وOwner في transaction واحدة؛ كل Server Action يعرض pending ويمنع التكرار.
 
 ### IAM-003 — البريد وكلمة المرور
 
 **Dependencies:** IAM-001..002.
 
-- [ ] `IAM-003-01` صفحة طلب إعادة تعيين كلمة المرور Server Action.
-- [ ] `IAM-003-02` Callback آمن لتبادل code والتحقق من `next` المحلي فقط.
-- [ ] `IAM-003-03` صفحة تعيين كلمة مرور جديدة والتحقق من القوة والتطابق.
-- [ ] `IAM-003-04` حالات الرابط المنتهي/المستخدم غير الموجود/النجاح وإعادة الإرسال.
-- [ ] `IAM-003-05` ضبط Supabase Redirect URLs لـlocalhost وPreview وProduction.
-- [ ] `IAM-003-06` اختبارات التكامل وعدم كشف وجود بريد مسجل.
+- [x] `IAM-003-01` صفحة طلب استعادة كلمة المرور Server Action مع عدم كشف وجود البريد.
+- [x] `IAM-003-02` نظام طلبات/موافقة من Platform Admin يربط الحساب برقم واتساب المسجل.
+- [x] `IAM-003-03` توليد كود استعادة فريد، تخزينه Hash فقط، صلاحيته 15 دقيقة، استخدام واحد وحد 5 محاولات خاطئة.
+- [x] `IAM-003-04` صفحة تعيين كلمة مرور جديدة بالتحقق من القوة والتطابق، وتغيير كلمة المرور عبر Admin API بعد استهلاك الكود بأمان.
+- [ ] `IAM-003-05` إرسال واتساب تلقائي للكود عبر مزود OTP — مؤجل بقرار المالك؛ يُرسل حاليًا يدويًا عبر رابط wa.me.
+- [x] `IAM-003-06` اختبارات التكامل والأذونات: طلب/استهلاك كود يعملان لغير المسجّل (anon)، والقبول/الرفض للمشرف فقط؛ تحذير Advisor حول أمان `consume` كـSECURITY DEFINER نشرَ وقُرئ كقرار مقصود (استعادة كلمة مرور زائر غير مسجّل) دون كشف بيانات أخرى. إرسال واتساب تلقائي مؤجل.
 
 ### IAM-004 — الدعوات
 
@@ -103,6 +113,7 @@ NEXT_TECHNICAL_TASK: IAM-003-02 — Callback آمن وتحقق من next الم�
 - [ ] `IAM-004-04` واجهة الفريق والدعوات والحالات الفارغة والمنتهية.
 - [ ] `IAM-004-05` Email template وتسليم عبر Supabase أولًا ثم Resend لاحقًا.
 - [ ] `IAM-004-06` Audit واختبارات expiry/replay/wrong tenant.
+- [ ] `IAM-004-07` دعم عضويات المستخدم في أكثر من Tenant بدور مستقل، وتعطيل عضوية واحدة دون حذف Auth user أو التأثير على عضوياته الأخرى.
 
 ### IAM-005 — مصفوفة الصلاحيات
 
@@ -111,6 +122,7 @@ NEXT_TECHNICAL_TASK: IAM-003-02 — Callback آمن وتحقق من next الم�
 - [ ] `IAM-005-03` DAL مركزي يفرض tenant + role ولا يعتمد على UI.
 - [ ] `IAM-005-04` إخفاء/تعطيل عناصر UI حسب capability المسترجعة من الخادم.
 - [ ] `IAM-005-05` اختبارات Role × Resource × Action موجبة وسالبة.
+- [ ] `IAM-005-06` ربط حسابات الطلاب وأولياء الأمور بملفاتهم عبر مسار دعوة موثوق يمنع claim لسجل شخص آخر.
 
 ### IAM-006..008 — الملكية والجلسات والعزل
 
@@ -309,7 +321,10 @@ NEXT_TECHNICAL_TASK: IAM-003-02 — Callback آمن وتحقق من next الم�
 - [ ] `SAA-002-01` Entitlements service وusage counters وgrace behavior.
 - [ ] `SAA-003-01` Trial/active/past_due/suspended/canceled state machine.
 - [ ] `SAA-004-01` Platform billing provider + signed webhooks + invoices.
-- [ ] `SAA-005-01` Separate admin schema/routes/roles/audit.
+- [ ] `SAA-005-01` Platform Admin shell منفصل مع Overview ومؤشرات SaaS الإجمالية.
+- [ ] `SAA-005-02` إدارة كل Tenants والمدرسين وأنواع الحسابات وحالات active/suspended مع Audit.
+- [ ] `SAA-005-03` تقارير الاشتراكات والاستخدام والنمو والتحصيل الخاص بالمنصة عبر كل Tenants.
+- [ ] `SAA-005-04` وصول دعم إلى Tenant عبر Impersonation مؤقت بسبب ومدة وbanner وAudit، دون قراءة دائمة مفتوحة لبيانات الطلاب.
 - [ ] `SAA-006-01` Support tickets وtemporary impersonation with reason/expiry/banner.
 - [ ] `SAA-007-01` Custom domain verification/SSL/branding isolation.
 - [ ] `SAA-008-01` MRR/churn/ARPA metrics from immutable billing events.
@@ -389,4 +404,4 @@ NEXT_TECHNICAL_TASK: IAM-003-02 — Callback آمن وتحقق من next الم�
 | 2026-09-06 | FND-010-01 | `docs: define recovery objectives` | RPO/RTO targets and review triggers documented | FND-010-02 |
 | 2026-09-06 | FND-010-02 | `docs: document Supabase backup policy` | Free/paid/PITR/Storage limits sourced from Supabase docs | FND-010-03 |
 | 2026-09-06 | FND-010-03 | `docs: add backup and restore runbook` | database/Storage/cutover steps + empty Production Storage inventory | FND-010-04 |
-| 2026-09-06 | FND-007-03/FND-010-04 | قرار المالك | Vercel Production re-linked to shared Supabase; extra project deleted; restore drill deferred | IAM-003-01 |
+| 2026-09-06 | FND-007-03/FND-010-04 | قرار المالك | Vercel Production re-linked to shared Supabase; extra project deleted; restore drill deferred | IAM-002A-01 |

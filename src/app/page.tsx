@@ -1,12 +1,13 @@
-import { Dashboard } from "@/components/dashboard";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { LandingPage } from "@/components/landing-page";
+import { Dashboard } from "@/components/dashboard";
+import { getCurrentAccountAccess } from "@/lib/auth/account-access";
 
 export default async function HomePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: membership } = await supabase.from("memberships").select("tenant_id").eq("user_id", user.id).eq("active", true).limit(1).maybeSingle();
-  if (!membership) redirect("/onboarding");
-  return <Dashboard />;
+  const access = await getCurrentAccountAccess();
+  if (!access.user) return <LandingPage />;
+  if (access.isPlatformAdmin) redirect("/platform-admin/requests");
+  if (access.membership) return <Dashboard />;
+  if (access.request) redirect("/account-status");
+  redirect("/onboarding");
 }
