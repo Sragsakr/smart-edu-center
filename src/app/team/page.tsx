@@ -4,7 +4,7 @@ import { Copy, MailPlus, ShieldCheck, UsersRound } from "lucide-react";
 
 import { ManagementRouteShell } from "@/components/management-route-shell";
 import { getTeamWorkspaceData } from "@/lib/team-access";
-import { createInvitation, deactivateMembership, resendInvitation, revokeInvitation } from "./actions";
+import { createInvitation, deactivateMembership, reactivateMembership, resendInvitation, revokeInvitation } from "./actions";
 import { ActionSubmitButton, InvitationShare } from "./team-client";
 import { DismissibleAlert } from "./dismissible-alert";
 
@@ -66,7 +66,7 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
               <div className="min-w-0 flex-1">
                 <b className="text-sm">رابط الدعوة الجديد</b>
                 <p className="mt-1 break-all text-xs leading-6 text-[#6f6a80]">{invite}</p>
-                <p className="mt-2 text-xs font-bold text-[#6547d9]">أرسل الرابط للشخص مباشرة عبر واتساب أو انسخه. المستخدم الجديد ينشئ كلمة المرور من صفحة الدعوة، والمستخدم الحالي يدخل بكلمة مروره الحالية.</p>
+                <p className="mt-2 text-xs font-bold text-[#6547d9]">أرسل الرابط للشخص مباشرة عبر واتساب أو انسخه. المستخدم الجديد ينشئ كلمة المرور من صفحة الدعوة.</p>
                 <InvitationShare invitationUrl={invite} />
               </div>
             </div>
@@ -92,7 +92,34 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
 
         <section className="card overflow-hidden">
           <div className="flex items-center gap-2 p-5 md:px-6"><UsersRound className="size-5 text-[#6547d9]" /><h2 className="font-extrabold">أعضاء الفريق</h2><span className="rounded-full bg-[#eeeaff] px-2 py-1 text-[10px] font-bold text-[#6547d9]">{data.members.length}</span></div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-right text-xs"><thead className="bg-[#faf9fc] text-[#8b8799]"><tr><th className="px-6 py-3">البريد</th><th className="px-4 py-3">الدور</th><th className="px-4 py-3">الحالة</th><th className="px-4 py-3">منذ</th><th className="px-6 py-3"></th></tr></thead><tbody>{data.members.map((member) => <tr key={member.user_id} className="border-t border-[#efedf3]"><td className="px-6 py-4 font-bold">{member.email}</td><td className="px-4 py-4">{roleLabel[member.role]}</td><td className="px-4 py-4"><span className={`rounded-full px-3 py-1 font-bold ${member.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{member.active ? "نشط" : "معطل"}</span></td><td className="px-4 py-4 text-[#777386]">{new Date(member.created_at).toLocaleDateString("ar-EG")}</td><td className="px-6 py-4">{data.manageable && member.active && member.role !== "owner" && member.user_id !== data.currentUserId ? <form action={deactivateMembership}><input type="hidden" name="tenant_id" value={data.tenant.id}/><input type="hidden" name="user_id" value={member.user_id}/><ActionSubmitButton idleLabel="تعطيل" pendingLabel="جارٍ التعطيل..." className="rounded-lg border border-red-200 px-3 py-2 font-bold text-red-600" /></form> : null}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-right text-xs">
+              <thead className="bg-[#faf9fc] text-[#8b8799]"><tr><th className="px-6 py-3">البريد</th><th className="px-4 py-3">الدور</th><th className="px-4 py-3">الحالة</th><th className="px-4 py-3">منذ</th><th className="px-6 py-3">الإجراء</th></tr></thead>
+              <tbody>{data.members.map((member) => (
+                <tr key={member.user_id} className="border-t border-[#efedf3]">
+                  <td className="px-6 py-4 font-bold">{member.email}</td>
+                  <td className="px-4 py-4">{roleLabel[member.role]}</td>
+                  <td className="px-4 py-4"><span className={`rounded-full px-3 py-1 font-bold ${member.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{member.active ? "نشط" : "معطل"}</span></td>
+                  <td className="px-4 py-4 text-[#777386]">{new Date(member.created_at).toLocaleDateString("ar-EG")}</td>
+                  <td className="px-6 py-4">
+                    {data.manageable && member.role !== "owner" && member.user_id !== data.currentUserId ? (
+                      member.active ? (
+                        <form action={deactivateMembership}>
+                          <input type="hidden" name="tenant_id" value={data.tenant.id}/><input type="hidden" name="user_id" value={member.user_id}/>
+                          <ActionSubmitButton idleLabel="تعطيل" pendingLabel="جارٍ التعطيل..." className="rounded-lg border border-red-200 px-3 py-2 font-bold text-red-600" />
+                        </form>
+                      ) : (
+                        <form action={reactivateMembership}>
+                          <input type="hidden" name="tenant_id" value={data.tenant.id}/><input type="hidden" name="user_id" value={member.user_id}/>
+                          <ActionSubmitButton idleLabel="إعادة تنشيط" pendingLabel="جارٍ إعادة التنشيط..." className="rounded-lg border border-emerald-200 px-3 py-2 font-bold text-emerald-700" />
+                        </form>
+                      )
+                    ) : null}
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
         </section>
 
         {data.manageable ? (
