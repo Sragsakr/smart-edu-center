@@ -1,5 +1,5 @@
--- Run this file against both the Supabase PostgreSQL database and the replacement
--- PostgreSQL database after data copy. Compare every result before cutover.
+-- Replacement PostgreSQL validation. Run after the data copy and compare the
+-- output with postgres/validation/source-row-counts.sql before cutover.
 
 select 'app_users' as table_name, count(*)::bigint as row_count from public.app_users
 union all select 'tenants', count(*)::bigint from public.tenants
