@@ -6,10 +6,10 @@ import "./globals.css";
 
 const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo", display: "swap" });
 export const metadata: Metadata = {
-  title: { default: "Smart Edu Center", template: "%s | Smart Edu Center" },
-  description: "نظام لإدارة السنتر أو المدرس، مع مسار مستقل لمنصة الكورسات الأونلاين والهوية المخصصة.",
-  applicationName: "Smart Edu Center",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Smart Edu" },
+  title: { default: "سبورتي | Saboraty", template: "%s | سبورتي | Saboraty" },
+  description: "سبورتي | Saboraty — نظام لإدارة السنتر أو المدرس، مع مسار مستقل لمنصة الكورسات الأونلاين والهوية المخصصة.",
+  applicationName: "سبورتي | Saboraty",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "سبورتي | Saboraty" },
 };
 export const viewport: Viewport = { themeColor: "#6547d9", colorScheme: "light" };
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
