@@ -5,7 +5,7 @@ import {
   canWithoutResourceScope,
   capabilityDecision,
   type MemberRole,
-} from "@/lib/authorization/policy";
+} from "./policy";
 
 describe("authorization policy", () => {
   it("allows owner and admin to manage the team", () => {
