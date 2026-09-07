@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bell, BookOpen, CalendarCheck, ChevronDown, CircleDollarSign, GraduationCap, LayoutDashboard, Menu, MessageCircle, MoreHorizontal, Plus, Search, Settings, TrendingUp, UserCheck, Users, Wallet, X } from "lucide-react";
+import { Bell, BookOpen, CalendarCheck, ChevronDown, CircleDollarSign, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, MoreHorizontal, Plus, Search, Settings, TrendingUp, UserCheck, Users, Wallet, X } from "lucide-react";
+import { signOut } from "@/app/auth/actions";
 
 const nav = [
   ["الرئيسية", LayoutDashboard], ["الطلاب", Users], ["المجموعات", GraduationCap], ["الحضور", CalendarCheck],
@@ -24,6 +25,7 @@ function Sidebar({active,setActive,open,setOpen}:{active:string;setActive:(x:str
       <nav className="space-y-1.5" aria-label="القائمة الرئيسية">{nav.map(([label,Icon])=><button key={label} onClick={()=>{setActive(label);setOpen(false)}} className={`focus-ring flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${active===label?"bg-[#eeeaff] text-[#6042d3]":"text-[#74718a] hover:bg-[#f8f7fb] hover:text-[#29263d]"}`}><Icon size={19}/>{label}</button>)}</nav>
       <div className="mt-auto rounded-2xl bg-[#f5f2ff] p-4"><p className="text-xs font-bold text-[#5e45bd]">تحتاج مساعدة؟</p><p className="mt-1 text-[11px] leading-5 text-[#817a9a]">فريقنا جاهز لمساعدتك في إعداد السنتر.</p><button className="mt-3 w-full rounded-lg bg-white py-2 text-xs font-bold text-[#6042d3]">تواصل معنا</button></div>
       <div className="mt-5 flex items-center gap-3 border-t border-[#ece9f3] pt-5"><span className="grid size-10 place-items-center rounded-full bg-[#231f3d] text-xs font-bold text-white">أم</span><div className="min-w-0 flex-1"><b className="block truncate text-xs">أحمد محمود</b><span className="text-[10px] text-[#9692a5]">مدير السنتر</span></div><MoreHorizontal size={17} className="text-[#9994a8]"/></div>
+      <form action={signOut} className="mt-4 border-t border-[#ece9f3] pt-4"><button type="submit" className="focus-ring flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-[#d95567] transition hover:bg-[#fff0f1]"><LogOut size={19}/>تسجيل الخروج</button></form>
     </aside></>;
 }
 
