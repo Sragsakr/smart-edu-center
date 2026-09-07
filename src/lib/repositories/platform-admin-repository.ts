@@ -5,6 +5,11 @@ export type RepositoryPlatformAdminUser = {
   email: string;
 };
 
+export type RepositoryPlatformAdminAccess =
+  | { status: "unauthenticated" }
+  | { status: "forbidden" }
+  | { status: "authorized"; user: RepositoryPlatformAdminUser };
+
 export type RepositoryOverviewMetrics = {
   centers: number;
   independentTeachers: number;
@@ -64,7 +69,7 @@ export type RepositoryAuditRow = {
 };
 
 export interface PlatformAdminRepository {
-  getCurrentPlatformAdmin(): Promise<RepositoryPlatformAdminUser | null>;
+  getCurrentPlatformAdminAccess(): Promise<RepositoryPlatformAdminAccess>;
   getOverviewMetrics(): Promise<RepositoryOverviewMetrics>;
   listTenants(): Promise<RepositoryTenantRow[]>;
   listUsers(): Promise<RepositoryUserRow[]>;
