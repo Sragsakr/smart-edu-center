@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MailCheck, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { acceptInvitation } from "@/app/team/actions";
+import { ActionSubmitButton } from "@/app/team/team-client";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -27,7 +28,7 @@ export default async function InvitePage({ searchParams }: { searchParams: Searc
             <div className="rounded-2xl bg-[#f7f5ff] p-4 text-sm text-[#5e5870]"><ShieldCheck className="ml-2 inline size-4 text-[#6547d9]" />أنت مسجل الدخول حاليًا بالبريد: <b>{user.email}</b></div>
             <form action={acceptInvitation} className="mt-4">
               <input type="hidden" name="token" value={token} />
-              <button className="w-full rounded-xl bg-[#6547d9] px-5 py-3 text-sm font-bold text-white">قبول الدعوة والانضمام</button>
+              <ActionSubmitButton idleLabel="قبول الدعوة والانضمام" pendingLabel="جارٍ قبول الدعوة..." className="w-full rounded-xl bg-[#6547d9] px-5 py-3 text-sm font-bold text-white" />
             </form>
           </div>
         ) : token ? (
