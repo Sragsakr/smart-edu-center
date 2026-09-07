@@ -1,7 +1,7 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
-import { platformAdminRepository } from "@/lib/repositories/supabase-platform-admin-repository";
+import { platformAdminRepository } from "@/lib/repositories";
 
 export type PlatformAdminUser = { id: string; email: string };
 
@@ -64,9 +64,12 @@ export type AuditRow = {
 };
 
 async function platformAdminUser(): Promise<PlatformAdminUser> {
-  const user = await platformAdminRepository.getCurrentPlatformAdmin();
-  if (!user) redirect("/login");
-  return user;
+  const access = await platformAdminRepository.getCurrentPlatformAdminAccess();
+
+  if (access.status === "unauthenticated") redirect("/login");
+  if (access.status === "forbidden") redirect("/");
+
+  return access.user;
 }
 
 export async function requirePlatformAdmin(): Promise<PlatformAdminUser> {
