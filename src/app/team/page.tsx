@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CheckCircle2, Copy, MailPlus, RefreshCw, ShieldCheck, UserMinus, UsersRound, XCircle } from "lucide-react";
+import { Copy, MailPlus, ShieldCheck, UsersRound } from "lucide-react";
 
 import { getTeamWorkspaceData } from "@/lib/team-access";
 import { createInvitation, deactivateMembership, resendInvitation, revokeInvitation } from "./actions";
 import { ActionSubmitButton, InvitationShare } from "./team-client";
+import { DismissibleAlert } from "./dismissible-alert";
 
 const roleLabel: Record<string, string> = {
   owner: "المالك",
@@ -59,8 +60,8 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
           </section>
         ) : null}
 
-        {error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700"><XCircle className="ml-2 inline size-4" />{error}</div> : null}
-        {success ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700"><CheckCircle2 className="ml-2 inline size-4" />{success}</div> : null}
+        {error ? <DismissibleAlert kind="error" message={error} /> : null}
+        {success ? <DismissibleAlert kind="success" message={success} /> : null}
         {invite ? (
           <div className="rounded-2xl border border-[#cfc7f5] bg-[#f1edff] p-4">
             <div className="flex items-start gap-3"><Copy className="mt-1 size-5 text-[#6547d9]" /><div className="min-w-0 flex-1"><b className="text-sm">رابط الدعوة الجديد</b><p className="mt-1 break-all text-xs leading-6 text-[#6f6a80]">{invite}</p><p className="mt-2 text-xs font-bold text-[#6547d9]">{delivery === "sent" ? "تم طلب إرسال الدعوة عبر البريد من خلال Supabase Auth، ويمكنك أيضًا نسخ الرابط أو إرساله عبر واتساب." : delivery === "existing-user" ? "الحساب موجود بالفعل؛ أرسل الرابط للمستخدم ليفتحه بعد تسجيل الدخول بنفس البريد." : "تعذر الإرسال التلقائي عبر البريد؛ استخدم النسخ أو واتساب."}</p><InvitationShare invitationUrl={invite} /></div></div>
