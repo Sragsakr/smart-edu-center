@@ -6,6 +6,7 @@ import { Bell, BookOpen, CalendarCheck, ChevronDown, GraduationCap, LayoutDashbo
 
 import { signOut } from "@/app/auth/actions";
 import { ActionSubmitButton } from "@/app/team/team-client";
+import { SupportWidget } from "@/components/support-widget";
 
 const items = [
   { label: "الرئيسية", icon: LayoutDashboard, href: "/" },
@@ -32,8 +33,7 @@ export function ManagementRouteShell({ activeLabel, children }: { activeLabel: s
       <nav className="space-y-1.5" aria-label="القائمة الرئيسية">
         {items.map(({label, icon:Icon, href}) => <Link key={label} href={href} onClick={()=>setOpen(false)} className={`focus-ring flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${activeLabel===label?"bg-[#eeeaff] text-[#6042d3]":"text-[#74718a] hover:bg-[#f8f7fb] hover:text-[#29263d]"}`}><Icon size={19}/>{label}</Link>)}
       </nav>
-      <div className="mt-auto rounded-2xl bg-[#f5f2ff] p-4"><p className="text-xs font-bold text-[#5e45bd]">تحتاج مساعدة؟</p><p className="mt-1 text-[11px] leading-5 text-[#817a9a]">فريقنا جاهز لمساعدتك في إعداد السنتر.</p><button className="mt-3 w-full rounded-lg bg-white py-2 text-xs font-bold text-[#6042d3]">تواصل معنا</button></div>
-      <div className="mt-5 flex items-center gap-3 border-t border-[#ece9f3] pt-5"><span className="grid size-10 place-items-center rounded-full bg-[#231f3d] text-xs font-bold text-white">أم</span><div className="min-w-0 flex-1"><b className="block truncate text-xs">أحمد محمود</b><span className="text-[10px] text-[#9692a5]">مدير السنتر</span></div><MoreHorizontal size={17} className="text-[#9994a8]"/></div>
+      <div className="mt-auto flex items-center gap-3 border-t border-[#ece9f3] pt-5"><span className="grid size-10 place-items-center rounded-full bg-[#231f3d] text-xs font-bold text-white">أم</span><div className="min-w-0 flex-1"><b className="block truncate text-xs">أحمد محمود</b><span className="text-[10px] text-[#9692a5]">مدير السنتر</span></div><MoreHorizontal size={17} className="text-[#9994a8]"/></div>
       <form action={signOut} className="mt-4 border-t border-[#ece9f3] pt-4"><ActionSubmitButton idleLabel="تسجيل الخروج" pendingLabel="جارٍ تسجيل الخروج..." className="focus-ring flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-[#d95567] transition hover:bg-[#fff0f1]" /></form>
     </aside>
     <main className="min-w-0 flex-1">
@@ -43,5 +43,6 @@ export function ManagementRouteShell({ activeLabel, children }: { activeLabel: s
       </header>
       <div className="mx-auto max-w-[1500px] p-4 md:p-8">{children}</div>
     </main>
+    <SupportWidget />
   </div>;
 }
