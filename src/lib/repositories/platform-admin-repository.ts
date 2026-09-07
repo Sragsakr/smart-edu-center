@@ -16,7 +16,28 @@ export type RepositoryOverviewMetrics = {
   auditLogEntries: number;
 };
 
+export type RepositoryTenantRow = {
+  id: string;
+  name: string;
+  slug: string;
+  account_type: string;
+  created_by: string;
+  created_at: string;
+  status: "active" | "suspended";
+  studentCount: number;
+  memberCount: number;
+};
+
+export type RepositoryUserRow = {
+  id: string;
+  email: string;
+  created_at: string;
+  memberships: { tenant_id: string; role: string; active: boolean }[];
+};
+
 export interface PlatformAdminRepository {
   getCurrentPlatformAdmin(): Promise<RepositoryPlatformAdminUser | null>;
   getOverviewMetrics(): Promise<RepositoryOverviewMetrics>;
+  listTenants(): Promise<RepositoryTenantRow[]>;
+  listUsers(): Promise<RepositoryUserRow[]>;
 }
