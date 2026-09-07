@@ -73,98 +73,12 @@ export async function getOverviewMetrics(): Promise<OverviewMetrics> {
 
 export async function listTenants(): Promise<TenantRow[]> {
   await platformAdminUser();
-  const admin = createAdminClient();
-
-  const { data: tenants, error } = await admin
-    .from("tenants")
-    .select("id,name,slug,account_type,created_by,created_at,status")
-    .order("created_at", { ascending: false });
-  if (error) throw new Error("failed to load tenants");
-  const rows = tenants ?? [];
-
-  const tenantIds = rows.map((t) => t.id);
-  if (tenantIds.length === 0) return [];
-
-  const [studentsData, membershipsData] = await Promise.all([
-    admin
-      .from("students")
-      .select("tenant_id")
-      .in("tenant_id", tenantIds),
-    admin.from("memberships").select("tenant_id").in("tenant_id", tenantIds),
-  ]);
-
-  const studentCounts = new Map<string, number>();
-  for (const s of studentsData.data ?? []) {
-    const t = s.tenant_id as string;
-    studentCounts.set(t, (studentCounts.get(t) ?? 0) + 1);
-  }
-  const memberCounts = new Map<string, number>();
-  for (const m of membershipsData.data ?? []) {
-    const t = m.tenant_id as string;
-    memberCounts.set(t, (memberCounts.get(t) ?? 0) + 1);
-  }
-
-  return rows.map((t) => ({
-    id: t.id,
-    name: t.name as string,
-    slug: t.slug as string,
-    account_type: t.account_type as string,
-    created_by: t.created_by as string,
-    created_at: t.created_at as string,
-    status: (t.status as "active" | "suspended") ?? "active",
-    studentCount: studentCounts.get(t.id) ?? 0,
-    memberCount: memberCounts.get(t.id) ?? 0,
-  }));
+  return platformAdminRepository.listTenants();
 }
 
 export async function listUsers(): Promise<UserRow[]> {
   await platformAdminUser();
-  const admin = createAdminClient();
-
-  const { data: memberships, error: mError } = await admin
-    .from("memberships")
-    .select("user_id,tenant_id,role,active");
-  if (mError) throw new Error("failed to load memberships");
-
-  const userLookup = new Map<string, UserRow>();
-  for (const m of memberships ?? []) {
-    const uid = m.user_id as string;
-    const entry = userLookup.get(uid) ?? {
-      id: uid,
-      email: "",
-      created_at: "",
-      memberships: [],
-    };
-    entry.memberships.push({
-      tenant_id: m.tenant_id as string,
-      role: m.role as string,
-      active: m.active as boolean,
-    });
-    userLookup.set(uid, entry);
-  }
-
-  const userIds = [...userLookup.keys()];
-  if (userIds.length === 0) return [];
-
-  const { data: users, error: uError } = await admin.auth.admin.listUsers();
-  if (uError) throw new Error("failed to load auth users");
-
-  const result: UserRow[] = [];
-  for (const u of users?.users ?? []) {
-    const entry = userLookup.get(u.id);
-    if (entry) {
-      entry.email = u.email ?? "";
-      entry.created_at = u.created_at ?? "";
-      result.push(entry);
-    }
-  }
-  // Include any membership users not returned (defensive).
-  for (const uid of userIds) {
-    if (!result.find((r) => r.id === uid)) {
-      result.push(userLookup.get(uid)!);
-    }
-  }
-  return result;
+  return platformAdminRepository.listUsers();
 }
 
 export type PlatformReport = {
