@@ -50,4 +50,25 @@ BEGIN
 END $$;
 
 RESET ROLE;
+
+-- Cross-tenant negative RLS check: owner of the demo tenant must not see or mutate Tenant B invitations.
+INSERT INTO public.tenants (id,name,slug,created_by)
+VALUES ('31111111-1111-4111-8111-111111111199','Tenant B IAM Test','iam-test-b','11111111-1111-4111-8111-111111111102');
+INSERT INTO public.memberships (tenant_id,user_id,role,active)
+VALUES ('31111111-1111-4111-8111-111111111199','11111111-1111-4111-8111-111111111102','owner',true);
+INSERT INTO public.invitations (id,tenant_id,invitee_email,role,token_hash,expires_at,created_by)
+VALUES ('41111111-1111-4111-8111-111111111199','31111111-1111-4111-8111-111111111199','cross-tenant@example.com','teacher',encode(extensions.digest('cross-tenant-iam004-token-abcdefghijklmnopqrstuvwxyz','sha256'),'hex'),now()+interval '7 days','11111111-1111-4111-8111-111111111102');
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', json_build_object('sub','11111111-1111-4111-8111-111111111101','email','center.demo@example.com','role','authenticated')::text, true);
+DO $$
+DECLARE visible_count integer;
+BEGIN
+  SELECT count(*) INTO visible_count FROM public.invitations WHERE id='41111111-1111-4111-8111-111111111199';
+  IF visible_count <> 0 THEN RAISE EXCEPTION 'cross-tenant select unexpectedly visible'; END IF;
+  UPDATE public.invitations SET status='revoked' WHERE id='41111111-1111-4111-8111-111111111199';
+  IF FOUND THEN RAISE EXCEPTION 'cross-tenant update unexpectedly succeeded'; END IF;
+END $$;
+
+RESET ROLE;
 ROLLBACK;
