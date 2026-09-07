@@ -7,7 +7,8 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { getAuthAccountState, removeLegacyInvitePlaceholder } from "@/lib/invitations";
-import type { MemberRole } from "@/lib/team-access";
+import type { MemberRole, TenantCapability } from "@/lib/authorization/policy";
+import { AuthorizationError, requireTenantCapability } from "@/lib/authorization/server";
 
 const assignableRoles = new Set<MemberRole>(["admin", "teacher", "receptionist", "accountant"]);
 
@@ -15,19 +16,13 @@ function fail(tenantId: string, message: string): never {
   redirect(`/team?tenant=${encodeURIComponent(tenantId)}&error=${encodeURIComponent(message)}`);
 }
 
-async function requireManager(tenantId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: membership, error } = await supabase
-    .from("memberships")
-    .select("role,active")
-    .eq("tenant_id", tenantId)
-    .eq("user_id", user.id)
-    .eq("active", true)
-    .maybeSingle();
-  if (error || !membership || !["owner", "admin"].includes(membership.role)) fail(tenantId, "ليس لديك صلاحية لإدارة الفريق");
-  return { supabase, user, role: membership.role as MemberRole };
+async function requireTeamCapability(tenantId: string, capability: TenantCapability) {
+  try {
+    return await requireTenantCapability(tenantId, capability);
+  } catch (error) {
+    if (error instanceof AuthorizationError) fail(tenantId, error.message);
+    throw error;
+  }
 }
 
 function normalizeEmail(value: FormDataEntryValue | null) {
@@ -80,7 +75,7 @@ export async function createInvitation(formData: FormData) {
   if (!/^\S+@\S+\.\S+$/.test(email)) fail(tenantId, "أدخل بريدًا إلكترونيًا صحيحًا");
   if (!assignableRoles.has(role)) fail(tenantId, "اختر صلاحية صحيحة");
 
-  const { supabase, user } = await requireManager(tenantId);
+  const { supabase, user } = await requireTeamCapability(tenantId, "invitations.create");
   await ensureInvitableEmail(tenantId, email);
 
   const { data: pending } = await supabase.from("invitations").select("id").eq("tenant_id", tenantId).eq("invitee_email", email).eq("status", "pending").maybeSingle();
@@ -104,7 +99,7 @@ export async function createInvitation(formData: FormData) {
 export async function resendInvitation(formData: FormData) {
   const tenantId = String(formData.get("tenant_id") ?? "");
   const invitationId = String(formData.get("invitation_id") ?? "");
-  const { supabase, user } = await requireManager(tenantId);
+  const { supabase, user } = await requireTeamCapability(tenantId, "invitations.resend");
   const { data: invitation, error: lookupError } = await supabase
     .from("invitations")
     .select("id,invitee_email,role,status")
@@ -133,7 +128,7 @@ export async function resendInvitation(formData: FormData) {
 export async function revokeInvitation(formData: FormData) {
   const tenantId = String(formData.get("tenant_id") ?? "");
   const invitationId = String(formData.get("invitation_id") ?? "");
-  const { supabase, user } = await requireManager(tenantId);
+  const { supabase, user } = await requireTeamCapability(tenantId, "invitations.revoke");
   const { error } = await supabase.from("invitations").update({ status: "revoked", revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", invitationId).eq("tenant_id", tenantId).eq("status", "pending");
   if (error) fail(tenantId, "تعذر إلغاء الدعوة");
   await audit(supabase, tenantId, user.id, "membership.invitation.revoked", invitationId, {});
@@ -144,7 +139,7 @@ export async function revokeInvitation(formData: FormData) {
 export async function deactivateMembership(formData: FormData) {
   const tenantId = String(formData.get("tenant_id") ?? "");
   const targetUserId = String(formData.get("user_id") ?? "");
-  const { supabase, user, role: actorRole } = await requireManager(tenantId);
+  const { supabase, user, role: actorRole } = await requireTeamCapability(tenantId, "team.manage");
   if (targetUserId === user.id) fail(tenantId, "لا يمكنك تعطيل عضويتك الحالية من هنا");
   const { data: target, error: lookupError } = await supabase.from("memberships").select("role,active").eq("tenant_id", tenantId).eq("user_id", targetUserId).maybeSingle();
   if (lookupError || !target) fail(tenantId, "العضوية غير موجودة");
@@ -161,7 +156,7 @@ export async function deactivateMembership(formData: FormData) {
 export async function reactivateMembership(formData: FormData) {
   const tenantId = String(formData.get("tenant_id") ?? "");
   const targetUserId = String(formData.get("user_id") ?? "");
-  const { supabase, user, role: actorRole } = await requireManager(tenantId);
+  const { supabase, user, role: actorRole } = await requireTeamCapability(tenantId, "team.manage");
   const { data: target, error: lookupError } = await supabase.from("memberships").select("role,active").eq("tenant_id", tenantId).eq("user_id", targetUserId).maybeSingle();
   if (lookupError || !target) fail(tenantId, "العضوية غير موجودة");
   if (target.role === "owner") fail(tenantId, "عضوية المالك لا تحتاج إلى إعادة تنشيط");
