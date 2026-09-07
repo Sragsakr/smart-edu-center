@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { getInvitationPreview } from "@/lib/invitations";
+import { getAuthAccountState, getInvitationPreview, removeLegacyInvitePlaceholder } from "@/lib/invitations";
 
 function inviteError(token: string, message: string): never {
   redirect(`/invite?token=${encodeURIComponent(token)}&error=${encodeURIComponent(message)}`);
@@ -45,7 +45,10 @@ export async function acceptNewInvitation(formData: FormData) {
 
   const invitation = await getInvitationPreview(token);
   if (!invitation || invitation.status !== "pending") inviteError(token, "الدعوة غير صالحة أو لم تعد متاحة");
-  if (invitation.accountExists) inviteError(token, "يوجد حساب بهذا البريد بالفعل. أدخل كلمة مرور حسابك الحالية");
+
+  const accountState = await getAuthAccountState(invitation.email);
+  if (accountState === "registered") inviteError(token, "هذا البريد لديه حساب حقيقي بالفعل، لذلك لا يمكن استخدام دعوة حساب جديد");
+  if (accountState === "legacy-placeholder") await removeLegacyInvitePlaceholder(invitation.email);
 
   const admin = createAdminClient();
   const { data: created, error: createError } = await admin.auth.admin.createUser({
@@ -82,7 +85,7 @@ export async function loginAndAcceptInvitation(formData: FormData) {
 
   const invitation = await getInvitationPreview(token);
   if (!invitation || invitation.status !== "pending") inviteError(token, "الدعوة غير صالحة أو لم تعد متاحة");
-  if (!invitation.accountExists) inviteError(token, "لا يوجد حساب بهذا البريد بعد. أنشئ كلمة مرور جديدة لإكمال الدعوة");
+  if (!invitation.accountExists) inviteError(token, "لا يوجد حساب حقيقي بهذا البريد بعد. أنشئ كلمة مرور جديدة لإكمال الدعوة");
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email: invitation.email, password });
