@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_TECHNICAL_EPIC: IAM-005 — مصفوفة الصلاحيات
-CURRENT_TECHNICAL_TASK: IAM-005-01 — إنشاء docs/RBAC_MATRIX.md لكل Resource/Action
-NEXT_TECHNICAL_TASK: IAM-005-02 — استبدال Policies العامة بسياسات per-resource/per-action
+CURRENT_TECHNICAL_TASK: IAM-005-02 — استبدال Policies العامة بسياسات per-resource/per-action
+NEXT_TECHNICAL_TASK: IAM-005-03 — DAL مركزي يفرض tenant + role ولا يعتمد على UI
 ```
 
 ## قواعد التشغيل
@@ -127,7 +127,7 @@ NEXT_TECHNICAL_TASK: IAM-005-02 — استبدال Policies العامة بسي�
 
 ### IAM-005 — مصفوفة الصلاحيات
 
-- [ ] `IAM-005-01` إنشاء `docs/RBAC_MATRIX.md` لكل Resource/Action.
+- [x] `IAM-005-01` إنشاء `docs/RBAC_MATRIX.md` لكل Resource/Action.
 - [ ] `IAM-005-02` استبدال Policies العامة بسياسات per-resource/per-action.
 - [ ] `IAM-005-03` DAL مركزي يفرض tenant + role ولا يعتمد على UI.
 - [ ] `IAM-005-04` إخفاء/تعطيل عناصر UI حسب capability المسترجعة من الخادم.
@@ -291,7 +291,7 @@ NEXT_TECHNICAL_TASK: IAM-005-02 — استبدال Policies العامة بسي�
 
 ### PORT-001..006
 
-- [ ] `PORT-001-01` Student role/profile mapping ودashboard server reads.
+- [ ] `PORT-001-01` Student role/profile mapping ودdashboard server reads.
 - [ ] `PORT-001-02` الجدول والمحتوى والواجبات والنتائج والمدفوعات.
 - [ ] `PORT-002-01` Guardian identity وربط الأبناء والتحقق من العلاقة.
 - [ ] `PORT-002-02` Guardian dashboard مع privacy boundaries.
@@ -420,3 +420,4 @@ NEXT_TECHNICAL_TASK: IAM-005-02 — استبدال Policies العامة بسي�
 | 2026-09-07 | IAM-002A/IAM-003/LANDING-001 | `87110a5` | full check + DB/RLS + desktop/mobile accessibility | PLATFORM-ADMIN-001 |
 | 2026-09-07 | PLATFORM-ADMIN-001 | pending commit | DB-backed Overview/Tenants/Users/Reports/Audit + tenant status + full check | IAM-004-01 |
 | 2026-09-07 | IAM-004 | `dfe025b` + follow-up commits | invitation migration/RLS/actions/UI/email contract + DB acceptance/replay/wrong-email/expiry + CI + Advisors | IAM-005-01 |
+| 2026-09-07 | IAM-005-01 | `bf881a2` | RBAC resource/action matrix + scoped teacher/finance/team rules documented | IAM-005-02 |
