@@ -66,18 +66,6 @@ async function audit(
   if (error) throw new Error("تعذر تسجيل العملية في سجل التدقيق");
 }
 
-async function trySupabaseInviteEmail(email: string, invitationUrl: string, tenantName?: string) {
-  const admin = createAdminClient();
-  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: invitationUrl,
-    data: { invited_to: tenantName ?? "Smart Edu", invitation_url: invitationUrl },
-  });
-  if (!error) return "sent" as const;
-  const message = error.message.toLowerCase();
-  if (message.includes("already") || message.includes("registered") || message.includes("exists")) return "existing-user" as const;
-  return "delivery-failed" as const;
-}
-
 export async function createInvitation(formData: FormData) {
   const tenantId = String(formData.get("tenant_id") ?? "");
   const email = normalizeEmail(formData.get("email"));
@@ -87,24 +75,14 @@ export async function createInvitation(formData: FormData) {
   if (!assignableRoles.has(role)) fail(tenantId, "اختر صلاحية صحيحة");
 
   const { supabase, user } = await requireManager(tenantId);
-  const { data: existingMembership } = await supabase
-    .from("memberships")
-    .select("user_id")
-    .eq("tenant_id", tenantId)
-    .eq("active", true);
+  const { data: existingMembership } = await supabase.from("memberships").select("user_id").eq("tenant_id", tenantId).eq("active", true);
   if (existingMembership?.length) {
     const admin = createAdminClient();
     const identities = await Promise.all(existingMembership.map(async (row) => (await admin.auth.admin.getUserById(row.user_id)).data.user));
     if (identities.some((identity) => identity?.email?.toLowerCase() === email)) fail(tenantId, "هذا المستخدم عضو بالفعل في مساحة العمل");
   }
 
-  const { data: pending } = await supabase
-    .from("invitations")
-    .select("id")
-    .eq("tenant_id", tenantId)
-    .eq("invitee_email", email)
-    .eq("status", "pending")
-    .maybeSingle();
+  const { data: pending } = await supabase.from("invitations").select("id").eq("tenant_id", tenantId).eq("invitee_email", email).eq("status", "pending").maybeSingle();
   if (pending) fail(tenantId, "توجد دعوة معلقة بالفعل لهذا البريد؛ استخدم إعادة الإرسال");
 
   const { raw, hash } = tokenPair();
@@ -116,12 +94,10 @@ export async function createInvitation(formData: FormData) {
     .single();
   if (error || !invitation) fail(tenantId, "تعذر إنشاء الدعوة");
 
-  await audit(supabase, tenantId, user.id, "membership.invitation.created", invitation.id, { email, role });
-  const origin = await requestOrigin();
-  const invitationUrl = `${origin}/invite?token=${encodeURIComponent(raw)}`;
-  const delivery = await trySupabaseInviteEmail(email, invitationUrl);
+  await audit(supabase, tenantId, user.id, "membership.invitation.created", invitation.id, { email, role, delivery: "share-link" });
+  const invitationUrl = `${await requestOrigin()}/invite?token=${encodeURIComponent(raw)}`;
   revalidatePath("/team");
-  redirect(`/team?tenant=${encodeURIComponent(tenantId)}&invite=${encodeURIComponent(invitationUrl)}&delivery=${delivery}`);
+  redirect(`/team?tenant=${encodeURIComponent(tenantId)}&invite=${encodeURIComponent(invitationUrl)}&delivery=manual`);
 }
 
 export async function resendInvitation(formData: FormData) {
@@ -137,15 +113,19 @@ export async function resendInvitation(formData: FormData) {
   if (lookupError || !invitation || invitation.status !== "pending") fail(tenantId, "الدعوة غير قابلة لإعادة الإرسال");
 
   const { raw, hash } = tokenPair();
+  const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabase.from("invitations").update({ token_hash: hash, expires_at: expiresAt, last_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", invitationId).eq("tenant_id", tenantId);
+  const { error } = await supabase
+    .from("invitations")
+    .update({ token_hash: hash, expires_at: expiresAt, last_sent_at: now, updated_at: now })
+    .eq("id", invitationId)
+    .eq("tenant_id", tenantId);
   if (error) fail(tenantId, "تعذر تحديث الدعوة");
-  await audit(supabase, tenantId, user.id, "membership.invitation.resent", invitationId, { email: invitation.invitee_email, role: invitation.role });
 
+  await audit(supabase, tenantId, user.id, "membership.invitation.resent", invitationId, { email: invitation.invitee_email, role: invitation.role, delivery: "share-link" });
   const invitationUrl = `${await requestOrigin()}/invite?token=${encodeURIComponent(raw)}`;
-  const delivery = await trySupabaseInviteEmail(invitation.invitee_email, invitationUrl);
   revalidatePath("/team");
-  redirect(`/team?tenant=${encodeURIComponent(tenantId)}&invite=${encodeURIComponent(invitationUrl)}&delivery=${delivery}`);
+  redirect(`/team?tenant=${encodeURIComponent(tenantId)}&invite=${encodeURIComponent(invitationUrl)}&delivery=manual`);
 }
 
 export async function revokeInvitation(formData: FormData) {
@@ -173,21 +153,4 @@ export async function deactivateMembership(formData: FormData) {
   await audit(supabase, tenantId, user.id, "membership.disabled", targetUserId, { previous_role: target.role });
   revalidatePath("/team");
   redirect(`/team?tenant=${encodeURIComponent(tenantId)}&success=${encodeURIComponent("تم تعطيل العضوية دون حذف الحساب")}`);
-}
-
-export async function acceptInvitation(formData: FormData) {
-  const token = String(formData.get("token") ?? "");
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect(`/login?error=${encodeURIComponent("سجل الدخول بنفس البريد المدعو ثم افتح رابط الدعوة مرة أخرى")}`);
-  const { data, error } = await supabase.rpc("accept_membership_invitation", { raw_token: token });
-  if (error || !data?.length) {
-    const raw = error?.message ?? "";
-    const message = raw.includes("expired") ? "انتهت صلاحية الدعوة" : raw.includes("email_mismatch") ? "هذه الدعوة موجهة إلى بريد إلكتروني آخر" : raw.includes("not_pending") ? "تم استخدام هذه الدعوة أو إلغاؤها من قبل" : "رابط الدعوة غير صالح";
-    redirect(`/invite?token=${encodeURIComponent(token)}&error=${encodeURIComponent(message)}`);
-  }
-  const tenantId = data[0].accepted_tenant_id as string;
-  revalidatePath("/");
-  revalidatePath("/team");
-  redirect(`/team?tenant=${encodeURIComponent(tenantId)}&success=${encodeURIComponent("تم قبول الدعوة وإضافة عضويتك")}`);
 }
