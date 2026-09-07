@@ -28,6 +28,20 @@ jobs:
     name: Verify
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: saboraty_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d saboraty_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +57,19 @@ jobs:
         env:
           MIGRATION_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: npm run check:migrations
+      - name: PostgreSQL 18 baseline validation
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql --host=127.0.0.1 --username=postgres --dbname=saboraty_ci --set=ON_ERROR_STOP=1 --file=postgres/baseline/0001_saboraty_clean_baseline.sql
+          psql --host=127.0.0.1 --username=postgres --dbname=saboraty_ci --set=ON_ERROR_STOP=1 --file=postgres/baseline/0002_platform_identity_workflows.sql
+          psql --host=127.0.0.1 --username=postgres --dbname=saboraty_ci --set=ON_ERROR_STOP=1 --tuples-only --no-align --file=postgres/validation/clean-baseline-smoke.sql | tee /tmp/saboraty-baseline-smoke.out
+          if grep -Ev '^(t|0)?$' /tmp/saboraty-baseline-smoke.out | grep -q .; then
+            echo "Unexpected PostgreSQL smoke output:"
+            cat /tmp/saboraty-baseline-smoke.out
+            exit 1
+          fi
       - name: Dependency audit
         run: npm audit --omit=dev --audit-level=high
       - name: Secret scan
