@@ -1,7 +1,8 @@
 import "server-only";
 
+import type { CurrentUserProvider } from "@/lib/auth/current-user-provider";
+import { SupabaseCurrentUserProvider } from "@/lib/auth/supabase-current-user-provider";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import type {
   PlatformAdminRepository,
   RepositoryAuditRow,
@@ -14,15 +15,16 @@ import type {
 } from "@/lib/repositories/platform-admin-repository";
 
 export class SupabasePlatformAdminRepository implements PlatformAdminRepository {
-  async getCurrentPlatformAdminAccess(): Promise<RepositoryPlatformAdminAccess> {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  constructor(
+    private readonly currentUserProvider: CurrentUserProvider = new SupabaseCurrentUserProvider(),
+  ) {}
 
+  async getCurrentPlatformAdminAccess(): Promise<RepositoryPlatformAdminAccess> {
+    const user = await this.currentUserProvider.getCurrentUser();
     if (!user) return { status: "unauthenticated" };
 
-    const { data: admin, error } = await supabase
+    const adminClient = createAdminClient();
+    const { data: admin, error } = await adminClient
       .from("platform_admins")
       .select("user_id")
       .eq("user_id", user.id)
@@ -33,7 +35,7 @@ export class SupabasePlatformAdminRepository implements PlatformAdminRepository 
 
     return {
       status: "authorized",
-      user: { id: user.id, email: user.email ?? "" },
+      user,
     };
   }
 
