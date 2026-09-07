@@ -106,7 +106,7 @@ export function LandingPage() {
           <nav className="hidden items-center gap-6 text-sm font-semibold text-[#5f5a70] lg:flex">
             <a href="#features" className="hover:text-[#6547d9]">المزايا</a><a href="#models" className="hover:text-[#6547d9]">طريقة الشغل</a><a href="#roles" className="hover:text-[#6547d9]">الصلاحيات</a><a href="#lms" className="hover:text-[#6547d9]">الكورسات Online</a>
           </nav>
-          <div className="flex items-center gap-3"><Link href="/login" className="hidden rounded-xl border border-[#ddd8e9] px-4 py-2 text-sm font-bold sm:block">تسجيل الدخول</Link><Link href="/login" className="rounded-xl bg-[#6547d9] px-4 py-2 text-sm font-bold text-white">ابدأ مجانًا</Link></div>
+          <div className="flex items-center gap-3"><Link href="/login" className="hidden rounded-xl border border-[#ddd8e9] px-4 py-2 text-sm font-bold sm:block">تسجيل الدخول</Link><Link href="/signup" className="rounded-xl bg-[#6547d9] px-4 py-2 text-sm font-bold text-white">ابدأ مجانًا</Link></div>
         </div>
       </header>
 
@@ -116,7 +116,7 @@ export function LandingPage() {
             <span className="inline-flex items-center gap-2 rounded-full border border-[#dcd5f3] bg-white px-3 py-1.5 text-xs font-bold text-[#6547d9]"><Sparkles size={14}/> للمدرس المستقل والسنتر التعليمي</span>
             <h1 className="mt-6 text-4xl font-black leading-[1.18] tracking-tight md:text-6xl">كل شغل السنتر أو مجموعاتك<br/><span className="text-[#6547d9]">في مكان واحد.</span></h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-[#5f5a70]">طلاب، حضور، تحصيل، مجموعات، فريق وتقارير. Smart Edu يخليك تشوف يومك كله بوضوح بدل الدفاتر والشيتات ورسائل الواتساب المتناثرة.</p>
-            <div className="mt-8 flex flex-wrap gap-3"><Link href="/login" className="inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-6 py-3.5 font-bold text-white shadow-lg shadow-purple-200">ابدأ مجانًا <ArrowLeft size={17}/></Link><a href="#features" className="rounded-xl border border-[#ddd8e9] bg-white px-6 py-3.5 font-bold text-[#5f5a70]">شوف النظام بيعمل إيه</a></div>
+            <div className="mt-8 flex flex-wrap gap-3"><Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-6 py-3.5 font-bold text-white shadow-lg shadow-purple-200">ابدأ مجانًا <ArrowLeft size={17}/></Link><a href="#features" className="rounded-xl border border-[#ddd8e9] bg-white px-6 py-3.5 font-bold text-[#5f5a70]">شوف النظام بيعمل إيه</a></div>
             <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-[#797386]">{["7 أيام تجربة", "إعداد سريع", "بدون تعقيد تقني"].map(item => <span key={item} className="flex items-center gap-2"><CheckCircle2 size={14} className="text-[#2fab88]"/>{item}</span>)}</div>
           </div>
           <DashboardPreview />
@@ -143,7 +143,7 @@ export function LandingPage() {
 
         <section id="lms" className="mx-auto max-w-7xl px-4 pb-20 md:px-8"><div className="overflow-hidden rounded-[32px] border border-[#ded7f2] bg-gradient-to-l from-[#eeeaff] to-white p-8 md:p-12"><div className="grid gap-8 lg:grid-cols-[1fr_.8fr] lg:items-center"><div><span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-bold text-[#6547d9]">مرحلة التوسع</span><h2 className="mt-5 text-3xl font-black md:text-4xl">ولما تكون جاهز تبيع كورسات Online… مش محتاج تغير النظام.</h2><p className="mt-4 max-w-2xl leading-8 text-[#625d70]">الـLMS منتج اختياري مستقل: Shared Academy أو Branded Academy باسمك ودومينك، مع كورسات وأكواد تفعيل واختبارات وتتبع تقدم.</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">{lmsFeatures.map(({ icon: Icon, label }) => <div key={label} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm"><span className="grid size-10 place-items-center rounded-xl bg-[#eeeaff] text-[#6547d9]"><Icon size={18}/></span><b className="text-sm">{label}</b></div>)}</div></div></div></section>
 
-        <section className="bg-white py-20"><div className="mx-auto max-w-4xl px-4 text-center md:px-8"><h2 className="text-3xl font-black md:text-4xl">ابدأ تنظيم شغلك من أول يوم</h2><p className="mt-4 text-[#6f6a80]">ابدأ بنظام الإدارة، وبعدها وسّع المنتج لما شغلك يحتاج.</p><Link href="/login" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-7 py-4 font-bold text-white shadow-lg shadow-purple-200">ابدأ تجربتك <ArrowLeft size={17}/></Link></div></section>
+        <section className="bg-white py-20"><div className="mx-auto max-w-4xl px-4 text-center md:px-8"><h2 className="text-3xl font-black md:text-4xl">ابدأ تنظيم شغلك من أول يوم</h2><p className="mt-4 text-[#6f6a80]">ابدأ بنظام الإدارة، وبعدها وسّع المنتج لما شغلك يحتاج.</p><Link href="/signup" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-7 py-4 font-bold text-white shadow-lg shadow-purple-200">ابدأ تجربتك <ArrowLeft size={17}/></Link></div></section>
       </main>
 
       <footer className="border-t border-[#e8e5ef] bg-white px-4 py-8 md:px-8"><div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 sm:flex-row"><Logo/><p className="text-xs text-[#6f6a80]">© {new Date().getFullYear()} Smart Edu Center. جميع الحقوق محفوظة.</p></div></footer>
