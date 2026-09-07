@@ -2,8 +2,9 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { can, type MemberRole } from "@/lib/authorization/policy";
 
-export type MemberRole = "owner" | "admin" | "teacher" | "receptionist" | "accountant";
+export type { MemberRole } from "@/lib/authorization/policy";
 export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
 
 export type TeamWorkspaceData = {
@@ -39,7 +40,7 @@ export async function getTeamWorkspaceData(requestedTenantId?: string): Promise<
     tenant_name: nameByTenant.get(membership.tenant_id) ?? "مساحة عمل",
   }));
   const chosen = workspaces.find((workspace) => workspace.tenant_id === requestedTenantId) ?? workspaces[0];
-  const manageable = chosen.role === "owner" || chosen.role === "admin";
+  const manageable = can(chosen.role, "team.manage");
 
   const { data: memberRows, error: memberError } = await supabase
     .from("memberships")
