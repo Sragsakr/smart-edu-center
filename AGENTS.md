@@ -41,6 +41,7 @@ Build a production-minded, Arabic-first multi-tenant center operating system. Op
 - Platform Admin operational control does not imply permanent unrestricted reads of tenant student data. Future support access must use time-bound, reasoned, bannered and audited impersonation.
 - Tenant staff accounts are provisioned by expiring invitations with per-membership roles, never by an Owner choosing another user's password. A user may have independent roles in multiple tenants; disabling one membership must not delete the Auth user or affect other memberships. Student and guardian portal identities require verified links to their records and cannot self-claim records.
 - `platform_admins`, `workspace_requests`, and `platform_audit_logs` are deliberate platform-scope exceptions to the business-table `tenant_id` rule because they govern approval before a tenant exists. They require RLS, least-privilege reads, and audited security-definer mutations.
+- Platform Admin aggregate reads live in a server-only DAL and may use the Admin client only after verifying `platform_admins`; never expose cross-tenant data or the secret key to Client Components. Dashboard figures must come from database queries, not hardcoded demo constants. Controlled demo records are seeded only through an explicitly documented migration with unmistakable demo identities.
 
 ## Security invariants
 

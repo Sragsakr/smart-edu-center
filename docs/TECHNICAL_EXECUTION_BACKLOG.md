@@ -5,9 +5,9 @@
 ## مؤشر التنفيذ التقني
 
 ```text
-CURRENT_TECHNICAL_EPIC: LANDING-001 — Landing page للمنتج
-CURRENT_TECHNICAL_TASK: PLATFORM-ADMIN-001 — Platform Dashboard (Overview) كامل
-NEXT_TECHNICAL_TASK: (التوالي يلي Platform Dashboard)
+CURRENT_TECHNICAL_EPIC: IAM-004 — الدعوات
+CURRENT_TECHNICAL_TASK: IAM-004-01 — Migration لجدول invitations
+NEXT_TECHNICAL_TASK: IAM-004-02 — RLS للدعوات
 ```
 
 ## قواعد التشغيل
@@ -86,11 +86,20 @@ NEXT_TECHNICAL_TASK: (التوالي يلي Platform Dashboard)
 
 - [x] `LANDING-001-01` Landing عامة RTL في جذر `/` للزائر غير المسجّل، بأقسام Hero/المميزات/النموذجين/الأسعار/كيف أبدأ، ودعوة للتسجيل، وقسم أسعار (تجربة مجانية 7 أيام). متجاوبة وAccessibility نظيف.
 
+### PLATFORM-ADMIN-001 — إدارة المنصة
+
+- [x] `PLATFORM-ADMIN-001-01` DAL خادم فقط يتحقق من Platform Admin ثم يستخدم Admin client لقراءات المنصة الشاملة.
+- [x] `PLATFORM-ADMIN-001-02` Overview بمؤشرات وقوائم نشاط مستمدة لحظيًا من قاعدة البيانات.
+- [x] `PLATFORM-ADMIN-001-03` قوائم المساحات والمستخدمين والعضويات وسجل التدقيق.
+- [x] `PLATFORM-ADMIN-001-04` تقارير حقيقية حسب نوع الحساب وحالة الطلب والدور وحالة الطلاب.
+- [x] `PLATFORM-ADMIN-001-05` تعليق/تفعيل Tenant وعضوياته ذريًا مع Platform Audit.
+- [x] `PLATFORM-ADMIN-001-06` Seed موثقة ومعروفة القصد لعرض متكامل دون أرقام ثابتة في UI.
+
 ### IAM-002A — موافقة إدارة المنصة على الحسابات
 
 **Dependencies:** IAM-001..002. **Output:** لا يُنشأ Tenant أو Owner جديد قبل موافقة Platform Admin.
 
-- [-] `IAM-002A-01` Vertical slice لطلب مساحة العمل، حالة الانتظار/الرفض، لوحة مراجعة Platform Admin، قبول ذري ينشئ Tenant وOwner، وLoading لكل الإجراءات.
+- [x] `IAM-002A-01` Vertical slice لطلب مساحة العمل، حالة الانتظار/الرفض، لوحة مراجعة Platform Admin، قبول ذري ينشئ Tenant وOwner، وLoading لكل الإجراءات.
 
 **Acceptance:** التسجيل لا يرسل رسالة تأكيد؛ الطلب يتضمن موبايل وواتساب بكود الدولة ثم يسجل المستخدم خروجًا؛ الحساب المعلق لا يدخل قبل القبول؛ غير المشرف لا يقرأ أو يراجع طلبات غيره؛ القبول ينشئ Tenant وOwner في transaction واحدة؛ كل Server Action يعرض pending ويمنع التكرار.
 
@@ -405,3 +414,5 @@ NEXT_TECHNICAL_TASK: (التوالي يلي Platform Dashboard)
 | 2026-09-06 | FND-010-02 | `docs: document Supabase backup policy` | Free/paid/PITR/Storage limits sourced from Supabase docs | FND-010-03 |
 | 2026-09-06 | FND-010-03 | `docs: add backup and restore runbook` | database/Storage/cutover steps + empty Production Storage inventory | FND-010-04 |
 | 2026-09-06 | FND-007-03/FND-010-04 | قرار المالك | Vercel Production re-linked to shared Supabase; extra project deleted; restore drill deferred | IAM-002A-01 |
+| 2026-09-07 | IAM-002A/IAM-003/LANDING-001 | `87110a5` | full check + DB/RLS + desktop/mobile accessibility | PLATFORM-ADMIN-001 |
+| 2026-09-07 | PLATFORM-ADMIN-001 | pending commit | DB-backed Overview/Tenants/Users/Reports/Audit + tenant status + full check | IAM-004-01 |

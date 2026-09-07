@@ -15,8 +15,8 @@
 
 ```text
 CURRENT_PHASE: 1 — الأساس التقني
-CURRENT_TASK: IAM-002A — موافقة إدارة المنصة على الحسابات
-LAST_COMPLETED: FND-010-03 — Runbook الاستعادة وStorage inventory
+CURRENT_TASK: IAM-004 — دعوات الموظفين والمدرسين وقبول/انتهاء الدعوة
+LAST_COMPLETED: PLATFORM-ADMIN-001 — Platform Control Plane من بيانات DB فعلية
 DEFERRED: FND-009-03 بقرار المالك، FND-009-04 حتى انضمام فريق، FND-010-04 لعدم اعتماد مورد استعادة إضافي
 ```
 
@@ -53,7 +53,7 @@ DEFERRED: FND-009-03 بقرار المالك، FND-009-04 حتى انضمام ف
 ## المرحلة 1 — الأساس التقني والهوية والمصادقة
 
 - [x] `LANDING-001` Landing page عامة للمنتج تعرض نموذجَي العمل (سنتر/مدرس مستقل) ودعوة للتسجيل متجاوبة RTL مع قسم خطط وأسعار (تجربة مجانية 7 أيام حتى تفعيل الإدارة).
-- [ ] `PLATFORM-ADMIN-001` Platform Dashboard (Overview) لمؤشرات الـSaaS العامة.
+- [x] `PLATFORM-ADMIN-001` Platform Control Plane: Overview، المساحات، المستخدمون، الطلبات، الاستعادة، التقارير، التدقيق، وتعليق/تفعيل Tenant من بيانات DB فعلية.
 
 - [x] `FND-001` إنشاء Next.js Web PWA وواجهة RTL.
 - [x] `FND-002` إنشاء GitHub وREADME وAGENTS وخطة التطوير.
@@ -67,7 +67,7 @@ DEFERRED: FND-009-03 بقرار المالك، FND-009-04 حتى انضمام ف
 - [!] `FND-010` إعداد Backup/Restore واختبار استعادة أولي — الأهداف والسياسة والـrunbook مكتملة؛ restore drill مؤجل لرفض مورد إضافي مدفوع.
 - [x] `IAM-001` تسجيل الحساب والدخول والخروج وتجديد جلسة SSR.
 - [x] `IAM-002` Onboarding أولي لنموذجي السنتر والمدرس المستقل.
-- [-] `IAM-002A` طلب مساحة العمل وموافقة Platform Admin قبل إنشاء Tenant وتفعيل Owner.
+- [x] `IAM-002A` طلب مساحة العمل وموافقة Platform Admin قبل إنشاء Tenant وتفعيل Owner.
 - [x] `IAM-003` استعادة كلمة المرور عبر إدارة المنصة. تأكيد التسجيل بالبريد معطل بقرار المالك، وإرسال واتساب الآلي مؤجل.
 - [ ] `IAM-004` دعوات الموظفين والمدرسين وقبول/انتهاء الدعوة.
 - [ ] `IAM-005` مصفوفة صلاحيات دقيقة Owner/Admin/Teacher/Receptionist/Accountant.
