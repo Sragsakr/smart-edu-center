@@ -55,8 +55,8 @@ const lmsFeatures: Array<{ icon: LucideIcon; label: string }> = [
 function Logo() {
   return (
     <Link href="/" className="flex items-center gap-3">
-      <span className="grid size-11 place-items-center rounded-2xl bg-[#6547d9] text-white shadow-lg shadow-purple-200"><GraduationCap size={25}/></span>
-      <div><b className="block text-[15px]">سبورتي | Saboraty</b><span className="text-[11px] text-[#858197]">إدارة تعليمية أبسط وأوضح</span></div>
+      <span className="grid size-10 place-items-center rounded-2xl bg-[#6547d9] text-white shadow-lg shadow-purple-200 sm:size-11"><GraduationCap size={24}/></span>
+      <div><b className="block text-sm sm:text-[15px]">سبورتي | Saboraty</b><span className="hidden text-[11px] text-[#858197] sm:block">إدارة تعليمية أبسط وأوضح</span></div>
     </Link>
   );
 }
@@ -64,30 +64,31 @@ function Logo() {
 function HeroVisual() {
   const bars = [58, 82, 68, 94, 73, 87, 64];
   return (
-    <div className="relative mx-auto min-h-[430px] w-full max-w-[590px] overflow-hidden rounded-[32px] border border-[#e7e1f6] bg-gradient-to-br from-[#eee9ff] via-white to-[#f8f6ff] shadow-[0_28px_80px_rgba(101,71,217,.14)] lg:min-h-[475px]">
+    <div className="relative min-h-[390px] w-full overflow-hidden rounded-[28px] border border-[#e7e1f6] bg-gradient-to-br from-[#eee9ff] via-white to-[#f8f6ff] shadow-[0_28px_80px_rgba(101,71,217,.14)] sm:min-h-[460px] lg:min-h-[520px] xl:min-h-[560px]">
       <div className="absolute -left-20 -top-20 size-64 rounded-full bg-[#d7ccff]/55 blur-3xl" />
+      <div className="absolute -bottom-20 right-0 size-72 rounded-full bg-[#efeaff] blur-3xl" />
       <div
         role="img"
-        aria-label="طالبة عربية تستخدم اللابتوب للدراسة"
-        className="absolute bottom-0 left-0 h-[66%] w-[54%] bg-cover bg-center opacity-90"
-        style={{ backgroundImage: "url('https://images.pexels.com/photos/6084091/pexels-photo-6084091.jpeg?auto=compress&dpr=1&h=750&w=1260')" }}
+        aria-label="طالب يستخدم اللابتوب للدراسة"
+        className="absolute bottom-0 left-0 h-[64%] w-[54%] bg-cover bg-center opacity-95 sm:h-[70%] sm:w-[48%]"
+        style={{ backgroundImage: "url('https://images.pexels.com/photos/6084091/pexels-photo-6084091.jpeg?auto=compress&dpr=1&h=900&w=1400')" }}
       />
       <div className="absolute inset-y-0 left-0 w-[58%] bg-gradient-to-r from-transparent via-white/20 to-white" />
 
-      <div className="absolute right-5 top-5 w-[76%] rounded-[26px] border border-white bg-white/95 p-4 shadow-[0_18px_50px_rgba(37,30,70,.13)] backdrop-blur md:right-7 md:top-7">
+      <div className="absolute right-3 top-4 w-[82%] rounded-[24px] border border-white bg-white/95 p-3 shadow-[0_18px_50px_rgba(37,30,70,.13)] backdrop-blur sm:right-6 sm:top-6 sm:w-[76%] sm:p-4 lg:right-8 lg:top-8 lg:w-[72%]">
         <div className="flex items-center justify-between border-b border-[#eeeaf4] pb-3">
-          <div><p className="text-xs font-bold text-[#6547d9]">لوحة الإدارة</p><p className="mt-1 text-[10px] text-[#8b8597]">ملخص التشغيل اليوم</p></div>
-          <span className="rounded-full bg-[#e8f7f2] px-3 py-1 text-[10px] font-bold text-[#20866a]">مباشر</span>
+          <div><p className="text-[11px] font-bold text-[#6547d9] sm:text-xs">لوحة الإدارة</p><p className="mt-1 text-[9px] text-[#8b8597] sm:text-[10px]">ملخص التشغيل اليوم</p></div>
+          <span className="rounded-full bg-[#e8f7f2] px-2.5 py-1 text-[9px] font-bold text-[#20866a] sm:px-3 sm:text-[10px]">مباشر</span>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {dashboardStats.map(({ title, value, icon: Icon, color }) => (
-            <div key={title} className="rounded-2xl bg-[#faf9fc] p-2.5">
-              <span className="grid size-7 place-items-center rounded-lg bg-white" style={{ color }}><Icon size={14}/></span>
-              <p className="mt-2 text-[9px] text-[#8c879a]">{title}</p><b className="mt-1 block text-xs">{value}</b>
+            <div key={title} className="rounded-2xl bg-[#faf9fc] p-2 sm:p-2.5">
+              <span className="grid size-6 place-items-center rounded-lg bg-white sm:size-7" style={{ color }}><Icon size={13}/></span>
+              <p className="mt-2 text-[8px] text-[#8c879a] sm:text-[9px]">{title}</p><b className="mt-1 block text-[10px] sm:text-xs">{value}</b>
             </div>
           ))}
         </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-[1.35fr_.75fr]">
+        <div className="mt-3 hidden gap-3 sm:grid sm:grid-cols-[1.35fr_.75fr]">
           <div className="rounded-2xl border border-[#eeeaf4] p-3">
             <div className="flex items-center justify-between"><div><b className="text-[11px]">نظرة على الحضور</b><p className="text-[9px] text-[#928ca0]">آخر 7 أيام</p></div><span className="text-[10px] font-bold text-[#6547d9]">91%</span></div>
             <div className="mt-3 flex h-20 items-end gap-1.5 border-b border-[#eeeaf4]">{bars.map((height, index) => <div key={index} className="flex-1 rounded-t-md bg-[#cfc5ff]" style={{height:`${height}%`}} />)}</div>
@@ -99,8 +100,8 @@ function HeroVisual() {
         </div>
       </div>
 
-      <div className="absolute bottom-6 right-6 rounded-2xl border border-[#e5e0f1] bg-white px-4 py-3 shadow-xl"><p className="text-[10px] text-[#8c879a]">حضور اليوم</p><b className="text-sm text-[#20866a]">+892 طالب</b></div>
-      <div className="absolute bottom-6 left-6 rounded-2xl border border-[#e5e0f1] bg-white px-4 py-3 shadow-xl"><p className="text-[10px] text-[#8c879a]">متابعة ذكية</p><b className="text-sm text-[#6547d9]">كل يوم أوضح</b></div>
+      <div className="absolute bottom-4 right-4 rounded-2xl border border-[#e5e0f1] bg-white px-3 py-2 shadow-xl sm:bottom-6 sm:right-6 sm:px-4 sm:py-3"><p className="text-[9px] text-[#8c879a] sm:text-[10px]">حضور اليوم</p><b className="text-xs text-[#20866a] sm:text-sm">+892 طالب</b></div>
+      <div className="absolute bottom-4 left-4 rounded-2xl border border-[#e5e0f1] bg-white px-3 py-2 shadow-xl sm:bottom-6 sm:left-6 sm:px-4 sm:py-3"><p className="text-[9px] text-[#8c879a] sm:text-[10px]">متابعة ذكية</p><b className="text-xs text-[#6547d9] sm:text-sm">كل يوم أوضح</b></div>
     </div>
   );
 }
@@ -109,28 +110,30 @@ export function LandingPage() {
   return (
     <div dir="rtl" className="min-h-dvh overflow-hidden bg-[#fbfaff] text-[#17152b]">
       <header className="sticky top-0 z-40 border-b border-[#ece8f4] bg-white/92 backdrop-blur-xl">
-        <div className="mx-auto flex h-20 max-w-[1180px] items-center justify-between px-5 md:px-8">
+        <div className="flex h-16 w-full items-center justify-between px-4 sm:h-20 sm:px-6 lg:px-10 xl:px-14 2xl:px-20">
           <Logo />
           <nav className="hidden items-center gap-7 text-sm font-semibold text-[#5f5a70] lg:flex">
             <a href="#features" className="hover:text-[#6547d9]">المزايا</a><a href="#models" className="hover:text-[#6547d9]">طريقة الشغل</a><a href="#roles" className="hover:text-[#6547d9]">الصلاحيات</a><a href="#lms" className="hover:text-[#6547d9]">الكورسات Online</a>
           </nav>
-          <div className="flex items-center gap-3"><Link href="/login" className="hidden rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold sm:block">تسجيل الدخول</Link><Link href="/signup" className="rounded-xl bg-[#6547d9] px-4 py-2 text-sm font-bold text-white shadow-lg shadow-purple-200">ابدأ مجانًا</Link></div>
+          <div className="flex items-center gap-2 sm:gap-3"><Link href="/login" className="hidden rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold sm:block">تسجيل الدخول</Link><Link href="/signup" className="rounded-xl bg-[#6547d9] px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-purple-200 sm:px-4 sm:text-sm">ابدأ مجانًا</Link></div>
         </div>
       </header>
 
       <main>
-        <section className="relative mx-auto grid min-h-[610px] max-w-[1180px] items-center gap-14 px-5 py-16 md:px-8 lg:grid-cols-[1fr_1fr] lg:py-20">
-          <div className="relative z-10 max-w-[560px] justify-self-end">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#dcd5f3] bg-white px-3 py-1.5 text-xs font-bold text-[#6547d9] shadow-sm"><Sparkles size={14}/> للمدرس المستقل والسنتر التعليمي</span>
-            <h1 className="mt-6 text-[42px] font-black leading-[1.16] tracking-tight md:text-[56px]">كل شغل السنتر أو<br/>مجموعاتك <span className="whitespace-nowrap text-[#6547d9]">في مكان واحد.</span></h1>
-            <p className="mt-6 max-w-[540px] text-[17px] leading-8 text-[#5f5a70]">طلاب، حضور، تحصيل، مجموعات، فريق وتقارير. سبورتي يخليك تشوف يومك كله بوضوح بدل الدفاتر والشيتات ورسائل الواتساب المتناثرة.</p>
-            <div className="mt-8 flex flex-wrap gap-3"><Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-6 py-3.5 font-bold text-white shadow-lg shadow-purple-200">ابدأ مجانًا <ArrowLeft size={17}/></Link><a href="#features" className="rounded-xl border border-[#ddd8e9] bg-white px-6 py-3.5 font-bold text-[#5f5a70] shadow-sm">شوف النظام بيعمل إيه</a></div>
-            <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-[#797386]">{["7 أيام تجربة", "إعداد سريع", "بدون تعقيد تقني"].map(item => <span key={item} className="flex items-center gap-2"><CheckCircle2 size={14} className="text-[#2fab88]"/>{item}</span>)}</div>
+        <section className="relative w-full overflow-hidden bg-[radial-gradient(circle_at_10%_20%,rgba(207,197,255,.35),transparent_28%),radial-gradient(circle_at_88%_22%,rgba(238,233,255,.7),transparent_32%),linear-gradient(180deg,#fbfaff_0%,#f8f5ff_100%)]">
+          <div className="grid min-h-[calc(100svh-64px)] w-full items-center gap-10 px-4 py-10 sm:min-h-[calc(100svh-80px)] sm:px-6 sm:py-14 lg:grid-cols-[1fr_1fr] lg:gap-14 lg:px-10 lg:py-16 xl:px-14 2xl:px-20">
+            <div className="order-1 max-w-[760px] justify-self-stretch lg:order-none lg:justify-self-end">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#dcd5f3] bg-white px-3 py-1.5 text-[11px] font-bold text-[#6547d9] shadow-sm sm:text-xs"><Sparkles size={14}/> للمدرس المستقل والسنتر التعليمي</span>
+              <h1 className="mt-5 max-w-[760px] text-[38px] font-black leading-[1.15] tracking-tight sm:text-[48px] lg:text-[56px] xl:text-[64px] 2xl:text-[72px]">كل شغل السنتر أو مجموعاتك<br className="hidden sm:block"/> <span className="text-[#6547d9]">في مكان واحد.</span></h1>
+              <p className="mt-5 max-w-[680px] text-[16px] leading-8 text-[#5f5a70] sm:text-[17px] lg:text-[18px]">طلاب، حضور، تحصيل، مجموعات، فريق وتقارير. سبورتي يخليك تشوف يومك كله بوضوح بدل الدفاتر والشيتات ورسائل الواتساب المتناثرة.</p>
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap"><Link href="/signup" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#6547d9] px-6 py-3.5 font-bold text-white shadow-lg shadow-purple-200">ابدأ مجانًا <ArrowLeft size={17}/></Link><a href="#features" className="rounded-xl border border-[#ddd8e9] bg-white px-6 py-3.5 text-center font-bold text-[#5f5a70] shadow-sm">شوف النظام بيعمل إيه</a></div>
+              <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-[#797386] sm:text-xs">{["7 أيام تجربة", "إعداد سريع", "بدون تعقيد تقني"].map(item => <span key={item} className="flex items-center gap-2"><CheckCircle2 size={14} className="text-[#2fab88]"/>{item}</span>)}</div>
+            </div>
+            <div className="order-2 w-full lg:order-none"><HeroVisual /></div>
           </div>
-          <HeroVisual />
         </section>
 
-        <section className="border-y border-[#ebe7f2] bg-white py-5"><div className="mx-auto flex max-w-7xl flex-wrap justify-center gap-x-8 gap-y-3 px-4 text-sm font-bold text-[#5f5a70] md:px-8">{quickFeatures.map(item => <span key={item} className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#6547d9]"/>{item}</span>)}</div></section>
+        <section className="border-y border-[#ebe7f2] bg-white py-5"><div className="flex w-full flex-wrap justify-center gap-x-8 gap-y-3 px-4 text-sm font-bold text-[#5f5a70] sm:px-6 lg:px-10 xl:px-14 2xl:px-20">{quickFeatures.map(item => <span key={item} className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#6547d9]"/>{item}</span>)}</div></section>
 
         <section id="features" className="mx-auto max-w-7xl px-4 py-20 md:px-8">
           <div className="mx-auto max-w-3xl text-center"><span className="text-sm font-bold text-[#6547d9]">من الفوضى لليوم المنظم</span><h2 className="mt-3 text-3xl font-black md:text-4xl">كل ما تحتاجه لتشغيل السنتر بوضوح</h2><p className="mt-4 text-[#6f6a80]">كل عملية متكررة تتحول لمسار واضح وسريع داخل النظام.</p></div>
