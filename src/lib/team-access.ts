@@ -62,6 +62,15 @@ export async function getTeamWorkspaceData(requestedTenantId?: string): Promise<
 
   let invitations: TeamWorkspaceData["invitations"] = [];
   if (manageable) {
+    const now = new Date().toISOString();
+    const { error: expiryError } = await supabase
+      .from("invitations")
+      .update({ status: "expired", updated_at: now })
+      .eq("tenant_id", chosen.tenant_id)
+      .eq("status", "pending")
+      .lt("expires_at", now);
+    if (expiryError) throw new Error("تعذر تحديث حالة الدعوات المنتهية");
+
     const { data, error } = await supabase
       .from("invitations")
       .select("id,invitee_email,role,status,expires_at,last_sent_at,created_at")
