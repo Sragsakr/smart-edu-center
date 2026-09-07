@@ -297,5 +297,3 @@ export class SupabasePlatformAdminRepository implements PlatformAdminRepository 
     });
   }
 }
-
-export const platformAdminRepository: PlatformAdminRepository = new SupabasePlatformAdminRepository();
