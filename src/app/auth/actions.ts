@@ -8,12 +8,13 @@ import { createClient } from "@/lib/supabase/server";
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 function loginError(message: string): never { redirect(`/login?error=${encodeURIComponent(message)}`); }
+function signupError(message: string): never { redirect(`/signup?error=${encodeURIComponent(message)}`); }
 function platformLoginError(message: string): never { redirect(`/platform-control/login?error=${encodeURIComponent(message)}`); }
 
 async function registerAccount(supabase: ServerSupabaseClient, email: string, password: string) {
   const { data: registration, error } = await supabase.auth.signUp({ email, password });
-  if (error) loginError(signUpErrorMessage(error.code));
-  if (!registration.session) loginError("إعداد التسجيل ما زال يطلب تأكيد البريد. أوقف Email Confirmation في Supabase ثم حاول مرة أخرى");
+  if (error) signupError(signUpErrorMessage(error.code));
+  if (!registration.session) signupError("إعداد التسجيل ما زال يطلب تأكيد البريد. أوقف Email Confirmation في Supabase ثم حاول مرة أخرى");
   redirect("/onboarding");
 }
 
@@ -50,11 +51,20 @@ async function signInAccount(supabase: ServerSupabaseClient, email: string, pass
 }
 
 export async function authenticate(formData: FormData) {
-  const parsed = authSubmissionSchema.safeParse({ email:formData.get("email"), password:formData.get("password"), intent:formData.get("intent") });
+  const parsed = authSubmissionSchema.safeParse({ email:formData.get("email"), password:formData.get("password"), intent:"sign-in" });
   if (!parsed.success) loginError(firstValidationMessage(parsed.error));
   const supabase = await createClient();
-  if (parsed.data.intent === "sign-up") await registerAccount(supabase,parsed.data.email,parsed.data.password);
   await signInAccount(supabase,parsed.data.email,parsed.data.password);
+}
+
+export async function createAccount(formData: FormData) {
+  const password = String(formData.get("password") ?? "");
+  const confirmation = String(formData.get("password_confirmation") ?? "");
+  if (password !== confirmation) signupError("كلمتا المرور غير متطابقتين");
+  const parsed = authSubmissionSchema.safeParse({ email:formData.get("email"), password, intent:"sign-up" });
+  if (!parsed.success) signupError(firstValidationMessage(parsed.error));
+  const supabase = await createClient();
+  await registerAccount(supabase,parsed.data.email,parsed.data.password);
 }
 
 export async function authenticatePlatformAdmin(formData: FormData) {
