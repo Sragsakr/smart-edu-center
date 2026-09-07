@@ -3,14 +3,14 @@
 import { useFormStatus } from "react-dom";
 import { Loader2, LogOut, UserPlus } from "lucide-react";
 
-import { acceptExistingInvitation, acceptNewInvitation, switchInvitationAccount } from "./actions";
+import { acceptExistingInvitation, acceptNewInvitation, loginAndAcceptInvitation, switchInvitationAccount } from "./actions";
 
 function SubmitButton({ idle, pending, tone = "primary" }: { idle: string; pending: string; tone?: "primary" | "outline" }) {
   const { pending: isPending } = useFormStatus();
   const classes = tone === "primary"
     ? "bg-[#6547d9] text-white disabled:bg-[#9b8be5]"
     : "border border-[#6547d9] bg-white text-[#6547d9] disabled:opacity-60";
-  return <button disabled={isPending} className={`flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition ${classes}`}>
+  return <button type="submit" disabled={isPending} aria-disabled={isPending} className={`flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition disabled:cursor-not-allowed ${classes}`}>
     {isPending ? <Loader2 className="size-4 animate-spin" /> : null}{isPending ? pending : idle}
   </button>;
 }
@@ -31,6 +31,21 @@ export function NewInviteAccountForm({ token, email }: { token: string; email: s
       <input id="invite-confirm-password" name="confirm_password" type="password" autoComplete="new-password" minLength={8} maxLength={72} required className="w-full rounded-xl border border-[#ddd8e9] px-4 py-3 outline-none focus:border-[#6547d9]" />
     </div>
     <SubmitButton idle="إنشاء الحساب وقبول الدعوة" pending="جارٍ إنشاء الحساب والانضمام..." />
+  </form>;
+}
+
+export function ExistingAccountPasswordForm({ token, email }: { token: string; email: string }) {
+  return <form action={loginAndAcceptInvitation} className="mt-5 space-y-4">
+    <input type="hidden" name="token" value={token} />
+    <div>
+      <label className="mb-2 block text-sm font-bold">البريد المدعو</label>
+      <input value={email} readOnly className="w-full rounded-xl border border-[#ddd8e9] bg-[#f7f5fb] px-4 py-3 text-sm text-[#625d70]" />
+    </div>
+    <div>
+      <label htmlFor="existing-invite-password" className="mb-2 block text-sm font-bold">كلمة المرور الحالية</label>
+      <input id="existing-invite-password" name="password" type="password" autoComplete="current-password" minLength={8} maxLength={72} required className="w-full rounded-xl border border-[#ddd8e9] px-4 py-3 outline-none focus:border-[#6547d9]" />
+    </div>
+    <SubmitButton idle="تسجيل الدخول وقبول الدعوة" pending="جارٍ تسجيل الدخول والانضمام..." />
   </form>;
 }
 
