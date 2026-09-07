@@ -2,7 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { platformAdminRepository } from "@/lib/repositories/supabase-platform-admin-repository";
 
 export type PlatformAdminUser = { id: string; email: string };
 
@@ -57,20 +57,9 @@ export type AuditRow = {
 };
 
 async function platformAdminUser(): Promise<PlatformAdminUser> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await platformAdminRepository.getCurrentPlatformAdmin();
   if (!user) redirect("/login");
-
-  const { data: admin, error } = await supabase
-    .from("platform_admins")
-    .select("user_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (error) throw new Error("admin check failed");
-  if (!admin) redirect("/");
-  return { id: user.id, email: user.email ?? "" };
+  return user;
 }
 
 export async function requirePlatformAdmin(): Promise<PlatformAdminUser> {
@@ -79,36 +68,7 @@ export async function requirePlatformAdmin(): Promise<PlatformAdminUser> {
 
 export async function getOverviewMetrics(): Promise<OverviewMetrics> {
   await platformAdminUser();
-  const admin = createAdminClient();
-
-  const [tenants, students, memberships, workspaceReq, resets, audit] = await Promise.all([
-    admin.from("tenants").select("id,account_type"),
-    admin.from("students").select("id"),
-    admin.from("memberships").select("tenant_id"),
-    admin.from("workspace_requests").select("id,status"),
-    admin.from("password_reset_requests").select("id,status"),
-    admin.from("platform_audit_logs").select("id"),
-  ]);
-  const lookupError =
-    tenants.error ?? students.error ?? memberships.error ?? workspaceReq.error ?? resets.error ?? audit.error;
-  if (lookupError) throw new Error("failed to load platform overview");
-
-  const count = (data: unknown[] | null) => data?.length ?? 0;
-  const tenantRows = (tenants.data ?? []) as { account_type: string }[];
-
-  return {
-    totalTenants: tenantRows.length,
-    centers: tenantRows.filter((t) => t.account_type === "center").length,
-    independentTeachers: tenantRows.filter((t) => t.account_type === "independent_teacher").length,
-    students: count(students.data),
-    memberships: count(memberships.data),
-    pendingWorkspaceRequests: (workspaceReq.data ?? []).filter(
-      (r) => (r as { status: string }).status === "pending_approval",
-    ).length,
-    pendingPasswordResets: (resets.data ?? []).filter((r) => (r as { status: string }).status === "pending")
-      .length,
-    auditLogEntries: count(audit.data),
-  };
+  return platformAdminRepository.getOverviewMetrics();
 }
 
 export async function listTenants(): Promise<TenantRow[]> {
