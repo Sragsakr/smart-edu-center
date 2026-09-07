@@ -150,9 +150,26 @@ export async function deactivateMembership(formData: FormData) {
   if (lookupError || !target) fail(tenantId, "العضوية غير موجودة");
   if (target.role === "owner") fail(tenantId, "لا يمكن تعطيل المالك من إدارة الفريق");
   if (actorRole === "admin" && target.role === "admin") fail(tenantId, "المشرف لا يستطيع تعطيل مشرف آخر");
+  if (!target.active) fail(tenantId, "العضوية معطلة بالفعل");
   const { error } = await supabase.from("memberships").update({ active: false }).eq("tenant_id", tenantId).eq("user_id", targetUserId);
   if (error) fail(tenantId, "تعذر تعطيل العضوية");
   await audit(supabase, tenantId, user.id, "membership.disabled", targetUserId, { previous_role: target.role });
   revalidatePath("/team");
   redirect(`/team?tenant=${encodeURIComponent(tenantId)}&success=${encodeURIComponent("تم تعطيل العضوية دون حذف الحساب")}`);
+}
+
+export async function reactivateMembership(formData: FormData) {
+  const tenantId = String(formData.get("tenant_id") ?? "");
+  const targetUserId = String(formData.get("user_id") ?? "");
+  const { supabase, user, role: actorRole } = await requireManager(tenantId);
+  const { data: target, error: lookupError } = await supabase.from("memberships").select("role,active").eq("tenant_id", tenantId).eq("user_id", targetUserId).maybeSingle();
+  if (lookupError || !target) fail(tenantId, "العضوية غير موجودة");
+  if (target.role === "owner") fail(tenantId, "عضوية المالك لا تحتاج إلى إعادة تنشيط");
+  if (actorRole === "admin" && target.role === "admin") fail(tenantId, "المشرف لا يستطيع إعادة تنشيط مشرف آخر");
+  if (target.active) fail(tenantId, "العضوية نشطة بالفعل");
+  const { error } = await supabase.from("memberships").update({ active: true }).eq("tenant_id", tenantId).eq("user_id", targetUserId);
+  if (error) fail(tenantId, "تعذر إعادة تنشيط العضوية");
+  await audit(supabase, tenantId, user.id, "membership.reactivated", targetUserId, { restored_role: target.role });
+  revalidatePath("/team");
+  redirect(`/team?tenant=${encodeURIComponent(tenantId)}&success=${encodeURIComponent("تمت إعادة تنشيط العضوية")}`);
 }
