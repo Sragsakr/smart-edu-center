@@ -84,3 +84,27 @@ jobs:
       - uses: ./.github/actions/setup
       - run: npm run build
       - run: npm run check:client-secrets
+
+  deploy-production:
+    name: Deploy production to Coolify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - lint
+      - typecheck
+      - test
+      - migrations
+      - security
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Coolify production deployment
+        env:
+          COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+        run: |
+          test -n "$COOLIFY_DEPLOY_WEBHOOK"
+          test -n "$COOLIFY_API_TOKEN"
+          curl --fail --show-error --silent \
+            --request GET "$COOLIFY_DEPLOY_WEBHOOK" \
+            --header "Authorization: Bearer $COOLIFY_API_TOKEN"
