@@ -1,9 +1,9 @@
-import { Check, GraduationCap, ShieldCheck } from "lucide-react";
+import { Check } from "lucide-react";
 import { redirect } from "next/navigation";
-import { signOut } from "@/app/auth/actions";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { listPendingWorkspaceRequests } from "@/lib/auth/account-access";
 import { approveWorkspaceRequest, rejectWorkspaceRequest } from "./actions";
+import { PlatformPageHeader } from "@/components/platform-page-header";
 
 const dateFormatter = new Intl.DateTimeFormat("ar-EG", {
   dateStyle: "medium",
@@ -21,28 +21,9 @@ export default async function PlatformRequestsPage({
   const params = await searchParams;
 
   return (
-    <main className="min-h-dvh bg-[#f6f5fb] p-4 md:p-8">
+    <main className="p-4 md:p-8">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-7 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="grid size-12 place-items-center rounded-2xl bg-[#6547d9] text-white">
-              <GraduationCap aria-hidden="true" />
-            </span>
-            <div>
-              <p className="flex items-center gap-1 text-xs font-bold text-[#6547d9]">
-                <ShieldCheck className="size-4" aria-hidden="true" /> إدارة المنصة
-              </p>
-              <h1 className="text-xl font-extrabold">طلبات تفعيل الحسابات</h1>
-            </div>
-          </div>
-          <form action={signOut}>
-            <PendingSubmitButton
-              idleLabel="تسجيل الخروج"
-              pendingLabel="جارٍ الخروج..."
-              className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold"
-            />
-          </form>
-        </header>
+        <PlatformPageHeader title="طلبات تفعيل الحسابات" description="مراجعة طلبات السناتر والمدرسين المستقلين قبل التفعيل." />
 
         {params.error ? (
           <p role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">

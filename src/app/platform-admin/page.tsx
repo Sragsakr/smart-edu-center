@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ArrowUpRight, Building2, CheckCircle2, GraduationCap, Layers, ShieldCheck, Users, Wallet } from "lucide-react";
-import { signOut } from "@/app/auth/actions";
+import { ArrowUpRight, Building2, CheckCircle2, GraduationCap, Layers, Users, Wallet } from "lucide-react";
 import { getOverviewMetrics, listPlatformAudit } from "@/lib/platform-admin-data";
+import { PlatformPageHeader } from "@/components/platform-page-header";
 
 const actionLabels: Record<string, string> = {
   "workspace_request.approved": "تم اعتماد طلب مساحة عمل",
@@ -38,41 +38,9 @@ export default async function PlatformAdminOverview() {
   const [metrics, audit] = await Promise.all([getOverviewMetrics(), listPlatformAudit(6)]);
 
   return (
-    <main className="min-h-dvh bg-[#f6f5fb] p-4 md:p-8">
+    <main className="p-4 md:p-8">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex gap-3">
-            <span className="grid size-12 place-items-center rounded-2xl bg-[#6547d9] text-white">
-              <ShieldCheck size={24} aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-bold text-[#6547d9]">إدارة المنصة</p>
-              <h1 className="text-2xl font-extrabold">نظرة عامة على الـSaaS</h1>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <Link href="/platform-admin/requests" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold">
-              الطلبات
-            </Link>
-            <Link href="/platform-admin/password-resets" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold">
-              الاستعادة
-            </Link>
-            <Link href="/platform-admin/tenants" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold">
-              المساحات
-            </Link>
-            <Link href="/platform-admin/users" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold">
-              المستخدمون
-            </Link>
-            <Link href="/platform-admin/reports" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold">
-              التقارير
-            </Link>
-            <form action={signOut}>
-              <button type="submit" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold">
-                خروج
-              </button>
-            </form>
-          </div>
-        </header>
+        <PlatformPageHeader title="نظرة عامة على الـSaaS" description="متابعة أداء المنصة وآخر الأنشطة التشغيلية." />
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <StatCard label="السناتر" value={metrics.centers} Icon={Building2} tone="#6547d9" />

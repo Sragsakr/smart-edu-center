@@ -1,7 +1,6 @@
-import Link from "next/link";
-import { BarChart3, ShieldCheck } from "lucide-react";
-import { signOut } from "@/app/auth/actions";
+import { BarChart3 } from "lucide-react";
 import { getPlatformReport } from "@/lib/platform-admin-data";
+import { PlatformPageHeader } from "@/components/platform-page-header";
 
 function Bars({ rows }: { rows: { label: string; value: number }[] }) {
   const max = Math.max(...rows.map((r) => r.value), 1);
@@ -26,25 +25,9 @@ export default async function PlatformReportsPage() {
   const report = await getPlatformReport();
 
   return (
-    <main className="min-h-dvh bg-[#f6f5fb] p-4 md:p-8">
+    <main className="p-4 md:p-8">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-7 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex gap-3">
-            <span className="grid size-12 place-items-center rounded-2xl bg-[#6547d9] text-white">
-              <ShieldCheck size={24} aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-bold text-[#6547d9]">إدارة المنصة</p>
-              <h1 className="text-2xl font-extrabold">تقارير الـSaaS</h1>
-            </div>
-          </div>
-          <nav className="flex gap-3 text-sm font-bold">
-            <Link href="/platform-admin" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2">نظرة عامة</Link>
-            <form action={signOut}>
-              <button type="submit" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2">خروج</button>
-            </form>
-          </nav>
-        </header>
+        <PlatformPageHeader title="تقارير الـSaaS" description="مؤشرات مجمعة ومحسوبة مباشرة من بيانات المنصة." />
 
         <div className="grid gap-5 lg:grid-cols-2">
           <article className="card p-6">

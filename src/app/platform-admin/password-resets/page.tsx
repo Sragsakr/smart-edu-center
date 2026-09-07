@@ -1,9 +1,8 @@
-import Link from "next/link";
-import { Check, Clock3, MessageCircle, ShieldCheck, X } from "lucide-react";
+import { Check, Clock3, MessageCircle, X } from "lucide-react";
 import { redirect } from "next/navigation";
-import { signOut } from "@/app/auth/actions";
 import { listPendingPasswordResetRequests } from "@/lib/auth/account-access";
 import { approvePasswordReset, rejectPasswordReset } from "./actions";
+import { PlatformPageHeader } from "@/components/platform-page-header";
 
 const dateFormatter = new Intl.DateTimeFormat("ar-EG", {
   dateStyle: "medium",
@@ -26,32 +25,9 @@ export default async function PasswordResetsPage({
       : null;
 
   return (
-    <main className="min-h-dvh bg-[#f6f5fb] p-4 md:p-8">
+    <main className="p-4 md:p-8">
       <div className="mx-auto max-w-5xl">
-        <header className="mb-7 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex gap-3">
-            <span className="grid size-12 place-items-center rounded-2xl bg-[#6547d9] text-white">
-              <ShieldCheck aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-bold text-[#6547d9]">إدارة المنصة</p>
-              <h1 className="text-xl font-extrabold">طلبات استعادة كلمة المرور</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/platform-admin/requests" className="text-sm font-bold text-[#6547d9]">
-              طلبات الحسابات
-            </Link>
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold"
-              >
-                تسجيل الخروج
-              </button>
-            </form>
-          </div>
-        </header>
+        <PlatformPageHeader title="طلبات استعادة كلمة المرور" description="مراجعة الطلبات وإصدار أكواد الاستعادة الآمنة." />
 
         {params.error ? (
           <p role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{params.error}</p>

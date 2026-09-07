@@ -1,8 +1,7 @@
-import { Building2, FileText, GraduationCap, ShieldCheck, Users } from "lucide-react";
-import Link from "next/link";
-import { signOut } from "@/app/auth/actions";
+import { Building2, FileText, GraduationCap, Users } from "lucide-react";
 import { listTenants } from "@/lib/platform-admin-data";
 import { setTenantStatus } from "./actions";
+import { PlatformPageHeader } from "@/components/platform-page-header";
 
 export default async function PlatformTenantsPage({
   searchParams,
@@ -12,26 +11,9 @@ export default async function PlatformTenantsPage({
   const [tenants, params] = await Promise.all([listTenants(), searchParams]);
 
   return (
-    <main className="min-h-dvh bg-[#f6f5fb] p-4 md:p-8">
+    <main className="p-4 md:p-8">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-7 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex gap-3">
-            <span className="grid size-12 place-items-center rounded-2xl bg-[#6547d9] text-white">
-              <ShieldCheck size={24} aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-bold text-[#6547d9]">إدارة المنصة</p>
-              <h1 className="text-2xl font-extrabold">المساحات (السناتر والمدرسون)</h1>
-            </div>
-          </div>
-          <nav className="flex gap-3 text-sm font-bold">
-            <Link href="/platform-admin" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2">نظرة عامة</Link>
-            <Link href="/platform-admin/users" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2">المستخدمون</Link>
-            <form action={signOut}>
-              <button type="submit" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2">خروج</button>
-            </form>
-          </nav>
-        </header>
+        <PlatformPageHeader title="السناتر والمدرسون" description="إدارة مساحات العمل وحالات التفعيل والتعليق." />
 
         {params.error ? (
           <p role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{params.error}</p>
@@ -45,7 +27,7 @@ export default async function PlatformTenantsPage({
           <section className="card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-right text-sm">
-                <thead className="bg-[#faf9fc] text-xs text-[#8b8799]">
+                <thead className="bg-[#faf9fc] text-xs text-[#6f6a80]">
                   <tr>
                     <th className="px-6 py-3 font-medium">المساحة</th>
                     <th className="px-4 py-3 font-medium">النوع</th>
