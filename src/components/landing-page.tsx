@@ -1,307 +1,152 @@
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
+  BookOpen,
   Building2,
   CalendarCheck,
   CheckCircle2,
-  FileText,
+  CircleDollarSign,
   GraduationCap,
   LineChart,
   MessageCircle,
-  Smartphone,
+  Palette,
+  ShieldCheck,
+  Sparkles,
+  TicketCheck,
+  UserCheck,
   Users,
+  UsersRound,
   Wallet,
 } from "lucide-react";
 
-const featureItems = [
-  { icon: Users, title: "إدارة الطلاب", desc: "ملفات الطلاب بأكواد فريدة وبحث وفلاتر وسجل زمني كامل." },
-  { icon: CalendarCheck, title: "الحضور والجداول", desc: "جداول الحصص وتسجيل حضور سريع وتقارير الغياب حسب المجموعة." },
-  { icon: Wallet, title: "التحصيل والفواتير", desc: "فواتير ومدفوعات وإيصالات وتتبع المتأخرات بدقة." },
-  { icon: FileText, title: "المحتوى والواجبات", desc: "كورسات ومذكرات وواجبات واختبارات لأبنائك." },
-  { icon: MessageCircle, title: "التواصل", desc: "إشعارات الغياب والاستحقاق عبر واتساب." },
-  { icon: LineChart, title: "التقارير", desc: "تقارير تشغيلية وإدارية تُفهم القرار." },
+const quickFeatures = ["الحضور والغياب", "التحصيل والفواتير", "المجموعات والجداول", "صلاحيات الفريق", "متابعة ولي الأمر", "تقارير التشغيل"];
+
+const useCases: Array<{ icon: LucideIcon; title: string; desc: string }> = [
+  { icon: CalendarCheck, title: "الحضور في ثواني", desc: "اعرف مين حضر ومين غاب من غير دفاتر أو شيتات منفصلة." },
+  { icon: Wallet, title: "فلوسك واضحة", desc: "شوف المدفوع، المتأخر، الفواتير والاستحقاقات من مكان واحد." },
+  { icon: Users, title: "كل طالب له ملف كامل", desc: "بيانات الطالب، مجموعاته، حضوره، تحصيله وتاريخه التشغيلي." },
+  { icon: UsersRound, title: "فريقك بصلاحيات واضحة", desc: "مالك، مشرف، مدرس، استقبال ومحاسب؛ كل شخص يشوف اللي يخصه." },
+  { icon: MessageCircle, title: "ولي الأمر متابع", desc: "بوابة ولي أمر تدعم أكثر من ابن وتعرض بيانات كل طالب بشكل منفصل." },
+  { icon: LineChart, title: "قرارك مبني على أرقام", desc: "مؤشرات تشغيلية للحضور والتحصيل والطلاب تساعدك تتحرك بسرعة." },
 ];
 
-const steps = [
-  { title: "سجّل حسابك", desc: "أنشئ حسابًا بالبريد وكلمة المرور وبيانات النشاط." },
-  { title: "بانتظار موافقة الإدارة", desc: "تراجع المنصة طلبك وتتواصل معك على واتساب." },
-  { title: "فعّل سنترك", desc: "بعد الموافقة عالمُ المساحة ويعمل فريقك عليها." },
+const roleCards = [
+  { title: "صاحب السنتر", desc: "الصورة الكاملة: الفروع، الفريق، الحضور، التحصيل والتقارير." },
+  { title: "الاستقبال والإدارة", desc: "تسجيل الطلاب، المجموعات، التحصيل والعمليات اليومية." },
+  { title: "المدرس", desc: "مجموعاته، طلابه وحضورهم من غير تشتيت باقي بيانات السنتر." },
+  { title: "ولي الأمر والطالب", desc: "بوابات منفصلة للمتابعة والوصول لما يخصهم فقط." },
 ];
 
-type PricingPlan = {
-  name: string;
-  price: string;
-  period: string;
-  tagline: string;
-  features: string[];
-  cta: string;
-  highlight: boolean;
-};
-
-const pricingPlans: PricingPlan[] = [
-  {
-    name: "مدرس مستقل",
-    price: "تجربة مجانية",
-    period: "7 أيام",
-    tagline: "جرّب النظام كاملًا ثم فعّل اشتراكك بموافقة الإدارة.",
-    features: [
-      "حتى 100 طالب",
-      "مجموعات وواجبات واختبارات",
-      "حضور وتحصيل",
-      "الإشعارات عبر واتساب",
-      "تفعيل من إدارة المنصة",
-    ],
-    cta: "ابدأ تجربتك",
-    highlight: false,
-  },
-  {
-    name: "سنتر تعليمي",
-    price: "تجربة مجانية",
-    period: "7 أيام",
-    tagline: "جرّب إدارة الفروع والموظفين والتحصيل كاملةً ثم فعّل اشتراكك.",
-    features: [
-      "فروع وقاعات وموظفون بأدوار",
-      "حضور وتحصيل لكل فرع",
-      "محتوى وواجبات واختبارات",
-      "تقارير تشغيلية وإدارية",
-      "دعم مباشر أثناء الإطلاق",
-      "تفعيل من إدارة المنصة",
-    ],
-    cta: "ابدأ تجربتك",
-    highlight: true,
-  },
+const dashboardStats: Array<{ title: string; value: string; icon: LucideIcon; color: string }> = [
+  { title: "إجمالي الطلاب", value: "1,248", icon: Users, color: "#6547d9" },
+  { title: "حضور اليوم", value: "892", icon: UserCheck, color: "#2fab88" },
+  { title: "تحصيل الشهر", value: "84,250 ج", icon: CircleDollarSign, color: "#e09d36" },
+  { title: "متأخرات", value: "12,800 ج", icon: Wallet, color: "#e96b7a" },
 ];
 
-function ProductCard({ area }: { area: "center" | "teacher" }) {
-  const isCenter = area === "center";
-  const points = isCenter
-    ? ["فروع وقاعات وموظفون", "فريق كامل بأدوار واتصالات", "حضور وتحصيل لكل فرع", "تقارير تشغيلية وإدارية"]
-    : ["مجموعات تحت اسمك", "إدارة طلابك وحضورهم", "استحقاق المدرس وتحصيله", "محتوى وواجبات خاصة بك"];
-  return (
-    <article className="card relative flex flex-col p-6">
-      {isCenter ? (
-        <span className="absolute -top-3 start-6 rounded-full bg-[#6547d9] px-3 py-1 text-xs font-bold text-white">
-          الأكثر شيوعًا
-        </span>
-      ) : null}
-      <span className="grid size-12 place-items-center rounded-2xl bg-[#eeeaff] text-[#6547d9]">
-        {isCenter ? <Building2 className="size-6" aria-hidden="true" /> : <GraduationCap className="size-6" aria-hidden="true" />}
-      </span>
-      <h3 className="mt-4 text-lg font-extrabold">{isCenter ? "سنتر تعليمي" : "مدرس مستقل"}</h3>
-      <p className="mt-1 text-sm text-[#6f6a80]">
-        {isCenter
-          ? "للفروع والموظفين والتحصيل والإدارة الكاملة."
-          : "للمدرس المستقل لإدارة مجموعاته وطلابه دون تعقيد."}
-      </p>
-      <ul className="mt-4 space-y-2 text-sm">
-        {points.map((point) => (
-          <li key={point} className="flex items-center gap-2">
-            <CheckCircle2 className="size-4 shrink-0 text-[#6547d9]" aria-hidden="true" />
-            {point}
-          </li>
-        ))}
-      </ul>
-      <Link
-        href="/login"
-        className="focus-ring mt-6 rounded-xl bg-white p-3 text-center text-sm font-bold text-[#6547d9] ring-1 ring-[#e5e2ec] transition hover:bg-[#f8f7fb]"
-      >
-        ابدأ الآن
-      </Link>
-    </article>
-  );
-}
+const lmsFeatures: Array<{ icon: LucideIcon; label: string }> = [
+  { icon: BookOpen, label: "كورسات وفيديو" },
+  { icon: TicketCheck, label: "أكواد تفعيل" },
+  { icon: Palette, label: "هوية ودومين مخصص" },
+  { icon: ShieldCheck, label: "صلاحيات وصول منفصلة" },
+];
 
 function Logo() {
   return (
     <Link href="/" className="flex items-center gap-3">
-      <span className="grid size-11 place-items-center rounded-2xl bg-[#6547d9] text-white shadow-lg shadow-purple-200">
-        <GraduationCap size={25} aria-hidden="true" />
-      </span>
-      <div>
-        <b className="block text-[15px]">Smart Edu Center</b>
-        <span className="text-[11px] text-[#858197]">إدارة السَنتَر والمُدرّس</span>
-      </div>
+      <span className="grid size-11 place-items-center rounded-2xl bg-[#6547d9] text-white shadow-lg shadow-purple-200"><GraduationCap size={25}/></span>
+      <div><b className="block text-[15px]">Smart Edu Center</b><span className="text-[11px] text-[#858197]">إدارة تعليمية أبسط وأوضح</span></div>
     </Link>
+  );
+}
+
+function DashboardPreview() {
+  const bars = [58, 82, 68, 94, 73, 87, 64];
+  return (
+    <div className="relative">
+      <div className="absolute -inset-8 -z-10 rounded-[40px] bg-[#dcd4ff]/55 blur-3xl" />
+      <div className="overflow-hidden rounded-[28px] border border-[#e5e0f1] bg-white shadow-2xl shadow-purple-200/50">
+        <div className="flex items-center justify-between border-b border-[#eeeaf4] px-5 py-4">
+          <div><p className="text-xs font-bold text-[#6547d9]">لوحة الإدارة</p><p className="mt-1 text-xs text-[#888294]">ملخص التشغيل اليوم</p></div>
+          <span className="rounded-full bg-[#e8f7f2] px-3 py-1 text-[10px] font-bold text-[#20866a]">مباشر</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 p-4 md:grid-cols-4">
+          {dashboardStats.map(({ title, value, icon: Icon, color }) => (
+            <div key={title} className="rounded-2xl bg-[#faf9fc] p-3">
+              <span className="grid size-8 place-items-center rounded-xl bg-white" style={{ color }}><Icon size={16}/></span>
+              <p className="mt-3 text-[10px] text-[#8c879a]">{title}</p><b className="mt-1 block text-sm">{value}</b>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-4 px-4 pb-4 lg:grid-cols-[1.35fr_.75fr]">
+          <div className="rounded-2xl border border-[#eeeaf4] p-4">
+            <div className="flex items-center justify-between"><div><b className="text-xs">نظرة على الحضور</b><p className="text-[10px] text-[#928ca0]">آخر 7 أيام</p></div><span className="text-[10px] font-bold text-[#6547d9]">91%</span></div>
+            <div className="mt-4 flex h-28 items-end gap-2 border-b border-[#eeeaf4]">{bars.map((height, index) => <div key={index} className="flex-1 rounded-t-md bg-[#d9d2ff]" style={{height:`${height}%`}} />)}</div>
+          </div>
+          <div className="rounded-2xl border border-[#eeeaf4] p-4">
+            <b className="text-xs">تحصيل الرسوم</b>
+            <div className="mx-auto mt-4 grid size-24 place-items-center rounded-full" style={{background:"conic-gradient(#6547d9 0 76%,#ece8f7 76% 100%)"}}><div className="grid size-16 place-items-center rounded-full bg-white"><b className="text-sm">76%</b></div></div>
+            <p className="mt-3 text-center text-[10px] text-[#8c879a]">تم تحصيل معظم مستحقات الشهر</p>
+          </div>
+        </div>
+      </div>
+      <div className="absolute -bottom-5 -right-4 rounded-2xl border border-[#e5e0f1] bg-white px-4 py-3 shadow-lg"><p className="text-[10px] text-[#8c879a]">حضور اليوم</p><b className="text-sm text-[#20866a]">+892 طالب</b></div>
+      <div className="absolute -left-3 top-24 rounded-2xl border border-[#e5e0f1] bg-white px-4 py-3 shadow-lg"><p className="text-[10px] text-[#8c879a]">متأخرات تحتاج متابعة</p><b className="text-sm text-[#d95567]">12,800 ج</b></div>
+    </div>
   );
 }
 
 export function LandingPage() {
   return (
-    <div dir="rtl" className="min-h-dvh bg-[#f6f5fb] text-[#17152b]">
-      <header className="sticky top-0 z-30 border-b border-[#e8e5ef] bg-[#f6f5fb]/90 backdrop-blur">
-        <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-4 md:px-8">
+    <div dir="rtl" className="min-h-dvh overflow-hidden bg-[#f7f6fb] text-[#17152b]">
+      <header className="sticky top-0 z-40 border-b border-[#e8e5ef] bg-[#f7f6fb]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 md:px-8">
           <Logo />
-          <nav aria-label="التنقل الرئيسي" className="hidden items-center gap-6 text-sm font-semibold text-[#5f5a70] lg:flex">
-            <a href="#features" className="hover:text-[#6547d9]">المميزات</a>
-            <a href="#models" className="hover:text-[#6547d9]">النماذج</a>
-            <a href="#pricing" className="hover:text-[#6547d9]">الأسعار</a>
-            <a href="#how" className="hover:text-[#6547d9]">كيف أبدأ</a>
+          <nav className="hidden items-center gap-6 text-sm font-semibold text-[#5f5a70] lg:flex">
+            <a href="#features" className="hover:text-[#6547d9]">المزايا</a><a href="#models" className="hover:text-[#6547d9]">طريقة الشغل</a><a href="#roles" className="hover:text-[#6547d9]">الصلاحيات</a><a href="#lms" className="hover:text-[#6547d9]">الكورسات Online</a>
           </nav>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="hidden rounded-xl border border-[#ddd8e9] px-4 py-2 text-sm font-bold text-[#5f5a70] sm:block">
-              تسجيل الدخول
-            </Link>
-            <Link href="/login" className="rounded-xl bg-[#6547d9] px-4 py-2 text-sm font-bold text-white">
-              أنشئ حسابك
-            </Link>
-          </div>
+          <div className="flex items-center gap-3"><Link href="/login" className="hidden rounded-xl border border-[#ddd8e9] px-4 py-2 text-sm font-bold sm:block">تسجيل الدخول</Link><Link href="/signup" className="rounded-xl bg-[#6547d9] px-4 py-2 text-sm font-bold text-white">ابدأ مجانًا</Link></div>
         </div>
       </header>
 
       <main>
-        {/* Hero */}
-        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 md:px-8 lg:grid-cols-2 lg:py-24">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#eeeaff] px-3 py-1 text-xs font-bold text-[#6547d9]">
-              <Smartphone className="size-4" aria-hidden="true" />
-              منصة عربية متعددة المستأجرين
-            </span>
-            <h1 className="mt-6 text-4xl font-extrabold leading-tight tracking-tight md:text-5xl">
-              إدارة السناتر التعليمية<br />
-              <span className="text-[#6547d9]">والمدرسين المستقلين</span> في مكان واحد
-            </h1>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-[#5f5a70]">
-              سجّل الطلاب، نَظّم المجموعات والحضور، وافهم التحصيل والمحتوى والتقارير — بسهولة على الهاتف والدسكتوب.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link href="/login" className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-6 py-3 font-bold text-white">
-                أنشئ حسابك مجانًا
-                <ArrowLeft className="size-4" aria-hidden="true" />
-              </Link>
-              <a href="#how" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[#ddd8e9] px-6 py-3 font-bold text-[#5f5a70]">
-                تعرّف على المنصة
-              </a>
-            </div>
+        <section className="relative mx-auto grid max-w-7xl items-center gap-14 px-4 py-16 md:px-8 lg:grid-cols-[.9fr_1.1fr] lg:py-24">
+          <div className="relative z-10">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#dcd5f3] bg-white px-3 py-1.5 text-xs font-bold text-[#6547d9]"><Sparkles size={14}/> للمدرس المستقل والسنتر التعليمي</span>
+            <h1 className="mt-6 text-4xl font-black leading-[1.18] tracking-tight md:text-6xl">كل شغل السنتر أو مجموعاتك<br/><span className="text-[#6547d9]">في مكان واحد.</span></h1>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-[#5f5a70]">طلاب، حضور، تحصيل، مجموعات، فريق وتقارير. Smart Edu يخليك تشوف يومك كله بوضوح بدل الدفاتر والشيتات ورسائل الواتساب المتناثرة.</p>
+            <div className="mt-8 flex flex-wrap gap-3"><Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-6 py-3.5 font-bold text-white shadow-lg shadow-purple-200">ابدأ مجانًا <ArrowLeft size={17}/></Link><a href="#features" className="rounded-xl border border-[#ddd8e9] bg-white px-6 py-3.5 font-bold text-[#5f5a70]">شوف النظام بيعمل إيه</a></div>
+            <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-[#797386]">{["7 أيام تجربة", "إعداد سريع", "بدون تعقيد تقني"].map(item => <span key={item} className="flex items-center gap-2"><CheckCircle2 size={14} className="text-[#2fab88]"/>{item}</span>)}</div>
           </div>
-          <div className="card relative p-6" aria-hidden="true">
-            <div className="grid gap-3">
-              <div className="flex items-center justify-between rounded-xl border border-[#eeeaf6] bg-white p-4">
-                <span className="flex items-center gap-2 text-sm font-bold"><Users className="size-4 text-[#6547d9]" /> إجمالي الطلاب</span>
-                <b className="text-lg">1,248</b>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-[#eeeaf6] bg-white p-4">
-                <span className="flex items-center gap-2 text-sm font-bold"><CalendarCheck className="size-4 text-[#2fab88]" /> حضور اليوم</span>
-                <b className="text-lg">892</b>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-[#eeeaf6] bg-white p-4">
-                <span className="flex items-center gap-2 text-sm font-bold"><Wallet className="size-4 text-[#e09d36]" /> تحصيل الشهر</span>
-                <b className="text-lg">84,250 ج</b>
-              </div>
-            </div>
-            <p className="mt-4 text-center text-xs text-[#6f6a80]">صورة توضيحية لشكل لوحة الإدارة بعد تسجيل الدخول.</p>
-          </div>
+          <DashboardPreview />
         </section>
 
-        {/* Features */}
-        <section id="features" className="mx-auto max-w-6xl px-4 py-16 md:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-extrabold">كل أدوات إدارة السنتر</h2>
-            <p className="mt-3 text-[#5f5a70]">مكوّنات متكاملة تبدأ من التسجيل حتى التقارير.</p>
-          </div>
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {featureItems.map(({ icon: Icon, title, desc }) => (
-              <article key={title} className="card p-6">
-                <span className="grid size-11 place-items-center rounded-2xl bg-[#eeeaff] text-[#6547d9]">
-                  <Icon className="size-5" aria-hidden="true" />
-                </span>
-                <h3 className="mt-4 font-extrabold">{title}</h3>
-                <p className="mt-1 text-sm leading-6 text-[#6f6a80]">{desc}</p>
-              </article>
-            ))}
-          </div>
+        <section className="border-y border-[#ebe7f2] bg-white/80 py-5"><div className="mx-auto flex max-w-7xl flex-wrap justify-center gap-x-8 gap-y-3 px-4 text-sm font-bold text-[#5f5a70] md:px-8">{quickFeatures.map(item => <span key={item} className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[#6547d9]"/>{item}</span>)}</div></section>
+
+        <section id="features" className="mx-auto max-w-7xl px-4 py-20 md:px-8">
+          <div className="mx-auto max-w-3xl text-center"><span className="text-sm font-bold text-[#6547d9]">من الفوضى لليوم المنظم</span><h2 className="mt-3 text-3xl font-black md:text-4xl">بدل الدفاتر والشيتات ورسائل الواتساب المبعثرة</h2><p className="mt-4 text-[#6f6a80]">كل عملية متكررة في السنتر تتحول لمسار واضح وسريع داخل النظام.</p></div>
+          <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{useCases.map(({icon:Icon,title,desc}) => <article key={title} className="group rounded-3xl border border-[#e8e3f0] bg-white p-6 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-100"><span className="grid size-12 place-items-center rounded-2xl bg-[#eeeaff] text-[#6547d9] transition group-hover:bg-[#6547d9] group-hover:text-white"><Icon size={22}/></span><h3 className="mt-5 text-lg font-extrabold">{title}</h3><p className="mt-2 text-sm leading-7 text-[#6f6a80]">{desc}</p></article>)}</div>
         </section>
 
-        {/* Models */}
-        <section id="models" className="bg-white py-16">
-          <div className="mx-auto max-w-6xl px-4 md:px-8">
-            <div className="mx-auto max-w-2xl text-center">
-              <h2 className="text-3xl font-extrabold">منصة واحدة، نموذجان مختلفان</h2>
-              <p className="mt-3 text-[#5f5a70]">اختر نوع نشاطك وسيتكيّف النظام لتلبية حاجتك.</p>
-            </div>
+        <section id="models" className="bg-[#17152b] py-20 text-white">
+          <div className="mx-auto max-w-7xl px-4 md:px-8">
+            <div className="mx-auto max-w-3xl text-center"><span className="text-sm font-bold text-[#b9aaff]">النظام بيتشكل على شغلك</span><h2 className="mt-3 text-3xl font-black md:text-4xl">سنتر كامل؟ ولا مدرس مستقل؟</h2><p className="mt-4 text-[#c9c5d8]">نفس المحرك، لكن التجربة والصلاحيات تتظبط حسب نموذج التشغيل من أول يوم.</p></div>
             <div className="mt-12 grid gap-6 lg:grid-cols-2">
-              <ProductCard area="center" />
-              <ProductCard area="teacher" />
+              <article className="rounded-3xl border border-white/10 bg-white/5 p-7"><Building2 className="size-8 text-[#b9aaff]"/><h3 className="mt-5 text-2xl font-extrabold">سنتر تعليمي</h3><p className="mt-2 leading-7 text-[#c9c5d8]">فروع، قاعات، فريق، صلاحيات، طلاب ومجموعات وتحصيل وتقارير تشغيلية كاملة.</p><ul className="mt-5 space-y-3 text-sm">{["فروع وقاعات", "فريق ودعوات وصلاحيات", "تشغيل مركزي لكل الفروع", "تقارير للإدارة"].map(item => <li key={item} className="flex items-center gap-2"><CheckCircle2 size={16} className="text-[#b9aaff]"/>{item}</li>)}</ul></article>
+              <article className="rounded-3xl border border-[#7d67e8] bg-[#251f45] p-7"><GraduationCap className="size-8 text-[#b9aaff]"/><h3 className="mt-5 text-2xl font-extrabold">مدرس مستقل</h3><p className="mt-2 leading-7 text-[#c9c5d8]">واجهة أبسط للمدرس اللي محتاج مجموعاته وطلابه وحضوره وتحصيله من غير تعقيد السناتر.</p><ul className="mt-5 space-y-3 text-sm">{["مجموعات وطلاب", "حضور وتحصيل", "متابعة يومية بسيطة", "قابل للتوسع لسنتر لاحقًا"].map(item => <li key={item} className="flex items-center gap-2"><CheckCircle2 size={16} className="text-[#b9aaff]"/>{item}</li>)}</ul></article>
             </div>
           </div>
         </section>
 
-        {/* Pricing */}
-        <section id="pricing" className="mx-auto max-w-6xl px-4 py-16 md:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-extrabold">خطط وأسعار بسيطة</h2>
-            <p className="mt-3 text-[#5f5a70]">ميزات متدرجة حسب حجم العمل. ابدأ بتجربة مجانية 7 أيام حتى تفعيل الاشتراك من إدارة المنصة.</p>
-          </div>
-          <div className="mt-12 grid gap-6 lg:grid-cols-2">
-            {pricingPlans.map((plan) => (
-              <article
-                key={plan.name}
-                className={`card flex flex-col p-6 ${plan.highlight ? "border-2 border-[#6547d9]" : ""}`}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-xl font-extrabold">{plan.name}</h3>
-                    <p className="mt-1 text-sm text-[#6f6a80]">{plan.tagline}</p>
-                  </div>
-                  {plan.highlight ? (
-                    <span className="rounded-full bg-[#6547d9] px-3 py-1 text-xs font-bold text-white">الأكثر شيوعًا</span>
-                  ) : null}
-                </div>
-                <div className="mt-5">
-                  <span className="text-3xl font-extrabold">{plan.price}</span>
-                  <span className="text-sm text-[#6f6a80]"> {plan.period}</span>
-                </div>
-                <ul className="mt-6 space-y-2 text-sm">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2">
-                      <CheckCircle2 className="size-4 shrink-0 text-[#6547d9]" aria-hidden="true" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/login"
-                  className={`focus-ring mt-8 rounded-xl p-3 text-center text-sm font-bold ${
-                    plan.highlight ? "bg-[#6547d9] text-white" : "bg-white text-[#6547d9] ring-1 ring-[#e5e2ec]"
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
-              </article>
-            ))}
-          </div>
-        </section>
+        <section id="roles" className="mx-auto max-w-7xl px-4 py-20 md:px-8"><div className="mx-auto max-w-3xl text-center"><span className="text-sm font-bold text-[#6547d9]">كل شخص يشوف اللي يخصه</span><h2 className="mt-3 text-3xl font-black md:text-4xl">نفس النظام، تجارب مختلفة حسب الدور</h2></div><div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">{roleCards.map((role,index) => <article key={role.title} className="rounded-3xl border border-[#e8e3f0] bg-white p-6"><span className="grid size-10 place-items-center rounded-xl bg-[#eeeaff] text-sm font-black text-[#6547d9]">0{index+1}</span><h3 className="mt-5 font-extrabold">{role.title}</h3><p className="mt-2 text-sm leading-7 text-[#6f6a80]">{role.desc}</p></article>)}</div></section>
 
-        {/* How to start */}
-        <section id="how" className="mx-auto max-w-6xl px-4 py-16 md:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-extrabold">كيف أبدأ خلال ثلاث خطوات</h2>
-          </div>
-          <ol className="mt-12 grid gap-5 sm:grid-cols-3">
-            {steps.map((step, index) => (
-              <li key={step.title} className="card relative p-6">
-                <span className="absolute -top-3 start-6 grid size-8 place-items-center rounded-full bg-[#6547d9] text-sm font-bold text-white">
-                  {index + 1}
-                </span>
-                <h3 className="mt-4 font-extrabold">{step.title}</h3>
-                <p className="mt-1 text-sm leading-6 text-[#6f6a80]">{step.desc}</p>
-              </li>
-            ))}
-          </ol>
-          <div className="mt-10 text-center">
-            <Link href="/login" className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-6 py-3 font-bold text-white">
-              أنشئ حسابك الآن
-              <ArrowLeft className="size-4" aria-hidden="true" />
-            </Link>
-          </div>
-        </section>
+        <section id="lms" className="mx-auto max-w-7xl px-4 pb-20 md:px-8"><div className="overflow-hidden rounded-[32px] border border-[#ded7f2] bg-gradient-to-l from-[#eeeaff] to-white p-8 md:p-12"><div className="grid gap-8 lg:grid-cols-[1fr_.8fr] lg:items-center"><div><span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-bold text-[#6547d9]">مرحلة التوسع</span><h2 className="mt-5 text-3xl font-black md:text-4xl">ولما تكون جاهز تبيع كورسات Online… مش محتاج تغير النظام.</h2><p className="mt-4 max-w-2xl leading-8 text-[#625d70]">الـLMS منتج اختياري مستقل: Shared Academy أو Branded Academy باسمك ودومينك، مع كورسات وأكواد تفعيل واختبارات وتتبع تقدم.</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">{lmsFeatures.map(({ icon: Icon, label }) => <div key={label} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm"><span className="grid size-10 place-items-center rounded-xl bg-[#eeeaff] text-[#6547d9]"><Icon size={18}/></span><b className="text-sm">{label}</b></div>)}</div></div></div></section>
+
+        <section className="bg-white py-20"><div className="mx-auto max-w-4xl px-4 text-center md:px-8"><h2 className="text-3xl font-black md:text-4xl">ابدأ تنظيم شغلك من أول يوم</h2><p className="mt-4 text-[#6f6a80]">ابدأ بنظام الإدارة، وبعدها وسّع المنتج لما شغلك يحتاج.</p><Link href="/signup" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-7 py-4 font-bold text-white shadow-lg shadow-purple-200">ابدأ تجربتك <ArrowLeft size={17}/></Link></div></section>
       </main>
 
-      <footer className="border-t border-[#e8e5ef] bg-white px-4 py-8 md:px-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
-          <Logo />
-          <p className="text-xs text-[#6f6a80]">© {new Date().getFullYear()} Smart Edu Center. جميع الحقوق محفوظة.</p>
-        </div>
-      </footer>
+      <footer className="border-t border-[#e8e5ef] bg-white px-4 py-8 md:px-8"><div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 sm:flex-row"><Logo/><p className="text-xs text-[#6f6a80]">© {new Date().getFullYear()} Smart Edu Center. جميع الحقوق محفوظة.</p></div></footer>
     </div>
   );
 }

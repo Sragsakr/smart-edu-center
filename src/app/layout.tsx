@@ -7,7 +7,7 @@ import "./globals.css";
 const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo", display: "swap" });
 export const metadata: Metadata = {
   title: { default: "Smart Edu Center", template: "%s | Smart Edu Center" },
-  description: "إدارة السنتر والطلاب والحضور والتحصيل من مكان واحد.",
+  description: "نظام لإدارة السنتر أو المدرس، مع مسار مستقل لمنصة الكورسات الأونلاين والهوية المخصصة.",
   applicationName: "Smart Edu Center",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Smart Edu" },
 };

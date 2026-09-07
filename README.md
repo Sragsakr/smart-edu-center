@@ -1,43 +1,163 @@
 # Smart Edu Center
 
-منصة Web PWA عربية لإدارة المدرسين والسناتر التعليمية: الطلاب، المجموعات، الحضور، التحصيل، المحتوى والتقارير.
+منصة Web PWA عربية لإدارة السناتر التعليمية والمدرسين المستقلين، مع مسار مستقل مستقبلي لمنصة الكورسات Online/LMS.
 
 ## الحالة الحالية
 
 - Next.js 16 App Router + TypeScript + Tailwind CSS 4.
+- Supabase Auth + PostgreSQL + RLS.
 - واجهة عربية RTL متجاوبة وقابلة للتثبيت كـPWA.
-- Vertical slice أولي: لوحة الإدارة، الطلاب، البحث، وحالة السداد.
-- مخطط Supabase متعدد المستأجرين مع RLS في `supabase/migrations`.
-- مشروع Vercel واحد ومشروع Supabase واحد باسم `smart-edu-center` يخدمان Development وPreview وProduction دون تكلفة مشروع بيانات إضافي.
+- Management SaaS يدعم نموذجين: `center` و`independent_teacher`.
+- Control Plane لإدارة الـSaaS.
+- Student Portal أولي فعلي مرتبط ببيانات الطالب.
+- Parent Portal أولي فعلي مرتبط بعلاقة ولي الأمر بأبنائه.
+- LMS مخطط كمنتج/اشتراك مستقل، وليس Feature إجبارية داخل اشتراك الإدارة.
 
-## دورة إنشاء الحساب وتفعيله
+## Build Mode — مهم قبل أي تعديل Database
 
-إنشاء مستخدم في Supabase Auth لا ينشئ سنترًا تلقائيًا. تأكيد البريد معطل بقرار المالك؛ الرحلة المعتمدة هي: تسجيل البريد وكلمة المرور، إرسال بيانات السنتر أو المدرس المستقل ورقمي الموبايل وواتساب بكود الدولة، ثم تسجيل خروج المستخدم وانتظار تواصل إدارة المنصة. لا تُنشأ سجلات `tenants` و`memberships` إلا عند قبول Platform Admin للطلب؛ ينفذ القبول العمليتين داخل transaction واحدة. محاولة الدخول قبل القبول تنتهي بتسجيل خروج ورسالة انتظار، وبعد التفعيل يسجل المستخدم دخوله من جديد.
+**المشروع ما زال في مرحلة البناء، ولا توجد Customer/Production Data Contract حتى الآن.**
 
-مسارات `/platform-admin` هي Control Plane منفصلة لإدارة الـSaaS. تبدأ بلوحة مراجعة الطلبات في `/platform-admin/requests`، ثم تتوسع Feature by Feature إلى Overview، وإدارة كل السناتر والمدرسين وأنواع الحسابات وحالات التفعيل والتعليق والاشتراكات وتقارير المنصة الإجمالية. لا يصل إليها إلا مستخدم مسجل صراحة في `platform_admins`، ولا يُمنح أصحاب السناتر هذه الصلاحية تلقائيًا. الوصول الداعم لبيانات Tenant الحساسة سيكون لاحقًا عبر Impersonation مؤقت ومدقق، وليس قراءة مفتوحة دائمة.
+حتى يعلن المالك صراحة **SCHEMA FREEZE / PRODUCTION DATA MODE** نعمل بالقواعد التالية:
 
-بعد تطبيق migration، يعيّن مالك قاعدة البيانات أول مشرف من Supabase SQL Editor باستخدام بريد مؤكد وموثوق:
+1. نفضّل الوصول مباشرة إلى الـTarget Schema الصحيح بدل الحفاظ على توافق مع Demo/Development Data قديمة.
+2. عند تغيير Domain Model بشكل كبير، يمكن مسح Business/Demo Data وإعادة Seed ببيانات نظيفة بدل إضافة Migration جديدة فقط للحفاظ على شكل قديم لم يعد مطلوبًا.
+3. لا نصرف وقتًا في Backward Compatibility لبيانات تجريبية قابلة للحذف.
+4. Existing migration history ليست Public Contract نهائية بعد، ويمكن Consolidate/Rebuild قبل Schema Freeze.
+5. أي قرار Database جديد يجب أن يبقى موثقًا في الكود/README/AGENTS حتى لا تتحول قاعدة البيانات إلى حالة غير قابلة لإعادة البناء.
+6. أثناء Reset نحافظ على حسابات Auth الحقيقية وحسابات Platform Admin الحقيقية إلا لو المالك طلب حذفها صراحة. Demo users وBusiness demo data قابلة للمسح.
+7. بعد إعلان **SCHEMA FREEZE** يتوقف هذا الأسلوب فورًا، وتصبح كل تغييرات Schema عبر Forward-only reviewed migrations وخطة Restore/Rollback.
 
-```sql
-insert into public.platform_admins (user_id)
-select id from auth.users where lower(email) = lower('admin@example.com');
+> القرار الحالي من المالك: Build Mode نشط، وReset/Reseed مسموح لتسريع إعادة تشكيل المنتج أثناء البناء.
+
+## نموذج المنتج
+
+### 1. Management SaaS
+
+منتج إدارة وتشغيل السنتر أو المدرس المستقل: الطلاب، الفروع، المجموعات، الجداول، الحضور، التحصيل، الموظفون، الصلاحيات والتقارير.
+
+### 2. LMS / Online Learning
+
+منتج تجاري مستقل سيضم الكورسات الرقمية، الفيديو/الملفات، الاختبارات، أكواد التفعيل، الوصول والتقدم. يمكن للعميل شراء Management فقط أو LMS فقط أو الاثنين.
+
+الـLMS له شكلان مخططان:
+
+- **Shared Academy:** على دومين المنصة الرئيسي.
+- **Branded / White-label Academy:** اسم/Logo/Theme/Custom Domain للسنتر أو المدرس مع نفس الـcodebase والـruntime؛ لا يوجد Deployment منفصل لكل عميل.
+
+## Student Domain
+
+لا نعتبر كل طالب نوعًا واحدًا.
+
+- **Center Student:** علاقته بالفرع/المجموعة/الحضور/الاشتراك الحضوري.
+- **Online Student:** علاقته بالكورس/التفعيل/الوصول/التقدم/الاختبارات.
+- نفس الشخص يمكن أن يكون الاثنين من خلال Identity واحدة وعلاقتين منفصلتين.
+
+لا نعتمد على `student_type` واحد كحل وحيد، ولا نجبر Online Student على Branch/Group، ولا يدخل Online Enrollment تلقائيًا ضمن حساب طلاب السنتر.
+
+## نموذج الدخول والـPortals
+
+لدينا **4 Experiences** ولكن **2 Login Surfaces فقط**.
+
+### A. SaaS Platform Admin — دخول منفصل
+
+- Login: `/platform-control/login`
+- Control Plane: `/platform-admin`
+- غير مرتبط من الـLanding Page.
+- الرابط غير المعلن ليس Security Boundary؛ الوصول يتطلب وجود المستخدم في `platform_admins` ويتم التحقق Server-side.
+
+### B. الدخول العادي — Management + Student + Parent
+
+Login واحد فقط: `/login`
+
+لا توجد Tabs لاختيار نوع المستخدم قبل المصادقة. بعد نجاح Auth، العلاقات المحمية في قاعدة البيانات تحدد الـPortal:
+
+```text
+/login
+  ├── active tenant membership  → Management Dashboard
+  ├── students.user_id          → /student
+  └── guardians.user_id         → /parent
 ```
 
-استبدل البريد فقط داخل SQL Editor ولا تضع بريد المشرف أو أي credentials في Git. كل نماذج Server Actions تعرض حالة تحميل وتعطّل الإرسال المتكرر أثناء التنفيذ.
+لو نفس Auth user له أكثر من علاقة، ينتقل إلى `/choose-context` ويختار الواجهة بدون حساب أو Password جديد.
 
-بعد قبول مساحة العمل، ينشئ الـOwner أو Admin الحسابات التابعة عبر دعوات بأدوار `Admin` و`Teacher` و`Receptionist` و`Accountant`؛ لا ينشئ كلمات مرور نيابة عنهم. العضوية تخص Tenant واحدة، لذلك يمكن للمستخدم نفسه امتلاك أدوار مختلفة في مساحات متعددة، وتعطيل عضوية لا يحذف Auth user أو يعطل عضوياته الأخرى. حسابات الطالب وولي الأمر تُربط بملفاتهما عبر تحقق موثوق ولا يمكن للمستخدم claim لسجل طالب بنفسه.
+### Management Portal
 
-نظرًا لتعذر إرسال البريد الآن (لا Domain ولا SMTP)، استعادة كلمة المرور تتم عبر إدارة المنصة: المستخدم يطلب الاستعادة من `/forgot-password`، وتظهر مراجعة في `/platform-admin/password-resets` يراجعها Platform Admin، ثم يولّد النظام كودًا فريدًا مخزنًا كـHash بصلاحية 15 دقيقة لاستخدام واحد، ويُرسله المشرف يدويًا إلى رقم واتساب المسجل عبر رابط `wa.me`، ثم يغيّر المستخدم كلمته من `/reset-password`. تغيير كلمة المرور يستخدم `SUPABASE_SECRET_KEY` داخل Server-only فقط ولا يُكشف مفتاح الخدمة في المتصفح أو Git. الأتمتة عبر WhatsApp API مؤجلة.
+لـOwner/Admin/Teacher/Receptionist/Accountant داخل Tenant. العضوية في `memberships` تخص تشغيل السنتر/المدرس فقط.
 
-## لوحة إدارة المنصة
+### Student Portal — `/student`
 
-تعمل `/platform-admin` كـControl Plane فعلية تعتمد على بيانات Supabase الحالية، داخل Dashboard موحّدة بقائمة جانبية ثابتة على الديسكتوب وقائمة قابلة للفتح والإغلاق على الموبايل. تشمل نظرة عامة، طلبات الحسابات، استعادة كلمات المرور، المساحات، المستخدمين والعضويات، تقارير SaaS، وسجل تدقيق مجمّع حسب الـTenant وقابل للبحث والفلترة وفتح تفاصيل الحدث كاملة. جميع الأرقام والقوائم والمخططات ناتجة من استعلامات Server-only وليست قيم Demo ثابتة في الواجهة. يمكن للمشرف تعليق Tenant أو إعادة تفعيله؛ تتغير عضوياته وتُسجل العملية في `platform_audit_logs`.
+النسخة الحالية تعرض من البيانات الحقيقية:
 
-تضيف migration `20260906215149_seed_platform_demo.sql` بيانات تجريبية معروفة القصد لعرض النظام محليًا؛ حسابات Auth التجريبية تستخدم بريدًا يحمل `demo`، ولا تمثل مستخدمين حقيقيين. لا تُضف بيانات تجريبية عشوائية خارج migration موثقة، خاصة لأن البيئات تشترك في مشروع Supabase واحد.
+- بيانات الطالب.
+- الحصص القادمة.
+- سجل الحضور.
+- الاشتراكات/الفواتير والمدفوعات.
+- مساحة `كورساتي Online` موجودة كواجهة مشروطة مستقبلًا؛ لا تُفعّل إلا عند وجود LMS entitlement + Online Enrollment.
+
+### Parent Portal — `/parent`
+
+ولي الأمر ليس Tenant Member. الوصول يتم عبر:
+
+```text
+auth.users
+  → guardians.user_id
+  → student_guardians
+  → students
+```
+
+RLS يسمح له بقراءة بيانات أبنائه المرتبطين فقط. النسخة الحالية تعرض الأبناء، الحضور، الحصص والمستحقات. موديول الرسائل مع المعلم له مكان واضح في الواجهة وسيُبنى كDomain مستقل لاحقًا.
+
+## دورة إنشاء حساب المشترك
+
+إنشاء User في Supabase Auth لا ينشئ Tenant تلقائيًا. رحلة السنتر/المدرس الحالية:
+
+1. تسجيل البريد وكلمة المرور.
+2. إدخال نوع النشاط واسم المساحة وبيانات التواصل.
+3. إنشاء `workspace_requests` فقط ثم تسجيل الخروج.
+4. Platform Admin يراجع الطلب.
+5. عند القبول يتم إنشاء `tenant` + Owner `membership`.
+6. المستخدم يدخل من `/login` ويصل إلى Management Dashboard.
+
+Platform Admin لا يُمنح تلقائيًا لأي Tenant Owner.
+
+## بيانات Demo الحالية
+
+قاعدة التطوير الحالية أُعيد تنظيفها لتكون صغيرة وواضحة وتمثل الـ4 Experiences الأساسية. كل حسابات Demo التالية تستخدم كلمة المرور:
+
+```text
+DemoPass.123
+```
+
+| التجربة | البريد | الدخول |
+|---|---|---|
+| SaaS Platform Admin | `admin.demo@example.com` | `/platform-control/login` |
+| Center Management Owner | `center.demo@example.com` | `/login` |
+| Student | `teacher.demo@example.com` | `/login` |
+| Parent / Guardian | `center.demo2@example.com` | `/login` |
+
+> أسماء بعض Demo emails موروثة من seed قديم لتجنب إعادة إنشاء Auth users أثناء البناء؛ العلاقة الحالية في قاعدة البيانات هي المصدر الحقيقي للدور، وليس اسم البريد.
+
+Dataset الحالية تحتوي Tenant واحدًا (`سنتر النور التجريبي`) وفرعًا ومجموعة وطالبًا وولي أمر وعلاقة Parent→Student وحصصًا وحضورًا وفواتير ومدفوعًا جزئيًا، كي تكون الـPortals قابلة للاختبار بدون بيانات ضخمة.
+
+لا تعتمد Business Logic على Demo email أو UUID ثابت.
+
+## RLS والصلاحيات
+
+- Tenant staff: وصولهم يعتمد على `memberships` والـrole.
+- Student: يرى سجله وما يرتبط به فقط عبر `students.user_id = auth.uid()` وسياسات العلاقات المرتبطة.
+- Guardian: يرى فقط الأبناء المرتبطين في `student_guardians` وما يخصهم.
+- Platform Admin: صلاحية SaaS مستقلة في `platform_admins`.
+- لا نستخدم `user_metadata` لاتخاذ قرار Authorization.
+- لا نضع Student/Guardian داخل `memberships` فقط لتسهيل الاستعلامات.
+- أي Table جديدة exposed يجب أن تحصل على RLS واختبارات Positive/Negative isolation.
+
+## Password Recovery
+
+حتى يتوفر Domain/SMTP، الاستعادة الحالية تمر عبر إدارة المنصة: طلب من `/forgot-password` ثم مراجعة من `/platform-admin/password-resets` وكود مؤقت single-use يُرسل يدويًا عبر واتساب. أي Secret/Admin Supabase key يبقى Server-only ولا يوضع في `NEXT_PUBLIC_*` أو Git.
 
 ## التشغيل المحلي
 
-يستخدم المشروع Node.js `22.23.2` كما هو مثبت في `.nvmrc` وCI.
+المشروع يستخدم Node.js `22.23.2` كما في `.nvmrc`.
 
 ```bash
 nvm use
@@ -48,42 +168,26 @@ npm run dev
 
 ثم افتح `http://localhost:3000`.
 
-## البيئات ومتغيرات التشغيل
-
-| البيئة | مصدر الكود والتشغيل | إعداد المتغيرات | مشروع البيانات |
-|---|---|---|---|
-| Development | نسخة المطور المحلية عبر `npm run dev` | `.env.local` غير المتتبع في Git | مشروع Supabase `smart-edu-center` المشترك |
-| Preview | أي فرع أو Pull Request غير `main` على Vercel | نطاق Vercel Preview | مشروع Supabase `smart-edu-center` المشترك |
-| Production | فرع `main` والدومين الإنتاجي على Vercel | نطاق Vercel Production | مشروع Supabase `smart-edu-center` المشترك |
-
-انسخ `.env.example` إلى `.env.local` للتشغيل المحلي واضبط المتغيرين العامين بالقيم غير الإنتاجية المناسبة:
+المتغيرات العامة الأساسية:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ```
 
-يعرّف `src/lib/env.ts` العقد العام typed ويتحقق منه عند بدء Next.js أو البناء. يفشل التشغيل برسالة تجمع المتغيرات الناقصة أو غير الصالحة بدل تمرير قيم غير معرّفة إلى Supabase. استخدم هذا العقد بدل قراءة `process.env` مباشرة داخل التطبيق.
+اقرأها من العقد الموجود في `src/lib/env.ts` بدل `process.env` مباشرة داخل التطبيق.
 
-المتغيران من نوع Vercel Config لأنهما معلنان للمتصفح. نطاقا Preview وProduction في Vercel يستخدمان حاليًا القيم نفسها لمشروع Supabase المشترك بقرار المالك لتجنب تكلفة مشروع إضافي. هذا يعني أن البيانات ليست معزولة بين البيئات؛ لا تشغّل اختبارات مدمرة أو seed تجريبي من Development/Preview، ولا تضع قيمة فعلية في Git أو في `.env.example`.
+## البيئات الحالية
 
-لا تستخدم `service_role` في المتصفح أو في متغير يبدأ بـ`NEXT_PUBLIC_`. لا توجد متغيرات خادمية خاصة مطلوبة حاليًا؛ عند إضافتها يجب إبقاؤها في module يحمل `server-only` وعدم تصديرها عبر العقد العام. يفحص `npm run check:client-secrets` أسماء المتغيرات العامة وملفات `.next/static` بعد البناء، وهو جزء من `npm run check`.
+Development وVercel Preview و`main` تستخدم حاليًا مشروع Supabase واحد باسم `smart-edu-center` بقرار المالك لتقليل التكلفة أثناء البناء. لذلك تعامل مع المشروع الحالي كبيئة Build مشتركة حتى إعلان Production Data Mode.
 
-## قاعدة البيانات والترقية بين البيئات
+هذا يعني:
 
-طُبقت migrations الحالية على مشروع Supabase المشترك. كل جداول الأعمال تحتوي `tenant_id` ومحمية بـRLS. عند إضافة migration جديدة:
-
-1. أنشئ ملفًا جديدًا forward-only داخل `supabase/migrations`؛ لا تعدّل migration مطبقة.
-2. تحقق منها محليًا وداخل CI دون بيانات اعتماد أو تطبيق تلقائي على قاعدة البيانات.
-3. راجع أثرها وخطة rollback، ثم طبّقها مرة واحدة على مشروع Supabase المشترك في نافذة معلنة.
-4. شغّل اختبارات العزل وSecurity وPerformance Advisors فور التطبيق.
-5. راجع Preview Deployment، ثم ادمج الفرع إلى `main` وتحقق من Production.
-
-بسبب مشاركة قاعدة البيانات، أي كتابة من Development أو Preview تصل إلى البيانات نفسها التي تستخدمها Production. أهداف RPO/RTO وحدود الاستعادة موثقة في [`docs/BACKUP_RECOVERY.md`](docs/BACKUP_RECOVERY.md).
+- لا تنفذ Reset من نفسك؛ يحتاج قرار المالك.
+- بعد موافقة المالك في Build Mode يمكن Reset/Reseed بدل الحفاظ على بيانات Demo قديمة.
+- قبل إدخال عملاء/بيانات حقيقية يجب فصل/تثبيت استراتيجية البيئات والنسخ الاحتياطي ثم إعلان Schema Freeze.
 
 ## أوامر الجودة
-
-يشغّل GitHub Actions على كل Pull Request وعلى تحديث `main` وظائف مستقلة للـlint وtypecheck والاختبارات والبناء مع فحص Client bundle. توجد وظيفة Migration Safety تتحقق من أسماء وtransaction boundaries للـmigrations وتمنع تعديل أو حذف الملفات القائمة مقارنة بفرع الأساس؛ تعمل بلا بيانات اعتماد ولا تطبق أي تغيير على قاعدة بيانات. تفحص وظيفة Security الحزم الإنتاجية عالية الخطورة والملفات المتتبعة بحثًا عن أنماط الأسرار، ويتابع Dependabot حزم npm وGitHub Actions أسبوعيًا. تستخدم الوظائف Node.js المحدد في `.nvmrc` و`npm ci`، ولا تتصل بقواعد Supabase لأن قيم البناء placeholders عامة فقط. ينشئ تكامل Vercel Git نسخة Preview لكل Pull Request ويضيف رابطها وحالتها ضمن Checks الخاصة بالـPR.
 
 ```bash
 npm run lint
@@ -93,38 +197,34 @@ npm run check:migrations
 npm run check:secrets
 npm run build
 npm run check:client-secrets
-# أو شغّلها كلها بالترتيب:
 npm run check
 ```
 
+ملاحظة: بعض Migration Safety rules الحالية أقدم من قرار Build Mode. إذا منعت Consolidation مقصودة قبل Schema Freeze، حدّث قواعد CI نفسها بدل إضافة migrations وهمية فقط لإرضاء تاريخ تطوير لم يعد مطلوبًا.
+
 ## المعمارية
 
-- `src/app`: المسارات وmetadata والـmanifest.
-- `src/components`: مكونات الواجهة التفاعلية.
-- `src/lib/env.ts`: عقد متغيرات البيئة العامة والتحقق المبكر منها.
-- `src/lib/supabase`: عملاء Supabase للمتصفح والخادم.
-- `supabase/migrations`: المخطط والسياسات والوظائف.
-- `public/sw.js`: Service Worker بسيط للـApp Shell.
+- `src/app`: routes والـmetadata والـportals.
+- `src/app/platform-control/login`: مدخل إدارة الـSaaS المنفصل.
+- `src/app/platform-admin`: SaaS Control Plane.
+- `src/app/student`: Student Portal.
+- `src/app/parent`: Parent Portal.
+- `src/app/choose-context`: اختيار Portal للمستخدم متعدد العلاقات.
+- `src/components`: مكونات الواجهة.
+- `src/lib/auth/account-access.ts`: Identity/relationship resolver.
+- `src/lib/portal-data.ts`: server-only data access للطالب وولي الأمر.
+- `src/lib/supabase`: عملاء Supabase.
+- `supabase/migrations`: تاريخ المخطط الحالي، وليس Contract نهائية أثناء Build Mode.
 
-## خارطة MVP
+## خارطة التنفيذ
 
-1. تأسيس PWA والهوية ولوحة الإدارة.
-2. Auth، السنتر، الفروع والصلاحيات.
-3. الطلاب وأولياء الأمور والمجموعات.
-4. الحضور والتحصيل والإيصالات.
-5. المحتوى والواجبات والاختبارات.
-6. الإشعارات والتقارير ثم Pilot مع سنتر حقيقي.
+المصدر الأساسي للتطوير المتسلسل:
 
-## المساهمة وGitHub
+- [`docs/MASTER_DELIVERY_PLAN.md`](docs/MASTER_DELIVERY_PLAN.md)
+- [`docs/TECHNICAL_EXECUTION_BACKLOG.md`](docs/TECHNICAL_EXECUTION_BACKLOG.md)
 
-استخدم قوالب GitHub عند فتح Bug أو Feature أو Database Migration، واملأ قائمة PR بما يشمل الجودة والأمان وPreview وخطة التعافي عند الحاجة. القوالب موجودة داخل `.github/` وتمنع البلاغات الفارغة التي لا تحتوي خطوات إعادة إنتاج أو معيار نجاح. قواعد أسماء الفروع وConventional Commits ومسار المراجعة موثقة في [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## خطة التطوير الكاملة
-
-راجع [`docs/MASTER_DELIVERY_PLAN.md`](docs/MASTER_DELIVERY_PLAN.md). يحتوي على `CURRENT_TASK` والمراحل والاعتماديات وبوابات الجودة للمشروع الكامل، وهو المصدر الوحيد لاختيار التاسك التالية.
-
-التنفيذ الهندسي التفصيلي موجود في [`docs/TECHNICAL_EXECUTION_BACKLOG.md`](docs/TECHNICAL_EXECUTION_BACKLOG.md)، ويحتوي على `CURRENT_TECHNICAL_TASK` والـSchema وRLS وServer Actions والواجهات والاختبارات ومعايير القبول.
+راجع `CURRENT_TASK` و`CURRENT_TECHNICAL_TASK` دائمًا قبل بدء شغل جديد، وحدّثهما عند اكتمال التاسك حتى نستطيع دائمًا أخذ «التاسك اللي عليها الدور» بدون فجوات.
 
 ## النشر
 
-المصدر على GitHub، والواجهة داخل مشروع Vercel واحد، والبيانات والمصادقة والتخزين داخل مشروع Supabase واحد. رفع فرع غير `main` ينشئ Preview Deployment، بينما تحديث `main` ينشئ Production Deployment؛ كلاهما يتصل بقاعدة البيانات المشتركة حاليًا.
+المصدر على GitHub، التطبيق على Vercel، والبيانات/Auth على Supabase. تحديث `main` ينشر النسخة الأساسية، والفروع يمكن أن تنشئ Preview. قبل اعتبار النظام Production فعليًا يجب إنهاء Schema Freeze، فصل سياسة البيانات الحقيقية عن Demo Build Mode، ومراجعة Security/Backup/Restore gates.
