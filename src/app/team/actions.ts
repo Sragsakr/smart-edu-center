@@ -5,8 +5,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthAccountState, removeLegacyInvitePlaceholder } from "@/lib/invitations";
 import type { MemberRole } from "@/lib/team-access";
 
 const assignableRoles = new Set<MemberRole>(["admin", "teacher", "receptionist", "accountant"]);
@@ -34,17 +34,10 @@ function normalizeEmail(value: FormDataEntryValue | null) {
   return String(value ?? "").trim().toLowerCase();
 }
 
-async function authAccountExists(email: string) {
-  const admin = createAdminClient();
-  const normalized = email.trim().toLowerCase();
-  const perPage = 200;
-  for (let page = 1; page <= 50; page += 1) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-    if (error) throw new Error("تعذر التحقق من وجود الحساب");
-    if (data.users.some((candidate) => candidate.email?.toLowerCase() === normalized)) return true;
-    if (data.users.length < perPage) return false;
-  }
-  return false;
+async function ensureInvitableEmail(tenantId: string, email: string) {
+  const state = await getAuthAccountState(email);
+  if (state === "registered") fail(tenantId, "هذا البريد مسجل بالفعل في النظام؛ الدعوات متاحة للحسابات الجديدة فقط");
+  if (state === "legacy-placeholder") await removeLegacyInvitePlaceholder(email);
 }
 
 function tokenPair() {
@@ -88,9 +81,7 @@ export async function createInvitation(formData: FormData) {
   if (!assignableRoles.has(role)) fail(tenantId, "اختر صلاحية صحيحة");
 
   const { supabase, user } = await requireManager(tenantId);
-  if (await authAccountExists(email)) {
-    fail(tenantId, "هذا البريد مسجل بالفعل في النظام؛ الدعوات متاحة للحسابات الجديدة فقط");
-  }
+  await ensureInvitableEmail(tenantId, email);
 
   const { data: pending } = await supabase.from("invitations").select("id").eq("tenant_id", tenantId).eq("invitee_email", email).eq("status", "pending").maybeSingle();
   if (pending) fail(tenantId, "توجد دعوة معلقة بالفعل لهذا البريد؛ استخدم إعادة الإرسال");
@@ -121,9 +112,7 @@ export async function resendInvitation(formData: FormData) {
     .eq("tenant_id", tenantId)
     .maybeSingle();
   if (lookupError || !invitation || invitation.status !== "pending") fail(tenantId, "الدعوة غير قابلة لإعادة الإرسال");
-  if (await authAccountExists(invitation.invitee_email)) {
-    fail(tenantId, "هذا البريد أصبح مسجلًا بالفعل في النظام؛ ألغِ الدعوة القديمة لأنها لم تعد صالحة");
-  }
+  await ensureInvitableEmail(tenantId, invitation.invitee_email);
 
   const { raw, hash } = tokenPair();
   const now = new Date().toISOString();
