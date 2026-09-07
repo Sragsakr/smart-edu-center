@@ -7,20 +7,20 @@ import type {
   RepositoryAuditRow,
   RepositoryAuditTenant,
   RepositoryOverviewMetrics,
-  RepositoryPlatformAdminUser,
+  RepositoryPlatformAdminAccess,
   RepositoryPlatformReport,
   RepositoryTenantRow,
   RepositoryUserRow,
 } from "@/lib/repositories/platform-admin-repository";
 
 export class SupabasePlatformAdminRepository implements PlatformAdminRepository {
-  async getCurrentPlatformAdmin(): Promise<RepositoryPlatformAdminUser | null> {
+  async getCurrentPlatformAdminAccess(): Promise<RepositoryPlatformAdminAccess> {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) return null;
+    if (!user) return { status: "unauthenticated" };
 
     const { data: admin, error } = await supabase
       .from("platform_admins")
@@ -29,9 +29,12 @@ export class SupabasePlatformAdminRepository implements PlatformAdminRepository 
       .maybeSingle();
 
     if (error) throw new Error("admin check failed");
-    if (!admin) return null;
+    if (!admin) return { status: "forbidden" };
 
-    return { id: user.id, email: user.email ?? "" };
+    return {
+      status: "authorized",
+      user: { id: user.id, email: user.email ?? "" },
+    };
   }
 
   async getOverviewMetrics(): Promise<RepositoryOverviewMetrics> {
