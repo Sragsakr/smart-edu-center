@@ -14,13 +14,43 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 After reading this file and `README.md`, open `docs/MASTER_DELIVERY_PLAN.md` and `docs/TECHNICAL_EXECUTION_BACKLOG.md`. For engineering work, execute only `CURRENT_TECHNICAL_TASK`. When it satisfies acceptance and quality gates, mark it complete, append the commit/test result to the execution log, and advance both task pointers. Never skip dependencies or leave either plan stale.
 
+## BUILD MODE — database rule (ACTIVE)
+
+The product is still under active construction and there is no customer/production data contract yet. Until the owner explicitly declares **SCHEMA FREEZE / PRODUCTION DATA MODE**:
+
+- Prefer the simplest correct target schema over backward compatibility with demo/dev data.
+- For major domain-model changes, it is acceptable and preferred to wipe disposable business/demo data and reseed a small canonical dataset instead of stacking compatibility migrations.
+- Do **not** spend time writing migrations whose only purpose is preserving old demo rows or an obsolete development schema.
+- Existing migration history may be consolidated/rebuilt before schema freeze; do not assume an early migration is a permanent public contract.
+- Keep the current target data model documented in code/docs so a reset is reproducible. Never make an undocumented database-only decision.
+- Preserve real owner/platform-admin Auth accounts during development resets unless the owner explicitly asks to delete them. Demo Auth users and all business demo data are disposable.
+- Destructive reset operations require the owner's explicit instruction in the current task. The owner has currently authorized reset/reseed while Build Mode remains active.
+- After **SCHEMA FREEZE** is declared, this rule ends immediately: all schema changes become forward-only reviewed migrations with rollback/restore planning.
+
+This Build Mode rule overrides older instructions in this repository that say every development schema change must be preserved through a new forward-only migration.
+
+## Access / portal model
+
+There are four user experiences, but only two login surfaces:
+
+1. **SaaS Platform Admin** — separate private entry at `/platform-control/login`, then `/platform-admin`. It is not linked from the public landing page and requires an explicit `platform_admins` row.
+2. **Tenant Management** — center owner/admin/teacher/staff via the normal `/login`, then the management dashboard.
+3. **Student Portal** — via the same normal `/login`, then `/student` when `students.user_id = auth.uid()`.
+4. **Parent / Guardian Portal** — via the same normal `/login`, then `/parent` when `guardians.user_id = auth.uid()`.
+
+Do not add role tabs to the login form. Authentication answers “who is this user”; protected database relationships decide which portals the user may enter. If one Auth user has more than one non-platform context, route to `/choose-context` and let the user switch portals without separate credentials.
+
+Student and guardian identities are not tenant staff memberships. A student may be both a center student and, later, an LMS/online student through separate enrollment domains. LMS features must appear conditionally from product entitlement + online enrollment; never infer LMS access from being a center student.
+
 ## Mission
 
-Build a production-minded, Arabic-first multi-tenant center operating system. Optimize for a fast Egyptian tutoring-center pilot, not a broad generic LMS or marketplace.
+Build a production-minded, Arabic-first multi-tenant center operating system that supports both educational centers and independent teachers, with an LMS sold as a separate product/entitlement rather than silently merging online students into center operations.
 
 ## Product boundaries
 
-- MVP: tenants, branches, roles, students, guardians, groups, attendance, invoices/payments, content, assignments, objective quizzes, reports and notifications.
+- Management product: tenants, branches, roles, center students, guardians, groups, attendance, invoices/payments, content, assignments, objective quizzes, reports and notifications.
+- LMS product: separate commercial module for online courses, activation/access, progress and exams; shared platform or branded/white-label academy will use the same multi-tenant runtime.
+- Center Student and Online Student are separate relationships to one identity; do not use one `student_type` flag as the only discriminator.
 - Not MVP: marketplace, full school SIS/ERP, owned video conferencing, generic AI features.
 - Arabic RTL is the default. Keep English/i18n structurally possible.
 - Mobile-first for students/guardians; efficient desktop workflows for center staff.
@@ -30,38 +60,36 @@ Build a production-minded, Arabic-first multi-tenant center operating system. Op
 - Next.js App Router, React Server Components by default.
 - Add `"use client"` only at the smallest interactive boundary.
 - Reads belong in a server-only Data Access Layer; UI mutations use Server Actions; external webhooks use Route Handlers.
-- Supabase provides Auth, PostgreSQL and Storage. Never expose a service-role key.
-- Read public environment variables through the typed contract in `src/lib/env.ts`, not directly from `process.env`. Future private variables belong in a `server-only` module and must never be re-exported to client code; `npm run check:client-secrets` enforces the client-bundle boundary.
-- Treat the environment matrix and promotion runbook in `README.md` as canonical. Development, Preview and Production currently share one Supabase project by owner decision; avoid destructive or synthetic writes outside controlled flows. Existing migration files are immutable; CI may validate them but never receives database credentials or applies them.
-- Every business table must have `tenant_id`, RLS enabled, and deny access unless an active membership exists.
-- Never authorize from `user_metadata`; membership and role data must come from protected database tables or trusted app metadata.
+- Supabase provides Auth, PostgreSQL and Storage. Never expose a service-role/secret key.
+- Read public environment variables through `src/lib/env.ts`, not directly from `process.env`.
+- Every tenant business table must carry tenant scope and RLS. Platform-scope tables such as `platform_admins`, `workspace_requests`, and `platform_audit_logs` are deliberate exceptions.
+- Never authorize from `user_metadata`; authorization comes from protected database relationships/tables.
 - Prefer a modular monolith. Do not add Redis, queues, microservices, payment or messaging vendors until a demonstrated requirement needs them.
-- `/platform-admin` is the separate SaaS control plane, presented through a shared responsive dashboard shell with desktop sidebar and mobile drawer, for platform-wide overview, tenants, independent teachers, account states, subscriptions, usage and SaaS reporting. Email confirmation is disabled by owner decision; registration captures separate mobile and WhatsApp numbers with country codes, signs the applicant out after submission, and blocks subsequent access until approval. New self-service registrations remain unprovisioned until a row in `workspace_requests` is approved by an explicitly bootstrapped `platform_admins` user.
-- Password recovery is manual until a domain/SMTP provider is chosen: a user requests recovery, a `platform_admins` reviewer approves, the system generates a single-use hashed 8-char code (15-minute expiry) shown only to the reviewer, who sends it to the registered WhatsApp number via a `wa.me` link. Changing the password uses `SUPABASE_SECRET_KEY` from a Server-only module (`src/lib/supabase/admin.ts`); the private key must never appear in `NEXT_PUBLIC_*`, the client bundle, or Git. Approval must atomically create the tenant and Owner membership; never grant platform administration to tenant Owners implicitly.
-- Platform Admin operational control does not imply permanent unrestricted reads of tenant student data. Future support access must use time-bound, reasoned, bannered and audited impersonation.
-- Tenant staff accounts are provisioned by expiring invitations with per-membership roles, never by an Owner choosing another user's password. A user may have independent roles in multiple tenants; disabling one membership must not delete the Auth user or affect other memberships. Student and guardian portal identities require verified links to their records and cannot self-claim records.
-- `platform_admins`, `workspace_requests`, and `platform_audit_logs` are deliberate platform-scope exceptions to the business-table `tenant_id` rule because they govern approval before a tenant exists. They require RLS, least-privilege reads, and audited security-definer mutations.
-- Platform Admin aggregate reads live in a server-only DAL and may use the Admin client only after verifying `platform_admins`; never expose cross-tenant data or the secret key to Client Components. Dashboard figures must come from database queries, not hardcoded demo constants. Controlled demo records are seeded only through an explicitly documented migration with unmistakable demo identities.
+- `/platform-admin` is the SaaS control plane only. Platform Admin operational control does not imply permanent unrestricted reads of tenant student data; future support access must be time-bound and audited.
+- Tenant staff accounts use memberships/roles. Student and guardian portal identities use verified `user_id` links and RLS; they must not be inserted into `memberships` just to make reads easy.
+- Parent access is relationship-scoped: guardian RLS may read only students linked through `student_guardians` and only data belonging to those children.
+- LMS enablement must eventually come from an explicit product entitlement, not tenant type or user role.
 
 ## Security invariants
 
-- Tenant isolation is mandatory in both DAL filters and database RLS.
+- Tenant and relationship isolation are mandatory in both DAL filters and database RLS.
 - Validate every mutation server-side. Treat client inputs as hostile.
 - Keep privileged environment access inside server-only modules.
 - Use signed/private URLs for protected learning files.
 - Record sensitive financial, attendance and role changes in audit logs.
-- New exposed tables require RLS and both positive/negative tenant-isolation tests.
+- New exposed tables require RLS and positive/negative isolation tests.
+- A hidden/private-looking URL is not a security boundary; `/platform-control/login` still requires authenticated authorization checks.
 
 ## Working method
 
-Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`. Follow `CONTRIBUTING.md` for branch names, Conventional Commits, and the PR workflow.
+Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`.
 
-1. Read `README.md`, this file, and relevant local Next.js docs.
+1. Read `README.md`, this file, the delivery plan/backlog, and relevant local Next.js docs.
 2. Inspect existing changes; never overwrite unrelated user work.
-3. Implement the smallest complete vertical slice.
-4. Run `npm run check` (lint, typecheck, tests, migration safety, repository secrets, build and client-secret scan).
-5. Visually verify changed screens at mobile and desktop sizes.
-6. Update README/migrations/tests when behavior or setup changes.
+3. Confirm whether Build Mode is still active before choosing reset/reseed vs migration strategy.
+4. Implement the smallest complete vertical slice.
+5. Run `npm run check` and visually verify changed screens at mobile and desktop sizes when execution access is available.
+6. Update README/docs/tests whenever behavior, routing, data model, seed accounts or setup changes.
 
 ## UI rules
 
@@ -69,7 +97,8 @@ Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`. Fol
 - Reuse design tokens in `globals.css`; brand purple is `#6547d9`.
 - Avoid oversized text, excessive gradients, dense cards, and desktop-only tables.
 - Empty, loading, offline and error states are product behavior, not polish.
+- Management, Student and Parent portals should make the current context obvious in the header/navigation.
 
 ## Definition of done
 
-A change is done only when it compiles, is lint-clean, has a safe data path, respects tenant isolation, works responsively, and is documented sufficiently for the next developer or agent.
+A change is done only when it compiles, is lint-clean, has a safe data path, respects tenant/relationship isolation, works responsively, and is documented sufficiently for the next developer or agent. In Build Mode, “done” also means the canonical demo dataset and routing still represent the current product model rather than legacy assumptions.
