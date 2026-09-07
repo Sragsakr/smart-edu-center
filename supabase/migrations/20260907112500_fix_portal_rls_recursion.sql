@@ -1,3 +1,5 @@
+BEGIN;
+
 create or replace function private.is_student_self(target_student uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (select 1 from public.students s where s.id = target_student and s.user_id = (select auth.uid()));
@@ -65,3 +67,5 @@ create policy cohorts_portal_select on public.cohorts for select to authenticate
 drop policy if exists sessions_student_self_select on public.class_sessions;
 drop policy if exists sessions_guardian_children_select on public.class_sessions;
 create policy sessions_portal_select on public.class_sessions for select to authenticated using (private.can_access_cohort(cohort_id));
+
+COMMIT;
