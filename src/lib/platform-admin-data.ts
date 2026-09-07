@@ -36,14 +36,24 @@ export type UserRow = {
   memberships: { tenant_id: string; role: string; active: boolean }[];
 };
 
+export type AuditTenant = {
+  id: string;
+  name: string;
+  slug: string | null;
+  accountType: string | null;
+  source: "tenant" | "workspace_request" | "platform";
+};
+
 export type AuditRow = {
   id: number;
   actor_user_id: string | null;
+  actorEmail: string | null;
   action: string;
   entity_type: string;
   entity_id: string | null;
   details: Record<string, unknown>;
   created_at: string;
+  tenant: AuditTenant;
 };
 
 async function platformAdminUser(): Promise<PlatformAdminUser> {
@@ -244,14 +254,102 @@ export async function getPlatformReport(): Promise<PlatformReport> {
   };
 }
 
+type RawAuditRow = Omit<AuditRow, "actorEmail" | "tenant">;
+
+type AuditContext = {
+  tenants: Map<string, AuditTenant>;
+  requests: Map<string, AuditTenant>;
+  userTenants: Map<string, AuditTenant>;
+  actorEmails: Map<string, string>;
+};
+
+const platformAuditTenant: AuditTenant = {
+  id: "platform",
+  name: "أحداث عامة للمنصة",
+  slug: null,
+  accountType: null,
+  source: "platform",
+};
+
+function auditTenant(entry: RawAuditRow, context: AuditContext): AuditTenant {
+  const detailTenantId = typeof entry.details.tenant_id === "string" ? entry.details.tenant_id : null;
+  if (detailTenantId && context.tenants.has(detailTenantId)) return context.tenants.get(detailTenantId)!;
+  if (entry.entity_type === "tenant" && entry.entity_id && context.tenants.has(entry.entity_id)) {
+    return context.tenants.get(entry.entity_id)!;
+  }
+  if (entry.entity_type === "workspace_request" && entry.entity_id && context.requests.has(entry.entity_id)) {
+    return context.requests.get(entry.entity_id)!;
+  }
+  const applicantId = typeof entry.details.applicant_user_id === "string" ? entry.details.applicant_user_id : null;
+  return (applicantId && context.userTenants.get(applicantId)) || platformAuditTenant;
+}
+
+async function loadAuditContext(admin: ReturnType<typeof createAdminClient>): Promise<AuditContext> {
+  const [tenantsResponse, requestsResponse, membershipsResponse, usersResponse] = await Promise.all([
+    admin.from("tenants").select("id,name,slug,account_type"),
+    admin.from("workspace_requests").select("id,workspace_name,account_type,tenant_id,user_id"),
+    admin.from("memberships").select("user_id,tenant_id").eq("active", true),
+    admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+  ]);
+  const lookupError = tenantsResponse.error ?? requestsResponse.error ?? membershipsResponse.error ?? usersResponse.error;
+  if (lookupError) throw new Error("failed to load audit context");
+
+  const tenants = new Map<string, AuditTenant>();
+  for (const tenant of tenantsResponse.data ?? []) {
+    tenants.set(tenant.id, {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+      accountType: tenant.account_type,
+      source: "tenant",
+    });
+  }
+
+  const requests = new Map<string, AuditTenant>();
+  for (const request of requestsResponse.data ?? []) {
+    requests.set(request.id, request.tenant_id && tenants.has(request.tenant_id)
+      ? tenants.get(request.tenant_id)!
+      : {
+          id: `request:${request.id}`,
+          name: request.workspace_name,
+          slug: null,
+          accountType: request.account_type,
+          source: "workspace_request",
+        });
+  }
+
+  const userTenants = new Map<string, AuditTenant>();
+  for (const membership of membershipsResponse.data ?? []) {
+    const tenant = tenants.get(membership.tenant_id);
+    if (tenant && !userTenants.has(membership.user_id)) userTenants.set(membership.user_id, tenant);
+  }
+  for (const request of requestsResponse.data ?? []) {
+    const tenant = requests.get(request.id);
+    if (tenant && !userTenants.has(request.user_id)) userTenants.set(request.user_id, tenant);
+  }
+
+  const actorEmails = new Map(
+    (usersResponse.data.users ?? []).flatMap((user) => user.email ? [[user.id, user.email] as const] : []),
+  );
+  return { tenants, requests, userTenants, actorEmails };
+}
+
 export async function listPlatformAudit(limit = 30): Promise<AuditRow[]> {
   await platformAdminUser();
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("platform_audit_logs")
-    .select("id,actor_user_id,action,entity_type,entity_id,details,created_at")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const [{ data, error }, context] = await Promise.all([
+    admin
+      .from("platform_audit_logs")
+      .select("id,actor_user_id,action,entity_type,entity_id,details,created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    loadAuditContext(admin),
+  ]);
   if (error) throw new Error("failed to load audit logs");
-  return (data ?? []) as AuditRow[];
+
+  return ((data ?? []) as RawAuditRow[]).map((entry) => ({
+    ...entry,
+    actorEmail: entry.actor_user_id ? context.actorEmails.get(entry.actor_user_id) ?? null : null,
+    tenant: auditTenant(entry, context),
+  }));
 }
