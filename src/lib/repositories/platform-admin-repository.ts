@@ -35,9 +35,39 @@ export type RepositoryUserRow = {
   memberships: { tenant_id: string; role: string; active: boolean }[];
 };
 
+export type RepositoryPlatformReport = {
+  tenantByType: { label: string; value: number }[];
+  requestsByStatus: { label: string; value: number }[];
+  membershipsByRole: { label: string; value: number }[];
+  activeStudents: number;
+  inactiveStudents: number;
+};
+
+export type RepositoryAuditTenant = {
+  id: string;
+  name: string;
+  slug: string | null;
+  accountType: string | null;
+  source: "tenant" | "workspace_request" | "platform";
+};
+
+export type RepositoryAuditRow = {
+  id: number;
+  actor_user_id: string | null;
+  actorEmail: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+  tenant: RepositoryAuditTenant;
+};
+
 export interface PlatformAdminRepository {
   getCurrentPlatformAdmin(): Promise<RepositoryPlatformAdminUser | null>;
   getOverviewMetrics(): Promise<RepositoryOverviewMetrics>;
   listTenants(): Promise<RepositoryTenantRow[]>;
   listUsers(): Promise<RepositoryUserRow[]>;
+  getPlatformReport(): Promise<RepositoryPlatformReport>;
+  listPlatformAudit(limit?: number): Promise<RepositoryAuditRow[]>;
 }
