@@ -33,7 +33,6 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
   const error = typeof params.error === "string" ? params.error : null;
   const success = typeof params.success === "string" ? params.success : null;
   const invite = typeof params.invite === "string" ? params.invite : null;
-  const delivery = typeof params.delivery === "string" ? params.delivery : null;
 
   return (
     <main dir="rtl" className="min-h-dvh bg-[#f6f5fb] px-4 py-8 text-[#17152b] md:px-8">
@@ -64,7 +63,7 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
         {success ? <DismissibleAlert kind="success" message={success} /> : null}
         {invite ? (
           <div className="rounded-2xl border border-[#cfc7f5] bg-[#f1edff] p-4">
-            <div className="flex items-start gap-3"><Copy className="mt-1 size-5 text-[#6547d9]" /><div className="min-w-0 flex-1"><b className="text-sm">رابط الدعوة الجديد</b><p className="mt-1 break-all text-xs leading-6 text-[#6f6a80]">{invite}</p><p className="mt-2 text-xs font-bold text-[#6547d9]">{delivery === "sent" ? "تم طلب إرسال الدعوة عبر البريد من خلال Supabase Auth، ويمكنك أيضًا نسخ الرابط أو إرساله عبر واتساب." : delivery === "existing-user" ? "الحساب موجود بالفعل؛ أرسل الرابط للمستخدم ليفتحه بعد تسجيل الدخول بنفس البريد." : "تعذر الإرسال التلقائي عبر البريد؛ استخدم النسخ أو واتساب."}</p><InvitationShare invitationUrl={invite} /></div></div>
+            <div className="flex items-start gap-3"><Copy className="mt-1 size-5 text-[#6547d9]" /><div className="min-w-0 flex-1"><b className="text-sm">رابط الدعوة الجديد</b><p className="mt-1 break-all text-xs leading-6 text-[#6f6a80]">{invite}</p><p className="mt-2 text-xs font-bold text-[#6547d9]">أرسل الرابط للشخص مباشرة عبر واتساب أو انسخه. لو المستخدم جديد سيُنشئ كلمة المرور من صفحة الدعوة، ولو لديه حساب سيدخل كلمة مروره الحالية.</p><InvitationShare invitationUrl={invite} /></div></div>
           </div>
         ) : null}
 
@@ -77,9 +76,9 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
               <select name="role" defaultValue="teacher" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-3 text-sm outline-none focus:border-[#6547d9]">
                 <option value="admin">مشرف</option><option value="teacher">مدرس</option><option value="receptionist">استقبال</option><option value="accountant">محاسب</option>
               </select>
-              <ActionSubmitButton idleLabel="إرسال الدعوة" pendingLabel="جارٍ إرسال الدعوة..." className="rounded-xl bg-[#6547d9] px-5 py-3 text-sm font-bold text-white" />
+              <ActionSubmitButton idleLabel="إنشاء الدعوة" pendingLabel="جارٍ إنشاء الدعوة..." className="rounded-xl bg-[#6547d9] px-5 py-3 text-sm font-bold text-white" />
             </form>
-            <p className="mt-3 text-xs leading-6 text-[#8a8698]">صلاحية الدعوة 7 أيام. بعد إنشائها يظهر رابط جاهز للنسخ أو الإرسال عبر واتساب. إعادة الإرسال تدوّر الـtoken القديم فورًا.</p>
+            <p className="mt-3 text-xs leading-6 text-[#8a8698]">صلاحية الدعوة 7 أيام. بعد إنشائها يظهر رابط جاهز للنسخ أو الإرسال عبر واتساب. إعادة الإرسال تدوّر الرابط القديم فورًا.</p>
           </section>
         ) : (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><ShieldCheck className="ml-2 inline size-4" />لديك عضوية في هذه المساحة لكن إدارة الأعضاء متاحة للمالك والمشرف فقط.</div>
@@ -93,7 +92,7 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
         {data.manageable ? (
           <section className="card overflow-hidden">
             <div className="p-5 md:px-6"><h2 className="font-extrabold">سجل الدعوات</h2><p className="mt-1 text-xs text-[#8a8698]">المعلقة، المقبولة، الملغاة والمنتهية.</p></div>
-            {data.invitations.length ? <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-right text-xs"><thead className="bg-[#faf9fc] text-[#8b8799]"><tr><th className="px-6 py-3">البريد</th><th className="px-4 py-3">الدور</th><th className="px-4 py-3">الحالة</th><th className="px-4 py-3">تنتهي</th><th className="px-6 py-3">الإجراءات</th></tr></thead><tbody>{data.invitations.map((invitation) => { const expired = invitation.status === "pending" && new Date(invitation.expires_at) <= new Date(); const displayStatus = expired ? "expired" : invitation.status; return <tr key={invitation.id} className="border-t border-[#efedf3]"><td className="px-6 py-4 font-bold">{invitation.invitee_email}</td><td className="px-4 py-4">{roleLabel[invitation.role]}</td><td className="px-4 py-4">{statusLabel[displayStatus]}</td><td className="px-4 py-4 text-[#777386]">{new Date(invitation.expires_at).toLocaleString("ar-EG")}</td><td className="px-6 py-4"><div className="flex gap-2">{invitation.status === "pending" ? <><form action={resendInvitation}><input type="hidden" name="tenant_id" value={data.tenant.id}/><input type="hidden" name="invitation_id" value={invitation.id}/><ActionSubmitButton idleLabel="إعادة إرسال" pendingLabel="جارٍ إعادة الإرسال..." className="rounded-lg border border-[#d9d2f2] px-3 py-2 font-bold text-[#6547d9]" /></form><form action={revokeInvitation}><input type="hidden" name="tenant_id" value={data.tenant.id}/><input type="hidden" name="invitation_id" value={invitation.id}/><ActionSubmitButton idleLabel="إلغاء" pendingLabel="جارٍ الإلغاء..." className="rounded-lg border border-red-200 px-3 py-2 font-bold text-red-600" /></form></> : null}</div></td></tr>; })}</tbody></table></div> : <div className="px-6 pb-6 text-sm text-[#8a8698]">لا توجد دعوات حتى الآن.</div>}
+            {data.invitations.length ? <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-right text-xs"><thead className="bg-[#faf9fc] text-[#8b8799]"><tr><th className="px-6 py-3">البريد</th><th className="px-4 py-3">الدور</th><th className="px-4 py-3">الحالة</th><th className="px-4 py-3">تنتهي</th><th className="px-6 py-3">الإجراءات</th></tr></thead><tbody>{data.invitations.map((invitation) => { const expired = invitation.status === "pending" && new Date(invitation.expires_at) <= new Date(); const displayStatus = expired ? "expired" : invitation.status; return <tr key={invitation.id} className="border-t border-[#efedf3]"><td className="px-6 py-4 font-bold">{invitation.invitee_email}</td><td className="px-4 py-4">{roleLabel[invitation.role]}</td><td className="px-4 py-4">{statusLabel[displayStatus]}</td><td className="px-4 py-4 text-[#777386]">{new Date(invitation.expires_at).toLocaleString("ar-EG")}</td><td className="px-6 py-4"><div className="flex gap-2">{invitation.status === "pending" ? <><form action={resendInvitation}><input type="hidden" name="tenant_id" value={data.tenant.id}/><input type="hidden" name="invitation_id" value={invitation.id}/><ActionSubmitButton idleLabel="رابط جديد" pendingLabel="جارٍ إنشاء رابط جديد..." className="rounded-lg border border-[#d9d2f2] px-3 py-2 font-bold text-[#6547d9]" /></form><form action={revokeInvitation}><input type="hidden" name="tenant_id" value={data.tenant.id}/><input type="hidden" name="invitation_id" value={invitation.id}/><ActionSubmitButton idleLabel="إلغاء" pendingLabel="جارٍ الإلغاء..." className="rounded-lg border border-red-200 px-3 py-2 font-bold text-red-600" /></form></> : null}</div></td></tr>; })}</tbody></table></div> : <div className="px-6 pb-6 text-sm text-[#8a8698]">لا توجد دعوات حتى الآن.</div>}
           </section>
         ) : null}
       </div>
