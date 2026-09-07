@@ -19,7 +19,7 @@ const students = [
   { name:"سارة محمود", code:"ST-1021", group:"الصف الأول الثانوي", paid:true, color:"#e6a235" },
 ];
 
-function Logo() { return <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-[#6547d9] text-white shadow-lg shadow-purple-200"><GraduationCap size={25}/></span><div><b className="block text-[15px]">Smart Edu</b><span className="text-[11px] text-[#858197]">Center Management</span></div></div>; }
+function Logo() { return <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-[#6547d9] text-white shadow-lg shadow-purple-200"><GraduationCap size={25}/></span><div><b className="block text-[15px]">سبورتي | Saboraty</b><span className="text-[11px] text-[#858197]">إدارة تعليمية أبسط وأوضح</span></div></div>; }
 
 function Sidebar({active,setActive,open,setOpen}:{active:string;setActive:(x:string)=>void;open:boolean;setOpen:(x:boolean)=>void}) {
   return <><button aria-label="إغلاق القائمة" onClick={()=>setOpen(false)} className={`fixed inset-0 z-30 bg-slate-950/30 transition lg:hidden ${open?"opacity-100":"pointer-events-none opacity-0"}`}/>
