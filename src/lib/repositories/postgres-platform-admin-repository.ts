@@ -12,8 +12,6 @@ import type {
   RepositoryUserRow,
 } from "@/lib/repositories/platform-admin-repository";
 
-type ScalarRow = { value: number };
-
 type TenantRow = {
   id: string;
   name: string;
@@ -59,12 +57,12 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
     const user = await this.currentUserProvider.getCurrentUser();
     if (!user) return { status: "unauthenticated" };
 
-    const result = await this.sql.query<{ user_id: string }>(
+    const admin = await this.sql.query<{ user_id: string }>(
       "select user_id from public.platform_admins where user_id = $1 limit 1",
       [user.id],
     );
+    if (admin.rowCount === 0) return { status: "forbidden" };
 
-    if (result.rowCount === 0) return { status: "forbidden" };
     return { status: "authorized", user };
   }
 
@@ -109,11 +107,11 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
       select
         t.id,
         t.name,
-        t.slug,
-        t.account_type,
+        t.slug::text as slug,
+        t.account_type::text as account_type,
         t.created_by,
-        t.created_at::text,
-        t.status,
+        t.created_at::text as created_at,
+        t.status::text as status,
         count(distinct s.id)::int as student_count,
         count(distinct m.user_id)::int as member_count
       from public.tenants t
@@ -141,19 +139,20 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
       select
         u.id,
         u.email::text as email,
-        u.created_at::text,
+        u.created_at::text as created_at,
         coalesce(
           jsonb_agg(
             jsonb_build_object(
               'tenant_id', m.tenant_id,
-              'role', m.role,
+              'role', m.role::text,
               'active', m.active
-            ) order by m.created_at
+            )
+            order by m.created_at
           ) filter (where m.user_id is not null),
           '[]'::jsonb
         ) as memberships
       from public.users u
-      join public.memberships m on m.user_id = u.id
+      left join public.memberships m on m.user_id = u.id
       group by u.id
       order by u.created_at desc
     `);
@@ -169,19 +168,12 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
   async getPlatformReport(): Promise<RepositoryPlatformReport> {
     const [tenantTypes, requestStatuses, membershipRoles, studentStatus] = await Promise.all([
       this.sql.query<{ label: string; value: number }>(`
-        select
-          case account_type
-            when 'center' then 'سناتر'
-            when 'independent_teacher' then 'مدرسون مستقلون'
-            else account_type::text
-          end as label,
-          count(*)::int as value
+        select account_type::text as label, count(*)::int as value
         from public.tenants
         group by account_type
-        order by account_type
       `),
-      this.sql.query<{ status: string; value: number }>(`
-        select status::text as status, count(*)::int as value
+      this.sql.query<{ label: string; value: number }>(`
+        select status::text as label, count(*)::int as value
         from public.workspace_requests
         group by status
       `),
@@ -189,7 +181,6 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
         select role::text as label, count(*)::int as value
         from public.memberships
         group by role
-        order by role
       `),
       this.sql.query<{ active_students: number; inactive_students: number }>(`
         select
@@ -199,26 +190,29 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
       `),
     ]);
 
-    const requestMap = new Map(requestStatuses.rows.map((row) => [row.status, row.value]));
-    const students = studentStatus.rows[0];
+    const tenantMap = new Map(tenantTypes.rows.map((row) => [row.label, row.value]));
+    const requestMap = new Map(requestStatuses.rows.map((row) => [row.label, row.value]));
+    const student = studentStatus.rows[0];
 
     return {
-      tenantByType: tenantTypes.rows,
+      tenantByType: [
+        { label: "سناتر", value: tenantMap.get("center") ?? 0 },
+        { label: "مدرسون مستقلون", value: tenantMap.get("independent_teacher") ?? 0 },
+      ],
       requestsByStatus: [
         { label: "معلقة", value: requestMap.get("pending_approval") ?? 0 },
         { label: "معتمدة", value: requestMap.get("approved") ?? 0 },
         { label: "مرفوضة", value: requestMap.get("rejected") ?? 0 },
       ],
       membershipsByRole: membershipRoles.rows,
-      activeStudents: students?.active_students ?? 0,
-      inactiveStudents: students?.inactive_students ?? 0,
+      activeStudents: student?.active_students ?? 0,
+      inactiveStudents: student?.inactive_students ?? 0,
     };
   }
 
   async listPlatformAudit(limit = 30): Promise<RepositoryAuditRow[]> {
-    const safeLimit = Math.max(1, Math.min(limit, 200));
-    const result = await this.sql.query<AuditRow>(`
-      with base as (
+    const result = await this.sql.query<AuditRow>(
+      `
         select
           a.id,
           a.actor_user_id,
@@ -227,54 +221,29 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
           a.entity_type,
           a.entity_id,
           a.details,
-          a.created_at,
-          coalesce(
-            nullif(a.details->>'tenant_id', '')::uuid,
-            case when a.entity_type = 'tenant' then nullif(a.entity_id, '')::uuid end,
-            wr.tenant_id,
-            um.tenant_id
-          ) as resolved_tenant_id,
-          wr.id as workspace_request_id,
-          wr.workspace_name,
-          wr.account_type as workspace_account_type
+          a.created_at::text as created_at,
+          coalesce(t.id::text, 'platform') as tenant_id,
+          coalesce(t.name, wr.workspace_name, 'أحداث عامة للمنصة') as tenant_name,
+          t.slug::text as tenant_slug,
+          coalesce(t.account_type::text, wr.account_type::text) as tenant_account_type,
+          case
+            when t.id is not null then 'tenant'
+            when wr.id is not null then 'workspace_request'
+            else 'platform'
+          end as tenant_source
         from public.platform_audit_logs a
         left join public.users u on u.id = a.actor_user_id
+        left join public.tenants t
+          on t.id::text = a.entity_id
+          and a.entity_type = 'tenant'
         left join public.workspace_requests wr
-          on a.entity_type = 'workspace_request'
-         and a.entity_id = wr.id::text
-        left join lateral (
-          select m.tenant_id
-          from public.memberships m
-          where m.user_id = nullif(a.details->>'applicant_user_id', '')::uuid
-            and m.active
-          order by m.created_at
-          limit 1
-        ) um on true
+          on wr.id::text = a.entity_id
+          and a.entity_type = 'workspace_request'
         order by a.created_at desc
         limit $1
-      )
-      select
-        b.id,
-        b.actor_user_id,
-        b.actor_email,
-        b.action,
-        b.entity_type,
-        b.entity_id,
-        b.details,
-        b.created_at::text,
-        coalesce(t.id::text, 'platform') as tenant_id,
-        coalesce(t.name, b.workspace_name, 'أحداث عامة للمنصة') as tenant_name,
-        t.slug::text as tenant_slug,
-        coalesce(t.account_type::text, b.workspace_account_type::text) as tenant_account_type,
-        case
-          when t.id is not null then 'tenant'
-          when b.workspace_request_id is not null then 'workspace_request'
-          else 'platform'
-        end as tenant_source
-      from base b
-      left join public.tenants t on t.id = b.resolved_tenant_id
-      order by b.created_at desc
-    `, [safeLimit]);
+      `,
+      [limit],
+    );
 
     return result.rows.map((row) => ({
       id: row.id,
@@ -283,7 +252,7 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
       action: row.action,
       entity_type: row.entity_type,
       entity_id: row.entity_id,
-      details: row.details ?? {},
+      details: row.details,
       created_at: row.created_at,
       tenant: {
         id: row.tenant_id,
