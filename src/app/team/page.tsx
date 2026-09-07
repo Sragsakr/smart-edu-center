@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Copy, MailPlus, ShieldCheck, UsersRound } from "lucide-react";
 
+import { ManagementRouteShell } from "@/components/management-route-shell";
 import { getTeamWorkspaceData } from "@/lib/team-access";
 import { createInvitation, deactivateMembership, resendInvitation, revokeInvitation } from "./actions";
 import { ActionSubmitButton, InvitationShare } from "./team-client";
@@ -35,15 +36,12 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
   const invite = typeof params.invite === "string" ? params.invite : null;
 
   return (
-    <main dir="rtl" className="min-h-dvh bg-[#f6f5fb] px-4 py-8 text-[#17152b] md:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold text-[#6547d9]">إدارة الفريق</p>
-            <h1 className="mt-1 text-2xl font-extrabold">{data.tenant.name}</h1>
-            <p className="mt-1 text-sm text-[#777386]">أعضاء الفريق، الدعوات والصلاحيات لكل مساحة عمل.</p>
-          </div>
-          <Link href="/" className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-2 text-sm font-bold">العودة للرئيسية</Link>
+    <ManagementRouteShell activeLabel="الفريق والدعوات">
+      <div className="space-y-6">
+        <div>
+          <p className="text-xs font-bold text-[#6547d9]">إدارة الفريق</p>
+          <h2 className="mt-1 text-2xl font-extrabold">{data.tenant.name}</h2>
+          <p className="mt-1 text-sm text-[#777386]">أعضاء الفريق، الدعوات والصلاحيات لكل مساحة عمل.</p>
         </div>
 
         {data.workspaces.length > 1 ? (
@@ -63,7 +61,15 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
         {success ? <DismissibleAlert kind="success" message={success} /> : null}
         {invite ? (
           <div className="rounded-2xl border border-[#cfc7f5] bg-[#f1edff] p-4">
-            <div className="flex items-start gap-3"><Copy className="mt-1 size-5 text-[#6547d9]" /><div className="min-w-0 flex-1"><b className="text-sm">رابط الدعوة الجديد</b><p className="mt-1 break-all text-xs leading-6 text-[#6f6a80]">{invite}</p><p className="mt-2 text-xs font-bold text-[#6547d9]">أرسل الرابط للشخص مباشرة عبر واتساب أو انسخه. لو المستخدم جديد سيُنشئ كلمة المرور من صفحة الدعوة، ولو لديه حساب سيدخل كلمة مروره الحالية.</p><InvitationShare invitationUrl={invite} /></div></div>
+            <div className="flex items-start gap-3">
+              <Copy className="mt-1 size-5 text-[#6547d9]" />
+              <div className="min-w-0 flex-1">
+                <b className="text-sm">رابط الدعوة الجديد</b>
+                <p className="mt-1 break-all text-xs leading-6 text-[#6f6a80]">{invite}</p>
+                <p className="mt-2 text-xs font-bold text-[#6547d9]">أرسل الرابط للشخص مباشرة عبر واتساب أو انسخه. المستخدم الجديد ينشئ كلمة المرور من صفحة الدعوة، والمستخدم الحالي يدخل بكلمة مروره الحالية.</p>
+                <InvitationShare invitationUrl={invite} />
+              </div>
+            </div>
           </div>
         ) : null}
 
@@ -96,6 +102,6 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
           </section>
         ) : null}
       </div>
-    </main>
+    </ManagementRouteShell>
   );
 }
