@@ -24,9 +24,26 @@ Existing Supabase RLS policies remain in place as they are today. We will not ad
 
 - `IAM-005-01` RBAC matrix remains valid and backend-agnostic.
 - `IAM-005-02` database/RLS per-resource policy implementation is deferred until the replacement backend is chosen.
-- `IAM-005-03` centralized server-side authorization/DAL becomes the active implementation task.
-- `IAM-005-04` UI capability visibility can follow the server capabilities.
+- `IAM-005-03` centralized server-side authorization/DAL is complete for the shared authorization foundation and the existing team/invitation flow.
+- `IAM-005-04` UI capability visibility can follow the same capability contract; UI remains non-authoritative.
 - `IAM-005-05` tests should focus on server/application authorization now; database-specific authorization tests are deferred with `IAM-005-02`.
+
+## IAM-005-03 implementation
+
+The authorization layer is split so the business policy survives a backend migration:
+
+- `src/lib/authorization/policy.ts` contains backend-agnostic roles, capabilities and allow/scoped/deny decisions.
+- `src/lib/authorization/server.ts` resolves the authenticated user and active tenant membership on the server, then enforces capabilities before data access.
+- Scoped capabilities require an explicit resource-scope callback rather than silently granting access.
+- `src/app/team/actions.ts` now uses centralized capability checks for invitation creation/resend/revoke and membership activation/deactivation.
+- `src/lib/team-access.ts` derives manager capability from the centralized policy instead of hardcoded role comparisons.
+- `src/lib/authorization/policy.test.ts` verifies the core role/capability contract.
+
+CI run #99 passed Test, Typecheck, Lint, Build/client-secret scan, dependency/secret scan, and migration safety.
+
+## Current pointer
+
+`IAM-005-03` is complete. `IAM-005-02` remains deferred. The next non-database task is `IAM-005-04` — use server-derived capabilities to show/disable UI actions without treating the UI as a security boundary.
 
 ## Revisit trigger
 
