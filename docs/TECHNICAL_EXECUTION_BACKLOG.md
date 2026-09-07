@@ -5,9 +5,9 @@
 ## مؤشر التنفيذ التقني
 
 ```text
-CURRENT_TECHNICAL_EPIC: IAM-004 — الدعوات
-CURRENT_TECHNICAL_TASK: IAM-004-01 — Migration لجدول invitations
-NEXT_TECHNICAL_TASK: IAM-004-02 — RLS للدعوات
+CURRENT_TECHNICAL_EPIC: IAM-005 — مصفوفة الصلاحيات
+CURRENT_TECHNICAL_TASK: IAM-005-01 — إنشاء docs/RBAC_MATRIX.md لكل Resource/Action
+NEXT_TECHNICAL_TASK: IAM-005-02 — استبدال Policies العامة بسياسات per-resource/per-action
 ```
 
 ## قواعد التشغيل
@@ -117,13 +117,13 @@ NEXT_TECHNICAL_TASK: IAM-004-02 — RLS للدعوات
 
 ### IAM-004 — الدعوات
 
-- [ ] `IAM-004-01` Migration لجدول `invitations` مع token hash/role/expiry/status/tenant_id.
-- [ ] `IAM-004-02` RLS: Owner/Admin يدير الدعوات؛ المستلم يقبل دعوته فقط عبر مسار خادم.
-- [ ] `IAM-004-03` Server Actions create/resend/revoke/accept مع منع التكرار.
-- [ ] `IAM-004-04` واجهة الفريق والدعوات والحالات الفارغة والمنتهية.
-- [ ] `IAM-004-05` Email template وتسليم عبر Supabase أولًا ثم Resend لاحقًا.
-- [ ] `IAM-004-06` Audit واختبارات expiry/replay/wrong tenant.
-- [ ] `IAM-004-07` دعم عضويات المستخدم في أكثر من Tenant بدور مستقل، وتعطيل عضوية واحدة دون حذف Auth user أو التأثير على عضوياته الأخرى.
+- [x] `IAM-004-01` Migration لجدول `invitations` مع token hash/role/expiry/status/tenant_id.
+- [x] `IAM-004-02` RLS: Owner/Admin يدير الدعوات؛ المستلم يقبل دعوته فقط عبر مسار خادم.
+- [x] `IAM-004-03` Server Actions create/resend/revoke/accept مع منع التكرار.
+- [x] `IAM-004-04` واجهة الفريق والدعوات والحالات الفارغة والمنتهية.
+- [x] `IAM-004-05` Email template وتسليم عبر Supabase أولًا ثم Resend لاحقًا.
+- [x] `IAM-004-06` Audit واختبارات expiry/replay/wrong tenant.
+- [x] `IAM-004-07` دعم عضويات المستخدم في أكثر من Tenant بدور مستقل، وتعطيل عضوية واحدة دون حذف Auth user أو التأثير على عضوياته الأخرى.
 
 ### IAM-005 — مصفوفة الصلاحيات
 
@@ -151,6 +151,8 @@ NEXT_TECHNICAL_TASK: IAM-004-02 — RLS للدعوات
 ## Stream C — Academic Operations
 
 ### OPS-001..004 — الإعدادات والكيانات
+
+**Dependencies:** IAM-001..008. **Output:** تشغيل tenant بدون بيانات تجريبية ثابتة.
 
 - [ ] `OPS-001-01` Migration لإعدادات tenant: الاسم، الشعار، المنطقة الزمنية، العملة، اللغة.
 - [ ] `OPS-001-02` Storage bucket خاص للشعارات مع MIME/size policy وروابط آمنة.
@@ -417,3 +419,4 @@ NEXT_TECHNICAL_TASK: IAM-004-02 — RLS للدعوات
 | 2026-09-06 | FND-007-03/FND-010-04 | قرار المالك | Vercel Production re-linked to shared Supabase; extra project deleted; restore drill deferred | IAM-002A-01 |
 | 2026-09-07 | IAM-002A/IAM-003/LANDING-001 | `87110a5` | full check + DB/RLS + desktop/mobile accessibility | PLATFORM-ADMIN-001 |
 | 2026-09-07 | PLATFORM-ADMIN-001 | pending commit | DB-backed Overview/Tenants/Users/Reports/Audit + tenant status + full check | IAM-004-01 |
+| 2026-09-07 | IAM-004 | `dfe025b` + follow-up commits | invitation migration/RLS/actions/UI/email contract + DB acceptance/replay/wrong-email/expiry + CI + Advisors | IAM-005-01 |
