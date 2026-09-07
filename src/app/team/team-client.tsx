@@ -29,7 +29,7 @@ export function ActionSubmitButton({
 
 export function InvitationShare({ invitationUrl }: { invitationUrl: string }) {
   const [copied, setCopied] = useState(false);
-  const message = `تمت دعوتك للانضمام إلى Smart Edu. افتح الرابط وسجّل الدخول بنفس البريد الذي تم إرسال الدعوة إليه:\n${invitationUrl}`;
+  const message = `تمت دعوتك للانضمام إلى Smart Edu. افتح الرابط التالي. إذا كان هذا أول حساب لك ستنشئ كلمة المرور من صفحة الدعوة، وإذا كان لديك حساب ستدخل كلمة مرورك الحالية:\n${invitationUrl}`;
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 
   async function copyInvitation() {
