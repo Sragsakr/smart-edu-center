@@ -34,6 +34,19 @@ function normalizeEmail(value: FormDataEntryValue | null) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+async function authAccountExists(email: string) {
+  const admin = createAdminClient();
+  const normalized = email.trim().toLowerCase();
+  const perPage = 200;
+  for (let page = 1; page <= 50; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) throw new Error("تعذر التحقق من وجود الحساب");
+    if (data.users.some((candidate) => candidate.email?.toLowerCase() === normalized)) return true;
+    if (data.users.length < perPage) return false;
+  }
+  return false;
+}
+
 function tokenPair() {
   const raw = randomBytes(32).toString("base64url");
   const hash = createHash("sha256").update(raw).digest("hex");
@@ -75,11 +88,8 @@ export async function createInvitation(formData: FormData) {
   if (!assignableRoles.has(role)) fail(tenantId, "اختر صلاحية صحيحة");
 
   const { supabase, user } = await requireManager(tenantId);
-  const { data: existingMembership } = await supabase.from("memberships").select("user_id").eq("tenant_id", tenantId).eq("active", true);
-  if (existingMembership?.length) {
-    const admin = createAdminClient();
-    const identities = await Promise.all(existingMembership.map(async (row) => (await admin.auth.admin.getUserById(row.user_id)).data.user));
-    if (identities.some((identity) => identity?.email?.toLowerCase() === email)) fail(tenantId, "هذا المستخدم عضو بالفعل في مساحة العمل");
+  if (await authAccountExists(email)) {
+    fail(tenantId, "هذا البريد مسجل بالفعل في النظام؛ الدعوات متاحة للحسابات الجديدة فقط");
   }
 
   const { data: pending } = await supabase.from("invitations").select("id").eq("tenant_id", tenantId).eq("invitee_email", email).eq("status", "pending").maybeSingle();
@@ -111,6 +121,9 @@ export async function resendInvitation(formData: FormData) {
     .eq("tenant_id", tenantId)
     .maybeSingle();
   if (lookupError || !invitation || invitation.status !== "pending") fail(tenantId, "الدعوة غير قابلة لإعادة الإرسال");
+  if (await authAccountExists(invitation.invitee_email)) {
+    fail(tenantId, "هذا البريد أصبح مسجلًا بالفعل في النظام؛ ألغِ الدعوة القديمة لأنها لم تعد صالحة");
+  }
 
   const { raw, hash } = tokenPair();
   const now = new Date().toISOString();
