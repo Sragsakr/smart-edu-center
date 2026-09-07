@@ -41,7 +41,7 @@ function SidebarContents({ pathname, closeSidebar }: { pathname: string; closeSi
         </span>
         <span>
           <b className="block text-sm">إدارة المنصة</b>
-          <span className="text-[11px] text-[#6f6a80]">Smart Edu Control</span>
+          <span className="text-[11px] text-[#6f6a80]">سبورتي | Saboraty</span>
         </span>
       </Link>
 
@@ -68,12 +68,8 @@ function SidebarContents({ pathname, closeSidebar }: { pathname: string; closeSi
       </nav>
 
       <form action={signOut} className="mt-auto border-t border-[#efedf4] pt-5">
-        <button
-          type="submit"
-          className="focus-ring flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-        >
-          <LogOut size={19} aria-hidden="true" />
-          تسجيل الخروج
+        <button type="submit" className="focus-ring flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50">
+          <LogOut size={19} aria-hidden="true" /> تسجيل الخروج
         </button>
       </form>
     </>
@@ -86,51 +82,10 @@ export function PlatformAdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-dvh bg-[#f6f5fb] lg:flex">
-      <aside className="sticky top-0 hidden h-dvh w-[286px] shrink-0 flex-col border-l border-[#e8e5f1] bg-white px-5 py-6 lg:flex">
-        <SidebarContents pathname={pathname} />
-      </aside>
-
-      {sidebarOpen ? (
-        <>
-          <button
-            type="button"
-            aria-label="إغلاق قائمة إدارة المنصة"
-            onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 z-40 bg-slate-950/35 lg:hidden"
-          />
-          <aside
-            id="platform-admin-sidebar"
-            className="fixed inset-y-0 right-0 z-50 flex w-[286px] flex-col border-l border-[#e8e5f1] bg-white px-5 py-6 shadow-2xl lg:hidden"
-          >
-            <div className="mb-[-44px] flex justify-end">
-              <button
-                type="button"
-                aria-label="إغلاق القائمة"
-                onClick={() => setSidebarOpen(false)}
-                className="focus-ring z-10 rounded-lg p-2 text-[#777386]"
-              >
-                <X size={21} aria-hidden="true" />
-              </button>
-            </div>
-            <SidebarContents pathname={pathname} closeSidebar={() => setSidebarOpen(false)} />
-          </aside>
-        </>
-      ) : null}
-
+      <aside className="sticky top-0 hidden h-dvh w-[286px] shrink-0 flex-col border-l border-[#e8e5f1] bg-white px-5 py-6 lg:flex"><SidebarContents pathname={pathname} /></aside>
+      {sidebarOpen ? <><button type="button" aria-label="إغلاق قائمة إدارة المنصة" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-40 bg-slate-950/35 lg:hidden"/><aside id="platform-admin-sidebar" className="fixed inset-y-0 right-0 z-50 flex w-[286px] flex-col border-l border-[#e8e5f1] bg-white px-5 py-6 shadow-2xl lg:hidden"><div className="mb-[-44px] flex justify-end"><button type="button" aria-label="إغلاق القائمة" onClick={() => setSidebarOpen(false)} className="focus-ring z-10 rounded-lg p-2 text-[#777386]"><X size={21} aria-hidden="true" /></button></div><SidebarContents pathname={pathname} closeSidebar={() => setSidebarOpen(false)} /></aside></> : null}
       <div className="min-w-0 flex-1" inert={sidebarOpen ? true : undefined}>
-        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-[#e8e5f1] bg-white/95 px-4 backdrop-blur lg:hidden">
-          <button
-            type="button"
-            aria-label="فتح قائمة إدارة المنصة"
-            aria-controls="platform-admin-sidebar"
-            aria-expanded={sidebarOpen}
-            onClick={() => setSidebarOpen(true)}
-            className="focus-ring rounded-xl border border-[#e5e2ec] p-2.5 text-[#29263d]"
-          >
-            <Menu size={21} aria-hidden="true" />
-          </button>
-          <span className="mr-3 text-sm font-extrabold">إدارة المنصة</span>
-        </header>
+        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-[#e8e5f1] bg-white/95 px-4 backdrop-blur lg:hidden"><button type="button" aria-label="فتح قائمة إدارة المنصة" aria-controls="platform-admin-sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)} className="focus-ring rounded-xl border border-[#e5e2ec] p-2.5 text-[#29263d]"><Menu size={21} aria-hidden="true" /></button><span className="mr-3 text-sm font-extrabold">سبورتي | Saboraty</span></header>
         {children}
       </div>
     </div>
