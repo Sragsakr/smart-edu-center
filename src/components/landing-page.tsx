@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   BookOpen,
@@ -21,7 +22,7 @@ import {
 
 const quickFeatures = ["الحضور والغياب", "التحصيل والفواتير", "المجموعات والجداول", "صلاحيات الفريق", "متابعة ولي الأمر", "تقارير التشغيل"];
 
-const useCases = [
+const useCases: Array<{ icon: LucideIcon; title: string; desc: string }> = [
   { icon: CalendarCheck, title: "الحضور في ثواني", desc: "اعرف مين حضر ومين غاب من غير دفاتر أو شيتات منفصلة." },
   { icon: Wallet, title: "فلوسك واضحة", desc: "شوف المدفوع، المتأخر، الفواتير والاستحقاقات من مكان واحد." },
   { icon: Users, title: "كل طالب له ملف كامل", desc: "بيانات الطالب، مجموعاته، حضوره، تحصيله وتاريخه التشغيلي." },
@@ -35,6 +36,20 @@ const roleCards = [
   { title: "الاستقبال والإدارة", desc: "تسجيل الطلاب، المجموعات، التحصيل والعمليات اليومية." },
   { title: "المدرس", desc: "مجموعاته، طلابه وحضورهم من غير تشتيت باقي بيانات السنتر." },
   { title: "ولي الأمر والطالب", desc: "بوابات منفصلة للمتابعة والوصول لما يخصهم فقط." },
+];
+
+const dashboardStats: Array<{ title: string; value: string; icon: LucideIcon; color: string }> = [
+  { title: "إجمالي الطلاب", value: "1,248", icon: Users, color: "#6547d9" },
+  { title: "حضور اليوم", value: "892", icon: UserCheck, color: "#2fab88" },
+  { title: "تحصيل الشهر", value: "84,250 ج", icon: CircleDollarSign, color: "#e09d36" },
+  { title: "متأخرات", value: "12,800 ج", icon: Wallet, color: "#e96b7a" },
+];
+
+const lmsFeatures: Array<{ icon: LucideIcon; label: string }> = [
+  { icon: BookOpen, label: "كورسات وفيديو" },
+  { icon: TicketCheck, label: "أكواد تفعيل" },
+  { icon: Palette, label: "هوية ودومين مخصص" },
+  { icon: ShieldCheck, label: "صلاحيات وصول منفصلة" },
 ];
 
 function Logo() {
@@ -57,14 +72,9 @@ function DashboardPreview() {
           <span className="rounded-full bg-[#e8f7f2] px-3 py-1 text-[10px] font-bold text-[#20866a]">مباشر</span>
         </div>
         <div className="grid grid-cols-2 gap-3 p-4 md:grid-cols-4">
-          {[
-            ["إجمالي الطلاب", "1,248", Users, "#6547d9"],
-            ["حضور اليوم", "892", UserCheck, "#2fab88"],
-            ["تحصيل الشهر", "84,250 ج", CircleDollarSign, "#e09d36"],
-            ["متأخرات", "12,800 ج", Wallet, "#e96b7a"],
-          ].map(([title, value, Icon, color]) => (
-            <div key={String(title)} className="rounded-2xl bg-[#faf9fc] p-3">
-              <span className="grid size-8 place-items-center rounded-xl bg-white" style={{color: String(color)}}><Icon size={16}/></span>
+          {dashboardStats.map(({ title, value, icon: Icon, color }) => (
+            <div key={title} className="rounded-2xl bg-[#faf9fc] p-3">
+              <span className="grid size-8 place-items-center rounded-xl bg-white" style={{ color }}><Icon size={16}/></span>
               <p className="mt-3 text-[10px] text-[#8c879a]">{title}</p><b className="mt-1 block text-sm">{value}</b>
             </div>
           ))}
@@ -131,7 +141,7 @@ export function LandingPage() {
 
         <section id="roles" className="mx-auto max-w-7xl px-4 py-20 md:px-8"><div className="mx-auto max-w-3xl text-center"><span className="text-sm font-bold text-[#6547d9]">كل شخص يشوف اللي يخصه</span><h2 className="mt-3 text-3xl font-black md:text-4xl">نفس النظام، تجارب مختلفة حسب الدور</h2></div><div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">{roleCards.map((role,index) => <article key={role.title} className="rounded-3xl border border-[#e8e3f0] bg-white p-6"><span className="grid size-10 place-items-center rounded-xl bg-[#eeeaff] text-sm font-black text-[#6547d9]">0{index+1}</span><h3 className="mt-5 font-extrabold">{role.title}</h3><p className="mt-2 text-sm leading-7 text-[#6f6a80]">{role.desc}</p></article>)}</div></section>
 
-        <section id="lms" className="mx-auto max-w-7xl px-4 pb-20 md:px-8"><div className="overflow-hidden rounded-[32px] border border-[#ded7f2] bg-gradient-to-l from-[#eeeaff] to-white p-8 md:p-12"><div className="grid gap-8 lg:grid-cols-[1fr_.8fr] lg:items-center"><div><span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-bold text-[#6547d9]">مرحلة التوسع</span><h2 className="mt-5 text-3xl font-black md:text-4xl">ولما تكون جاهز تبيع كورسات Online… مش محتاج تغير النظام.</h2><p className="mt-4 max-w-2xl leading-8 text-[#625d70]">الـLMS منتج اختياري مستقل: Shared Academy أو Branded Academy باسمك ودومينك، مع كورسات وأكواد تفعيل واختبارات وتتبع تقدم.</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">{[[BookOpen,"كورسات وفيديو"],[TicketCheck,"أكواد تفعيل"],[Palette,"هوية ودومين مخصص"],[ShieldCheck,"صلاحيات وصول منفصلة"]].map(([Icon,label]) => <div key={String(label)} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm"><span className="grid size-10 place-items-center rounded-xl bg-[#eeeaff] text-[#6547d9]"><Icon size={18}/></span><b className="text-sm">{label}</b></div>)}</div></div></div></section>
+        <section id="lms" className="mx-auto max-w-7xl px-4 pb-20 md:px-8"><div className="overflow-hidden rounded-[32px] border border-[#ded7f2] bg-gradient-to-l from-[#eeeaff] to-white p-8 md:p-12"><div className="grid gap-8 lg:grid-cols-[1fr_.8fr] lg:items-center"><div><span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-bold text-[#6547d9]">مرحلة التوسع</span><h2 className="mt-5 text-3xl font-black md:text-4xl">ولما تكون جاهز تبيع كورسات Online… مش محتاج تغير النظام.</h2><p className="mt-4 max-w-2xl leading-8 text-[#625d70]">الـLMS منتج اختياري مستقل: Shared Academy أو Branded Academy باسمك ودومينك، مع كورسات وأكواد تفعيل واختبارات وتتبع تقدم.</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">{lmsFeatures.map(({ icon: Icon, label }) => <div key={label} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm"><span className="grid size-10 place-items-center rounded-xl bg-[#eeeaff] text-[#6547d9]"><Icon size={18}/></span><b className="text-sm">{label}</b></div>)}</div></div></div></section>
 
         <section className="bg-white py-20"><div className="mx-auto max-w-4xl px-4 text-center md:px-8"><h2 className="text-3xl font-black md:text-4xl">ابدأ تنظيم شغلك من أول يوم</h2><p className="mt-4 text-[#6f6a80]">ابدأ بنظام الإدارة، وبعدها وسّع المنتج لما شغلك يحتاج.</p><Link href="/login" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#6547d9] px-7 py-4 font-bold text-white shadow-lg shadow-purple-200">ابدأ تجربتك <ArrowLeft size={17}/></Link></div></section>
       </main>
