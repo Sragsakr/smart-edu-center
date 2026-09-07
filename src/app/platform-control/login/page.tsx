@@ -13,7 +13,7 @@ export default async function PlatformControlLoginPage({ searchParams }: { searc
       <section className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl">
         <div className="mb-7 flex items-center gap-3">
           <span className="grid size-12 place-items-center rounded-2xl bg-[#6547d9] text-white"><ShieldCheck /></span>
-          <div><h1 className="font-extrabold">إدارة Smart Edu Center</h1><p className="text-xs text-[#6f6a80]">SaaS Control Plane</p></div>
+          <div><h1 className="font-extrabold">إدارة سبورتي | Saboraty</h1><p className="text-xs text-[#6f6a80]">SaaS Control Plane</p></div>
         </div>
         {params.error ? <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{params.error}</p> : null}
         <form action={authenticatePlatformAdmin} className="space-y-4">
