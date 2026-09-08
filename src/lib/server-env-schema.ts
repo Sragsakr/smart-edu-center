@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 const privateEnvSchema = z.object({
-  DATA_BACKEND: z.literal("postgres").default("postgres"),
   DATABASE_URL: z
     .string({ error: "DATABASE_URL is required" })
     .url("DATABASE_URL must be a valid PostgreSQL URL")

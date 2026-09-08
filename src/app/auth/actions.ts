@@ -10,23 +10,14 @@ import {
   registerPostgresUser,
 } from "@/lib/auth/postgres-auth";
 import { authSubmissionSchema, firstValidationMessage } from "@/lib/auth/validation";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
-
-function postgresAuthDependencies() {
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) {
-    throw new Error("Authentication requires the PostgreSQL application backend");
-  }
-  return postgresSqlExecutor(config.databaseUrl);
-}
+import { applicationSql } from "@/lib/database/application-sql";
 
 function loginError(message: string): never { redirect(`/login?error=${encodeURIComponent(message)}`); }
 function signupError(message: string): never { redirect(`/signup?error=${encodeURIComponent(message)}`); }
 function platformLoginError(message: string): never { redirect(`/platform-control/login?error=${encodeURIComponent(message)}`); }
 
 async function signInPostgresAccount(email: string, password: string) {
-  const sql = postgresAuthDependencies();
+  const sql = applicationSql();
   const user = await authenticatePostgresUser(sql, email, password);
   if (!user) loginError("بيانات الدخول غير صحيحة");
   const [access, portalRelations] = await Promise.all([
@@ -71,7 +62,7 @@ export async function createAccount(formData: FormData) {
   const parsed = authSubmissionSchema.safeParse({ email: formData.get("email"), password, intent: "sign-up" });
   if (!parsed.success) signupError(firstValidationMessage(parsed.error));
 
-  const sql = postgresAuthDependencies();
+  const sql = applicationSql();
   try {
     const user = await registerPostgresUser(sql, parsed.data.email, parsed.data.password);
     await createPostgresSession(sql, user.id);
@@ -87,7 +78,7 @@ export async function authenticatePlatformAdmin(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   if (!email || password.length < 8) platformLoginError("أدخل بيانات الدخول الصحيحة");
 
-  const sql = postgresAuthDependencies();
+  const sql = applicationSql();
   const user = await authenticatePostgresUser(sql, email, password);
   if (!user) platformLoginError("بيانات الدخول غير صحيحة");
   const access = await getPostgresAccountAccess(sql, user.id);
@@ -97,6 +88,6 @@ export async function authenticatePlatformAdmin(formData: FormData) {
 }
 
 export async function signOut() {
-  await clearPostgresSession(postgresAuthDependencies());
+  await clearPostgresSession(applicationSql());
   redirect("/login");
 }

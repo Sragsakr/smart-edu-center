@@ -5,8 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import type { MemberRole, TenantCapability } from "@/lib/authorization/policy";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+import { applicationSql } from "@/lib/database/application-sql";
 import {
   assertAssignableRole,
   createPostgresInvitation,
@@ -32,11 +31,7 @@ async function requestOrigin(): Promise<string> {
 }
 
 async function postgresTeamContext(tenantId: string, capability: TenantCapability) {
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) {
-    throw new Error("Team management requires the PostgreSQL application backend");
-  }
-  const sql = postgresSqlExecutor(config.databaseUrl);
+  const sql = applicationSql();
   const access = await requirePostgresTenantCapability(sql, tenantId, capability);
   return { sql, ...access };
 }

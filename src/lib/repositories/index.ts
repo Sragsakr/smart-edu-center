@@ -1,17 +1,12 @@
 import "server-only";
 
 import { PostgresCurrentUserProvider } from "@/lib/auth/postgres-current-user-provider";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+import { applicationSql } from "@/lib/database/application-sql";
 import type { PlatformAdminRepository } from "@/lib/repositories/platform-admin-repository";
 import { PostgresPlatformAdminRepository } from "@/lib/repositories/postgres-platform-admin-repository";
 
 function resolvePlatformAdminRepository(): PlatformAdminRepository {
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) {
-    throw new Error("Platform Admin repository requires the PostgreSQL application backend");
-  }
-  const sql = postgresSqlExecutor(config.databaseUrl);
+  const sql = applicationSql();
   return new PostgresPlatformAdminRepository(sql, new PostgresCurrentUserProvider(sql));
 }
 

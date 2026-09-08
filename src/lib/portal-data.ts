@@ -1,19 +1,10 @@
 import "server-only";
 
 import { getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
-
-function postgresSql() {
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) {
-    throw new Error("Portal data requires the PostgreSQL application backend");
-  }
-  return postgresSqlExecutor(config.databaseUrl);
-}
+import { applicationSql } from "@/lib/database/application-sql";
 
 export async function getStudentPortalData() {
-  const sql = postgresSql();
+  const sql = applicationSql();
   const user = await getPostgresCurrentUser(sql);
   if (!user) return null;
   const student = (await sql.query<{ id: string; tenant_id: string; code: string; full_name: string; grade: string | null; phone: string | null; joined_on: string }>(
@@ -61,7 +52,7 @@ export async function getStudentPortalData() {
 }
 
 export async function getParentPortalData() {
-  const sql = postgresSql();
+  const sql = applicationSql();
   const user = await getPostgresCurrentUser(sql);
   if (!user) return null;
   const guardian = (await sql.query<{ id: string; tenant_id: string; full_name: string; phone: string; email: string | null }>(

@@ -1,7 +1,6 @@
 import "server-only";
 
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+import { applicationSql } from "@/lib/database/application-sql";
 import { getPostgresTeamWorkspaceData } from "@/lib/auth/postgres-team";
 import type { CapabilityMap, MemberRole } from "@/lib/authorization/policy";
 
@@ -19,10 +18,5 @@ export type TeamWorkspaceData = {
 };
 
 export async function getTeamWorkspaceData(requestedTenantId?: string): Promise<TeamWorkspaceData | null> {
-  const config = databaseConfig();
-  if (config.backend !== "postgres") {
-    throw new Error("Team management requires the PostgreSQL application backend");
-  }
-  if (!config.databaseUrl) throw new Error("PostgreSQL database URL is required");
-  return getPostgresTeamWorkspaceData(postgresSqlExecutor(config.databaseUrl), requestedTenantId);
+  return getPostgresTeamWorkspaceData(applicationSql(), requestedTenantId);
 }

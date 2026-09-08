@@ -4,7 +4,7 @@ import { cookieState } from "./test-cookies";
 
 vi.mock("server-only", () => ({}));
 
-// Code paths that resolve their own PostgresSqlExecutor via databaseConfig()/DATABASE_URL
+// Code paths that resolve their own PostgresSqlExecutor via DATABASE_URL
 // (e.g. src/lib/portal-data.ts, src/lib/authorization/server.ts) must also land on the
 // disposable database inside this process. assertSafeTestDatabase already guarantees
 // TEST_DATABASE_URL is not saboraty/production before this reassignment happens; the

@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 
 import { consumePostgresPasswordReset } from "@/lib/auth/postgres-password-recovery";
 import { firstValidationMessage, passwordResetRedemptionSchema } from "@/lib/auth/validation";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+import { applicationSql } from "@/lib/database/application-sql";
 
 function resetError(message: string): never {
   redirect(`/reset-password?error=${encodeURIComponent(message)}`);
@@ -20,10 +19,8 @@ export async function resetPasswordWithCode(formData: FormData) {
   });
   if (!parsedSubmission.success) resetError(firstValidationMessage(parsedSubmission.error));
 
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) resetError("تعذر إعداد الاستعادة");
   const consumed = await consumePostgresPasswordReset(
-    postgresSqlExecutor(config.databaseUrl),
+    applicationSql(),
     parsedSubmission.data.email,
     parsedSubmission.data.recoveryCode,
     parsedSubmission.data.password,

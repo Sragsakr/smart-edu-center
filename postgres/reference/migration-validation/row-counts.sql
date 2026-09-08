@@ -1,5 +1,5 @@
--- Replacement PostgreSQL validation. Run after the data copy and compare the
--- output with postgres/validation/source-row-counts.sql before cutover.
+-- Historical replacement PostgreSQL validation retained for migration review.
+-- Its matching source query is under ../supabase-history/validation/.
 
 select 'app_users' as table_name, count(*)::bigint as row_count from public.app_users
 union all select 'tenants', count(*)::bigint from public.tenants

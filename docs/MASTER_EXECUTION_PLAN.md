@@ -5,13 +5,13 @@
 ## 1. مؤشر التنفيذ الحالي
 
 ```text
-CURRENT_PHASE: PHASE-00 — إغلاق هجرة PostgreSQL وFresh Auth
-CURRENT_TASK: P00-06 — إغلاق INFRA-011 وتثبيت نقطة الاستئناف
-NEXT_TASK: P01-01 — جرد وتأكيد حالة Coolify/VPS/PostgreSQL/TLS/domains/secrets
+CURRENT_PHASE: PHASE-01 — البنية البديلة وجاهزية Staging
+CURRENT_TASK: P01-01 — جرد وتأكيد حالة Coolify/VPS/PostgreSQL/TLS/domains/secrets
+NEXT_TASK: P01-02 — نشر Staging من GitHub عبر CI إلى Coolify وربط PostgreSQL الخاصة
 CURRENT_PRIORITY: P0 — Release blocker
 PRODUCT_FEATURE_FREEZE: ACTIVE حتى اكتمال PHASE-02
 SCHEMA_MODE: BUILD MODE — reset/reseed مصرح به؛ لا توجد production data contract
-LAST_VERIFIED_AUTOMATED_GATE: 42 unit tests + 56 PostgreSQL integration tests + lint + typecheck + migration/secrets checks + build
+LAST_VERIFIED_AUTOMATED_GATE: 45 unit tests + 56 PostgreSQL integration tests + lint + typecheck + migration/secrets checks + build
 ```
 
 لا يجوز بدء `NEXT_TASK` أو أي Task أخرى قبل تحويل `CURRENT_TASK` إلى `DONE`، إلا إذا أصبحت `BLOCKED` وسُجل السبب واختيرت Task مستقلة عنها صراحة داخل هذا الملف.
@@ -159,10 +159,7 @@ Security، accessibility، audit، observability، documentation والاختب�
   - `/choose-context` لمستخدم متعدد العلاقات.
   - حالات unauthorized/expired/revoked وواجهات الخطأ.
   - RTL وموبايل وديسكتوب للمسارات المتغيرة.
-- [-] `P00-06` **CURRENT:** إغلاق INFRA-011:
-  - إصلاح أي عيوب يكشفها `P00-05` مع regression tests.
-  - تشغيل `npm run check` و`npm run test:integration` نهائيًا.
-  - توثيق النتيجة، تنظيف أي نص قديم عن runtime خارجي، وتثبيت نقطة استئناف قابلة للمراجعة.
+- [x] `P00-06` أُغلق INFRA-011: أصبح Runtime وCI وبيئة التشغيل PostgreSQL/Fresh Auth فقط، وحُذفت إعدادات وفروع OAuth/backend الخارجية، وأُحيلت أدوات الهجرة والتحقق القديمة إلى `postgres/reference/` للتاريخ فقط. نجح `npm run check` و`npm run test:integration` نهائيًا على Node.js `22.23.2`.
 
 **Exit Gate G00:** تغطية Auth/portal contexts آليًا على PostgreSQL ناجحة، ولا raw secrets/tokens أو regression أو تسريب tenant/relationship معروف. المالك اعتمد ترحيل التحقق اليدوي التفصيلي لكل Persona إلى مراحل الصلاحيات والبوابات `P02` و`P08` بدل دورة مستقلة في `P00-05`.
 
@@ -174,7 +171,7 @@ Security، accessibility، audit، observability، documentation والاختب�
 **Dependencies:** `G00`.
 **الهدف:** Staging قابلة لإعادة البناء والاستعادة والمراقبة على البنية المملوكة للمشروع.
 
-- [ ] `P01-01` جرد وتأكيد الحالة الفعلية لـCoolify/VPS/PostgreSQL/TLS/domains/secrets دون افتراض صحة مستندات الهجرة القديمة.
+- [-] `P01-01` **CURRENT:** جرد وتأكيد الحالة الفعلية لـCoolify/VPS/PostgreSQL/TLS/domains/secrets دون افتراض صحة مستندات الهجرة القديمة.
 - [ ] `P01-02` نشر Staging من GitHub عبر CI إلى Coolify وربطها بقاعدة PostgreSQL خاصة غير مكشوفة للإنترنت.
 - [ ] `P01-03` تطبيق الـbaseline على قاعدة نظيفة وإثبات reproducible setup وhealth/readiness checks.
 - [ ] `P01-04` بناء canonical seed/import صغير لنموذجي center وindependent teacher بهويات/علاقات Synthetic فقط، مع reconciliation counts.
@@ -552,6 +549,7 @@ Security، accessibility، audit، observability، documentation والاختب�
 |---|---|---|---|
 | 2026-09-08 | `P00-04` | 42 unit + 56 PostgreSQL integration؛ lint/typecheck/migrations/secrets/build ناجحة؛ reset guards رفضت `saboraty` و`DATABASE_URL` وnon-loopback | `P00-05` اختبار يدوي شامل |
 | 2026-09-08 | `P00-05` | أُغلقت بقرار المالك دون دورة يدوية مستقلة؛ نُقلت مراجعة كل Persona وصلاحياتها ورحلاتها إلى `P02` و`P08` | `P00-06` إغلاق INFRA-011 |
+| 2026-09-09 | `P00-06` | Node.js `22.23.2`: `npm run check` نجح مع 45 unit tests وbuild؛ 56/56 integration على `saboraty_test`؛ Browser smoke أكد login/recovery وFresh Auth error وlocal bootstrap وأن `/auth/callback` أصبح 404؛ المسح أكد عدم وجود Supabase runtime/config/callback نشط. شُغّلت Advisors قراءةً فقط على مشروع Supabase المتقاعد وأظهرت تحذيرات legacy SECURITY DEFINER/Auth وسياسات RLS وفهارس غير مستخدمة؛ لم تُجرَ تغييرات remote لأنها خارج Runtime الحالي. | `P01-01` جرد البنية الفعلية وجاهزية Staging |
 
 ## 12. قواعد صيانة الخطة
 

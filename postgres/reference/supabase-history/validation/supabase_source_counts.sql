@@ -1,5 +1,5 @@
--- Run on the current Supabase PostgreSQL database before and after export.
--- This mirrors postgres/validation/parity_counts.sql, mapping auth.users to app_users.
+-- Historical Supabase source-count query retained for migration review.
+-- It mapped auth.users to app_users for comparison with the retired target parity query.
 
 select 'app_users' as entity, count(*)::bigint as row_count from auth.users
 union all select 'tenants', count(*) from public.tenants

@@ -8,7 +8,7 @@ import { bootstrapLocalPlatformAdmin, isLocalDevelopmentBootstrapAvailable, type
 
 const localRuntime: LocalBootstrapRuntime = {
   nodeEnv: "development",
-  database: { backend: "postgres", databaseUrl: "postgresql://localhost:5432/saboraty" },
+  databaseUrl: "postgresql://localhost:5432/saboraty",
 };
 
 class RecordingSql implements TransactionalSqlExecutor {
@@ -26,10 +26,13 @@ class RecordingSql implements TransactionalSqlExecutor {
 }
 
 describe("local Fresh Auth platform-admin bootstrap", () => {
-  it("allows only development PostgreSQL loopback", () => {
-    expect(isLocalDevelopmentBootstrapAvailable(localRuntime)).toBe(true);
-    expect(isLocalDevelopmentBootstrapAvailable({ ...localRuntime, nodeEnv: "production" })).toBe(false);
-    expect(isLocalDevelopmentBootstrapAvailable({ ...localRuntime, database: { backend: "postgres", databaseUrl: "postgresql://db.example.com/saboraty" } })).toBe(false);
+  it.each([
+    ["development with loopback PostgreSQL", localRuntime, true],
+    ["production", { ...localRuntime, nodeEnv: "production" }, false],
+    ["development with remote PostgreSQL", { ...localRuntime, databaseUrl: "postgresql://db.example.com/saboraty" }, false],
+    ["development with an invalid database URL", { ...localRuntime, databaseUrl: "not-a-url" }, false],
+  ])("reports availability for %s", (_scenario, runtime, expected) => {
+    expect(isLocalDevelopmentBootstrapAvailable(runtime)).toBe(expected);
   });
 
   it("creates app user, credentials, and platform admin in one transaction", async () => {

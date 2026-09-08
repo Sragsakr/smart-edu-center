@@ -2,14 +2,14 @@ import { DatabaseZap, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { bootstrapLocalAdmin } from "@/app/platform-control/bootstrap/actions";
-import { databaseConfig } from "@/lib/database/config";
 import { isLocalDevelopmentBootstrapAvailable } from "@/lib/development/local-platform-admin-bootstrap";
+import { privateEnv } from "@/lib/server-env";
 
 export default function LocalPlatformAdminBootstrapPage() {
   if (process.env.NODE_ENV !== "development") notFound();
 
-  const database = databaseConfig();
-  if (!isLocalDevelopmentBootstrapAvailable({ nodeEnv: process.env.NODE_ENV, database })) {
+  const databaseUrl = privateEnv().DATABASE_URL;
+  if (!isLocalDevelopmentBootstrapAvailable({ nodeEnv: process.env.NODE_ENV, databaseUrl })) {
     notFound();
   }
 

@@ -2,8 +2,7 @@ import "server-only";
 
 import { getPostgresAccountAccess, getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
 import { listPostgresWorkspaceRequests } from "@/lib/auth/postgres-workspace-requests";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+import { applicationSql } from "@/lib/database/application-sql";
 
 export type WorkspaceRequestStatus = "pending_approval" | "approved" | "rejected";
 export type WorkspaceRequest = {
@@ -31,16 +30,8 @@ type PortalAccess = {
   isPlatformAdmin: boolean;
 };
 
-function postgresSql() {
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) {
-    throw new Error("Account access requires the PostgreSQL application backend");
-  }
-  return postgresSqlExecutor(config.databaseUrl);
-}
-
 export async function getCurrentAccountAccess(): Promise<PortalAccess> {
-  const sql = postgresSql();
+  const sql = applicationSql();
   const user = await getPostgresCurrentUser(sql);
   if (!user) return { user: null, membership: null, student: null, guardian: null, request: null, isPlatformAdmin: false };
 
@@ -74,7 +65,7 @@ export type PasswordResetRequest = {
 };
 
 async function requireCurrentPlatformAdmin() {
-  const sql = postgresSql();
+  const sql = applicationSql();
   const user = await getPostgresCurrentUser(sql);
   if (!user || !(await getPostgresAccountAccess(sql, user.id)).isPlatformAdmin) return null;
   return sql;

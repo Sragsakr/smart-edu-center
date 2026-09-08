@@ -7,7 +7,7 @@ const sql = testSqlExecutor();
 
 const runtime = {
   nodeEnv: "development",
-  database: { backend: "postgres" as const, databaseUrl: "postgresql://x@127.0.0.1:5432/whatever" },
+  databaseUrl: "postgresql://x@127.0.0.1:5432/whatever",
 };
 
 afterEach(async () => {
@@ -55,7 +55,7 @@ describe("Local Platform Admin bootstrap (real database)", () => {
   });
 
   it("refuses to run outside development/loopback even if called directly with a real executor", async () => {
-    const prodRuntime = { nodeEnv: "production", database: runtime.database };
+    const prodRuntime = { nodeEnv: "production", databaseUrl: runtime.databaseUrl };
     await expect(
       bootstrapLocalPlatformAdmin({ runtime: prodRuntime, sql, email: uniqueEmail("blocked"), password: "BlockedPass.1" }),
     ).rejects.toThrow("Local platform-admin bootstrap is unavailable in this environment");

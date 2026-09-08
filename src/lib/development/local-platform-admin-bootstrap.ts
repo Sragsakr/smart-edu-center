@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { DatabaseConfig } from "@/lib/database/config";
 import { hashPassword } from "../auth/password";
 import type { TransactionalSqlExecutor } from "@/lib/database/sql-executor";
 
@@ -8,7 +7,7 @@ const LOOPBACK_DATABASE_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1
 
 export type LocalBootstrapRuntime = {
   nodeEnv: string | undefined;
-  database: DatabaseConfig;
+  databaseUrl: string;
 };
 
 export type LocalPlatformAdminBootstrapDependencies = {
@@ -20,10 +19,9 @@ export type LocalPlatformAdminBootstrapDependencies = {
 
 export function isLocalDevelopmentBootstrapAvailable(runtime: LocalBootstrapRuntime): boolean {
   if (runtime.nodeEnv !== "development") return false;
-  if (runtime.database.backend !== "postgres" || !runtime.database.databaseUrl) return false;
 
   try {
-    return LOOPBACK_DATABASE_HOSTS.has(new URL(runtime.database.databaseUrl).hostname);
+    return LOOPBACK_DATABASE_HOSTS.has(new URL(runtime.databaseUrl).hostname);
   } catch {
     return false;
   }

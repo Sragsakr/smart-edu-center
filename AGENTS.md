@@ -61,7 +61,7 @@ Build a production-minded, Arabic-first multi-tenant center operating system tha
 - Add `"use client"` only at the smallest interactive boundary.
 - Reads belong in a server-only Data Access Layer; UI mutations use Server Actions; external webhooks use Route Handlers.
 - Self-managed PostgreSQL provides application data and application-owned Fresh Auth. Keep `DATABASE_URL` server-only; do not add external database/auth SDK fallbacks. Protected file storage must use a separately approved private-storage design when that feature is implemented.
-- Read public environment variables through `src/lib/env.ts`, not directly from `process.env`.
+- No public runtime environment variables are currently required. If one is introduced, expose it through a typed public-env module and never expose server secrets; private values remain centralized in `src/lib/server-env.ts`.
 - Every tenant business table must carry tenant scope and RLS. Platform-scope tables such as `platform_admins`, `workspace_requests`, and `platform_audit_logs` are deliberate exceptions.
 - Never authorize from `user_metadata`; authorization comes from protected database relationships/tables.
 - Prefer a modular monolith. Do not add Redis, queues, microservices, payment or messaging vendors until a demonstrated requirement needs them.

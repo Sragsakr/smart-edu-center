@@ -5,15 +5,8 @@ import { revalidatePath } from "next/cache";
 
 import { acceptPostgresInvitation, registerAndAcceptPostgresInvitation } from "@/lib/auth/postgres-team";
 import { authenticatePostgresUser, clearPostgresSession, createPostgresSession, getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+import { applicationSql } from "@/lib/database/application-sql";
 import { getAuthAccountState, getInvitationPreview } from "@/lib/invitations";
-
-function postgresSql() {
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) throw new Error("Invitation management requires the PostgreSQL application backend");
-  return postgresSqlExecutor(config.databaseUrl);
-}
 
 function inviteError(token: string, message: string): never {
   redirect(`/invite?token=${encodeURIComponent(token)}&error=${encodeURIComponent(message)}`);
@@ -43,7 +36,7 @@ export async function acceptNewInvitation(formData: FormData) {
     inviteError(token, "هذا البريد لديه حساب بالفعل؛ استخدم تسجيل الدخول لإكمال الدعوة");
   }
 
-  const sql = postgresSql();
+  const sql = applicationSql();
   try {
     const user = await registerAndAcceptPostgresInvitation(sql, invitation.email, password, token);
     await createPostgresSession(sql, user.id);
@@ -64,7 +57,7 @@ export async function loginAndAcceptInvitation(formData: FormData) {
   const invitation = await loadPendingInvitation(token);
   if (!invitation.accountExists) inviteError(token, "لا يوجد حساب حقيقي بهذا البريد بعد. أنشئ كلمة مرور جديدة لإكمال الدعوة");
 
-  const sql = postgresSql();
+  const sql = applicationSql();
   const user = await authenticatePostgresUser(sql, invitation.email, password);
   if (!user) inviteError(token, "كلمة المرور غير صحيحة");
   try {
@@ -80,7 +73,7 @@ export async function loginAndAcceptInvitation(formData: FormData) {
 
 export async function acceptExistingInvitation(formData: FormData) {
   const token = String(formData.get("token") ?? "");
-  const sql = postgresSql();
+  const sql = applicationSql();
   const user = await getPostgresCurrentUser(sql);
   if (!user) inviteError(token, "انتهت جلسة الدخول. أدخل كلمة المرور لإكمال الدعوة");
   try {
@@ -95,6 +88,6 @@ export async function acceptExistingInvitation(formData: FormData) {
 
 export async function switchInvitationAccount(formData: FormData) {
   const token = String(formData.get("token") ?? "");
-  await clearPostgresSession(postgresSql());
+  await clearPostgresSession(applicationSql());
   redirect(`/invite?token=${encodeURIComponent(token)}`);
 }

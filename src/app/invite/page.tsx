@@ -1,8 +1,7 @@
 import { MailCheck, ShieldCheck } from "lucide-react";
 
 import { getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+import { applicationSql } from "@/lib/database/application-sql";
 import { getInvitationPreview } from "@/lib/invitations";
 import { ExistingAccountPasswordForm, ExistingInviteForm, NewInviteAccountForm, SwitchInviteAccountForm } from "./invite-client";
 
@@ -14,9 +13,7 @@ export default async function InvitePage({ searchParams }: { searchParams: Searc
   const token = typeof params.token === "string" ? params.token : "";
   const error = typeof params.error === "string" ? params.error : null;
   const invitation = token ? await getInvitationPreview(token) : null;
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) throw new Error("Invitation management requires the PostgreSQL application backend");
-  const user = await getPostgresCurrentUser(postgresSqlExecutor(config.databaseUrl));
+  const user = await getPostgresCurrentUser(applicationSql());
 
   return (
     <main dir="rtl" className="grid min-h-dvh place-items-center bg-[#f6f5fb] px-4 py-10 text-[#17152b]">

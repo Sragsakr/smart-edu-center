@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 
 import { clearPostgresSession, getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
 import { firstValidationMessage, workspaceRequestSchema } from "@/lib/auth/validation";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+import { applicationSql } from "@/lib/database/application-sql";
 
 type ParsedWorkspaceRequest = ReturnType<typeof workspaceRequestSchema.parse>;
 
@@ -13,16 +12,8 @@ function onboardingError(message: string): never {
   redirect(`/onboarding?error=${encodeURIComponent(message)}`);
 }
 
-function postgresOnboardingDependencies() {
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) {
-    throw new Error("Onboarding requires the PostgreSQL application backend");
-  }
-  return postgresSqlExecutor(config.databaseUrl);
-}
-
 async function submitPostgresWorkspaceRequest(request: ParsedWorkspaceRequest) {
-  const sql = postgresOnboardingDependencies();
+  const sql = applicationSql();
   const applicant = await getPostgresCurrentUser(sql);
   if (!applicant) redirect("/login");
 

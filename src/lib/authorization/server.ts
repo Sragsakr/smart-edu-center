@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 
 import { getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
 import { capabilityDecision, type MemberRole, type TenantCapability } from "@/lib/authorization/policy";
-import { databaseConfig } from "@/lib/database/config";
-import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+import { applicationSql } from "@/lib/database/application-sql";
 import type { SqlExecutor } from "@/lib/database/sql-executor";
 
 export type AuthorizedTenantContext = {
@@ -24,9 +23,7 @@ export class AuthorizationError extends Error {
 
 export async function getTenantAuthorizationContext(tenantId: string): Promise<AuthorizedTenantContext> {
   if (!tenantId) throw new AuthorizationError("مساحة العمل غير محددة");
-  const config = databaseConfig();
-  if (config.backend !== "postgres" || !config.databaseUrl) throw new Error("Authorization requires the PostgreSQL application backend");
-  const sql = postgresSqlExecutor(config.databaseUrl);
+  const sql = applicationSql();
   const user = await getPostgresCurrentUser(sql);
   if (!user) redirect("/login");
 

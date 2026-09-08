@@ -122,11 +122,11 @@ Platform Admin لا يُمنح تلقائيًا لأي Tenant Owner.
 
 ## Fresh Auth المحلي
 
-عند تشغيل `DATA_BACKEND=postgres` تكون قاعدة PostgreSQL المحلية فارغة عمدًا بعد تطبيق الـclean baseline، ولا تُستعاد بيانات مزود الهوية السابق أو legacy dump تلقائيًا.
+Fresh Auth يستخدم `DATABASE_URL` مباشرة دون backend selector أو مزود هوية خارجي. تطبيق الـclean baseline على قاعدة جديدة ينشئ Schema فارغة عمدًا ولا يستعيد legacy dump تلقائيًا؛ أما قاعدة التطوير الحالية `saboraty` فتحتوي البيانات المحددة في القسم التالي.
 
 لإنشاء أول Platform Admin محليًا في وضع التطوير فقط:
 
-1. شغّل التطبيق باستخدام `npm run dev` مع `DATA_BACKEND=postgres` و`DATABASE_URL` يشير إلى PostgreSQL على loopback.
+1. شغّل التطبيق باستخدام `npm run dev` مع `DATABASE_URL` يشير إلى PostgreSQL على loopback.
 2. افتح `/platform-control/bootstrap`.
 3. أدخل البريد وكلمة المرور محليًا؛ يتم تخزين `scrypt-v1` hash فقط داخل `auth_password_credentials` وإنشاء `app_users` و`platform_admins` داخل transaction واحدة.
 4. افتح `/platform-control/login` وسجّل الدخول، ثم اختبر `/platform-admin` والخروج.
@@ -139,7 +139,9 @@ Platform Admin لا يُمنح تلقائيًا لأي Tenant Owner.
 
 لا تعتمد Business Logic على Demo email أو UUID ثابت، وأي Reset/Reseed لبيانات `saboraty` يحتاج موافقة المالك الصريحة.
 
-## RLS والصلاحيات
+## الصلاحيات وعزل البيانات
+
+الوضع الحالي يفرض الصلاحيات في الـserver-only DAL/Server Actions، وتمنع composite foreign keys ربط سجلات من Tenants مختلفة. تطبيق RLS/database policies الدقيقة جزء إلزامي من `P02-03` قبل توسيع بيانات العملاء؛ لا نعتبر طبقة الواجهة أو الفلاتر وحدها حد حماية نهائيًا.
 
 - Tenant staff: وصولهم يعتمد على `memberships` والـrole.
 - Student: يرى سجله وما يرتبط به فقط عندما يطابق `students.user_id` هوية `app_users.id` في الجلسة الموثقة.
@@ -168,7 +170,7 @@ npm run dev
 
 ### تهيئة Platform Admin في PostgreSQL المحلي
 
-عند تشغيل التطبيق محليًا مع `DATA_BACKEND=postgres` وPostgreSQL على loopback افتح:
+عند تشغيل التطبيق محليًا مع `DATABASE_URL` يشير إلى PostgreSQL على loopback افتح:
 
 ```text
 http://localhost:3000/platform-control/bootstrap
@@ -176,12 +178,11 @@ http://localhost:3000/platform-control/bootstrap
 
 أدخل بريدًا وكلمة مرور من اختيارك. ينشئ المسار `app_users` و`auth_password_credentials` و`platform_admins` داخل transaction واحدة، ولا يخزن كلمة المرور الخام.
 
-هذه الأداة متاحة فقط عند اجتماع الشروط الثلاثة: `NODE_ENV=development`، و`DATA_BACKEND=postgres`، واتصال قاعدة البيانات يشير إلى `localhost` أو loopback IP. خارج ذلك يعيد المسار 404، كما تعيد عملية الكتابة نفسها فحص الشروط لمنع استدعائها مباشرة.
+هذه الأداة متاحة فقط عندما يكون `NODE_ENV=development` واتصال `DATABASE_URL` يشير إلى `localhost` أو loopback IP. خارج ذلك يعيد المسار 404، كما تعيد عملية الكتابة نفسها فحص الشروط لمنع استدعائها مباشرة.
 
 المتغيرات المطلوبة:
 
 ```env
-DATA_BACKEND=postgres
 DATABASE_URL=postgresql://...
 ```
 
