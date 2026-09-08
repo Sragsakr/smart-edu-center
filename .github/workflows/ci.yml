@@ -24,6 +24,8 @@ jobs:
     name: Verify
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/saboraty_ci
     services:
       postgres:
         image: postgres:18-alpine
@@ -67,7 +69,6 @@ jobs:
           fi
       - name: Integration & isolation tests
         env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/saboraty_ci
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/saboraty_ci_test
         run: npm run test:integration
       - name: Dependency audit
