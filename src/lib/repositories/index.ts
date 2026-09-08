@@ -2,13 +2,20 @@ import "server-only";
 
 import { SupabaseCurrentUserProvider } from "@/lib/auth/supabase-current-user-provider";
 import { databaseConfig } from "@/lib/database/config";
+import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
 import type { PlatformAdminRepository } from "@/lib/repositories/platform-admin-repository";
 import { createPlatformAdminRepository } from "@/lib/repositories/platform-admin-repository-factory";
 
 function resolvePlatformAdminRepository(): PlatformAdminRepository {
+  const config = databaseConfig();
+
   return createPlatformAdminRepository({
-    config: databaseConfig(),
+    config,
     currentUserProvider: new SupabaseCurrentUserProvider(),
+    sqlExecutor:
+      config.backend === "postgres" && config.databaseUrl
+        ? postgresSqlExecutor(config.databaseUrl)
+        : undefined,
   });
 }
 
