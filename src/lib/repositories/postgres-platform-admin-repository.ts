@@ -151,7 +151,7 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
           ) filter (where m.user_id is not null),
           '[]'::jsonb
         ) as memberships
-      from public.users u
+      from public.app_users u
       left join public.memberships m on m.user_id = u.id
       group by u.id
       order by u.created_at desc
@@ -184,8 +184,8 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
       `),
       this.sql.query<{ active_students: number; inactive_students: number }>(`
         select
-          count(*) filter (where archived_at is null)::int as active_students,
-          count(*) filter (where archived_at is not null)::int as inactive_students
+          count(*) filter (where active = true)::int as active_students,
+          count(*) filter (where active = false)::int as inactive_students
         from public.students
       `),
     ]);
@@ -232,7 +232,7 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
             else 'platform'
           end as tenant_source
         from public.platform_audit_logs a
-        left join public.users u on u.id = a.actor_user_id
+        left join public.app_users u on u.id = a.actor_user_id
         left join public.tenants t
           on t.id::text = a.entity_id
           and a.entity_type = 'tenant'

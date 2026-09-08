@@ -8,15 +8,14 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude \"**/*.integration.test.ts\"",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
     "check:migrations": "node scripts/check-migrations.mjs",
     "check:secrets": "node scripts/check-repository-secrets.mjs",
     "check:client-secrets": "node scripts/check-client-secrets.mjs",
     "check": "npm run lint && npm run typecheck && npm run test && npm run check:migrations && npm run check:secrets && npm run build && npm run check:client-secrets"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.12.6",
-    "@supabase/supabase-js": "^2.115.0",
     "lucide-react": "^1.41.0",
     "next": "16.3.4",
     "pg": "^8.23.0",

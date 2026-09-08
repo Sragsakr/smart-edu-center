@@ -1,36 +1,36 @@
--- Run after applying postgres/baseline/0001 and 0002 to a disposable Saboraty database.
--- Every query below should return true / zero failures.
+-- Run after applying only postgres/baseline/0001_smart_edu_center_clean.sql.
+-- Every query should return true or zero rows.
 
-select to_regclass('public.users') is not null as users_exists;
-select to_regclass('public.tenants') is not null as tenants_exists;
-select to_regclass('public.memberships') is not null as memberships_exists;
-select to_regclass('public.tenant_settings') is not null as tenant_settings_exists;
-select to_regclass('public.branches') is not null as branches_exists;
-select to_regclass('public.rooms') is not null as rooms_exists;
-select to_regclass('public.grades') is not null as grades_exists;
-select to_regclass('public.subjects') is not null as subjects_exists;
+select to_regclass('public.app_users') is not null as app_users_exists;
+select to_regclass('public.auth_password_credentials') is not null as auth_password_credentials_exists;
+select to_regclass('public.auth_sessions') is not null as auth_sessions_exists;
+select to_regclass('public.platform_admins') is not null as platform_admins_exists;
 select to_regclass('public.staff_profiles') is not null as staff_profiles_exists;
-select to_regclass('public.recurring_schedules') is not null as recurring_schedules_exists;
-select to_regclass('public.schedule_exceptions') is not null as schedule_exceptions_exists;
 select to_regclass('public.workspace_requests') is not null as workspace_requests_exists;
-select to_regclass('public.invitations') is not null as invitations_exists;
 select to_regclass('public.password_reset_requests') is not null as password_reset_requests_exists;
+select to_regclass('public.platform_audit_logs') is not null as platform_audit_logs_exists;
+select to_regclass('public.invitations') is not null as invitations_exists;
+
+select count(*) = 0 as no_cross_tenant_invitations
+from public.invitations i
+left join public.memberships m on m.tenant_id = i.tenant_id and m.user_id = i.created_by
+where m.user_id is null;
 
 select count(*) = 0 as no_orphan_memberships
 from public.memberships m
-left join public.users u on u.id = m.user_id
+left join public.app_users u on u.id = m.user_id
 left join public.tenants t on t.id = m.tenant_id
 where u.id is null or t.id is null;
+
+select count(*) = 0 as no_orphan_staff_profiles
+from public.staff_profiles p
+left join public.memberships m on m.tenant_id = p.tenant_id and m.user_id = p.user_id
+where m.user_id is null;
 
 select count(*) = 0 as no_cross_tenant_student_branches
 from public.students s
 join public.branches b on b.id = s.branch_id
-where s.branch_id is not null and s.tenant_id <> b.tenant_id;
-
-select count(*) = 0 as no_cross_tenant_student_grades
-from public.students s
-join public.grades g on g.id = s.grade_id
-where s.grade_id is not null and s.tenant_id <> g.tenant_id;
+where s.tenant_id <> b.tenant_id;
 
 select count(*) = 0 as no_cross_tenant_guardian_links
 from public.student_guardians sg
@@ -41,22 +41,12 @@ where sg.tenant_id <> s.tenant_id or sg.tenant_id <> g.tenant_id;
 select count(*) = 0 as no_cross_tenant_cohort_branches
 from public.cohorts c
 join public.branches b on b.id = c.branch_id
-where c.branch_id is not null and c.tenant_id <> b.tenant_id;
+where c.tenant_id <> b.tenant_id;
 
-select count(*) = 0 as no_cross_tenant_cohort_grades
+select count(*) = 0 as no_cross_tenant_cohort_teachers
 from public.cohorts c
-join public.grades g on g.id = c.grade_id
-where c.grade_id is not null and c.tenant_id <> g.tenant_id;
-
-select count(*) = 0 as no_cross_tenant_cohort_subjects
-from public.cohorts c
-join public.subjects s on s.id = c.subject_id
-where c.subject_id is not null and c.tenant_id <> s.tenant_id;
-
-select count(*) = 0 as no_cross_tenant_cohort_rooms
-from public.cohorts c
-join public.rooms r on r.id = c.room_id
-where c.room_id is not null and c.tenant_id <> r.tenant_id;
+join public.memberships m on m.user_id = c.teacher_user_id
+where c.tenant_id <> m.tenant_id;
 
 select count(*) = 0 as no_cross_tenant_enrollments
 from public.enrollments e
