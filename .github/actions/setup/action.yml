@@ -12,4 +12,4 @@ runs:
         cache: npm
     - name: Install locked dependencies
       shell: bash
-      run: npm ci
+      run: npm ci --legacy-peer-deps
