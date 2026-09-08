@@ -11,6 +11,14 @@ import {
 } from "@/lib/development/local-platform-admin-bootstrap";
 
 export async function bootstrapCurrentAdmin() {
+  //
+  // Short‑circuit in production / CI so we never require SUPABASE_SECRET_KEY
+  // just to invoke this dev‑only Server Action.
+  //
+  if (process.env.NODE_ENV !== "development") {
+    throw new Error("Local platform-admin bootstrap is unavailable in this environment");
+  }
+
   const database = databaseConfig();
   const runtime = { nodeEnv: process.env.NODE_ENV, database };
 

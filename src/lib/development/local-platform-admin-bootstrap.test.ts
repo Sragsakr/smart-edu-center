@@ -68,6 +68,22 @@ describe("local platform-admin bootstrap safeguards", () => {
   });
 });
 
+describe("bootstrapCurrentLocalPlatformAdmin rejects production", () => {
+  it("throws before reading session when nodeEnv is production", async () => {
+    const provider = currentUserProvider({ id: "user-id", email: "admin@example.com" });
+    const sql = new RecordingTransactionalSqlExecutor();
+
+    await expect(bootstrapCurrentLocalPlatformAdmin({
+      runtime: { ...localRuntime, nodeEnv: "production" },
+      currentUserProvider: provider,
+      sql,
+    })).rejects.toThrow("unavailable in this environment");
+
+    expect(provider.getCurrentUser).not.toHaveBeenCalled();
+    expect(sql.transactionCount).toBe(0);
+  });
+});
+
 describe("bootstrapCurrentLocalPlatformAdmin", () => {
   it("upserts the authenticated identity and grants local platform access transactionally", async () => {
     const sql = new RecordingTransactionalSqlExecutor();

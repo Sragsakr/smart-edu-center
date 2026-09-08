@@ -7,6 +7,15 @@ import { databaseConfig } from "@/lib/database/config";
 import { isLocalDevelopmentBootstrapAvailable } from "@/lib/development/local-platform-admin-bootstrap";
 
 export default async function LocalPlatformAdminBootstrapPage() {
+  //
+  // Short‑circuit in production / CI so we never require SUPABASE_SECRET_KEY
+  // just to render a development‑only page.
+  //
+  if (process.env.NODE_ENV !== "development") {
+    notFound();
+    return;
+  }
+
   const database = databaseConfig();
   if (!isLocalDevelopmentBootstrapAvailable({
     nodeEnv: process.env.NODE_ENV,
