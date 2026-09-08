@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_PHASE: PHASE-00 — إغلاق هجرة PostgreSQL وFresh Auth
-CURRENT_TASK: P00-05 — الاختبار اليدوي الشامل لمسارات المصادقة والـportals
-NEXT_TASK: P00-06 — إغلاق INFRA-011 وتثبيت نقطة الاستئناف
+CURRENT_TASK: P00-06 — إغلاق INFRA-011 وتثبيت نقطة الاستئناف
+NEXT_TASK: P01-01 — جرد وتأكيد حالة Coolify/VPS/PostgreSQL/TLS/domains/secrets
 CURRENT_PRIORITY: P0 — Release blocker
 PRODUCT_FEATURE_FREEZE: ACTIVE حتى اكتمال PHASE-02
 SCHEMA_MODE: BUILD MODE — reset/reseed مصرح به؛ لا توجد production data contract
@@ -147,7 +147,7 @@ Security، accessibility، audit، observability، documentation والاختب�
 - [x] `P00-02` نقل login/logout/signup/onboarding/workspace approval إلى PostgreSQL-only runtime.
 - [x] `P00-03` نقل Team/invitations/password recovery/Platform Admin/Student/Parent reads.
 - [x] `P00-04` Integration harness آمن و56 اختبارًا على PostgreSQL حقيقيًا، تشمل Auth/bootstrap/platform/team/workspace recovery و16 اختبار عزل، مع 42 Unit tests وكل بوابات الجودة ناجحة.
-- [M] `P00-05` **CURRENT:** اختبار يدوي شامل في بيئة محلية/مراجعة معتمدة:
+- [x] `P00-05` أُغلقت بقرار المالك دون تنفيذ دورة يدوية شاملة مستقلة؛ ستُعاد مراجعة كل Persona وصلاحياتها ورحلاتها بصورة منظمة داخل مراحل بنائها (`P02` و`P08` وما يرتبط بهما):
   - التسجيل ثم onboarding ثم إنشاء workspace request والخروج.
   - مراجعة Platform Admin للطلب: قبول ورفض ومحاولة تكرار.
   - دخول Management بعد القبول والخروج.
@@ -159,12 +159,12 @@ Security، accessibility، audit، observability، documentation والاختب�
   - `/choose-context` لمستخدم متعدد العلاقات.
   - حالات unauthorized/expired/revoked وواجهات الخطأ.
   - RTL وموبايل وديسكتوب للمسارات المتغيرة.
-- [ ] `P00-06` إغلاق INFRA-011:
+- [-] `P00-06` **CURRENT:** إغلاق INFRA-011:
   - إصلاح أي عيوب يكشفها `P00-05` مع regression tests.
   - تشغيل `npm run check` و`npm run test:integration` نهائيًا.
   - توثيق النتيجة، تنظيف أي نص قديم عن runtime خارجي، وتثبيت نقطة استئناف قابلة للمراجعة.
 
-**Exit Gate G00:** جميع Auth/portal contexts تعمل يدويًا وآليًا على PostgreSQL، ولا raw secrets/tokens، ولا regression أو تسريب tenant/relationship معروف.
+**Exit Gate G00:** تغطية Auth/portal contexts آليًا على PostgreSQL ناجحة، ولا raw secrets/tokens أو regression أو تسريب tenant/relationship معروف. المالك اعتمد ترحيل التحقق اليدوي التفصيلي لكل Persona إلى مراحل الصلاحيات والبوابات `P02` و`P08` بدل دورة مستقلة في `P00-05`.
 
 ---
 
@@ -525,7 +525,6 @@ Security، accessibility، audit، observability، documentation والاختب�
 
 | ID | الحالة | المطلوب | المالك |
 |---|---|---|---|
-| `P00-05` | `MANUAL` | تنفيذ واعتماد الاختبار اليدوي الشامل. | مالك المشروع |
 | `P01-07` | `TODO` | مورد استعادة معزول وتكلفته إن كانت هناك تكلفة. | مالك المشروع |
 | GitHub main protection | `DEFERRED` | تفعيل required PR/checks ومنع force push عند اعتماد ذلك. | مالك المشروع |
 | CODEOWNERS | `DEFERRED` | يفعّل عند انضمام فريق. | مالك المشروع |
@@ -552,6 +551,7 @@ Security، accessibility، audit، observability، documentation والاختب�
 | التاريخ | Task | الدليل | النتيجة/المؤشر التالي |
 |---|---|---|---|
 | 2026-09-08 | `P00-04` | 42 unit + 56 PostgreSQL integration؛ lint/typecheck/migrations/secrets/build ناجحة؛ reset guards رفضت `saboraty` و`DATABASE_URL` وnon-loopback | `P00-05` اختبار يدوي شامل |
+| 2026-09-08 | `P00-05` | أُغلقت بقرار المالك دون دورة يدوية مستقلة؛ نُقلت مراجعة كل Persona وصلاحياتها ورحلاتها إلى `P02` و`P08` | `P00-06` إغلاق INFRA-011 |
 
 ## 12. قواعد صيانة الخطة
 
