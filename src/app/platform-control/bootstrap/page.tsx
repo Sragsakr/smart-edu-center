@@ -1,31 +1,17 @@
 import { DatabaseZap, ShieldCheck } from "lucide-react";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
-import { bootstrapCurrentAdmin } from "@/app/platform-control/bootstrap/actions";
-import { SupabaseCurrentUserProvider } from "@/lib/auth/supabase-current-user-provider";
+import { bootstrapLocalAdmin } from "@/app/platform-control/bootstrap/actions";
 import { databaseConfig } from "@/lib/database/config";
 import { isLocalDevelopmentBootstrapAvailable } from "@/lib/development/local-platform-admin-bootstrap";
 
-export default async function LocalPlatformAdminBootstrapPage() {
-  //
-  // Short‑circuit in production / CI so we never require SUPABASE_SECRET_KEY
-  // just to render a development‑only page.
-  //
-  if (process.env.NODE_ENV !== "development") {
-    notFound();
-    return;
-  }
+export default function LocalPlatformAdminBootstrapPage() {
+  if (process.env.NODE_ENV !== "development") notFound();
 
   const database = databaseConfig();
-  if (!isLocalDevelopmentBootstrapAvailable({
-    nodeEnv: process.env.NODE_ENV,
-    database,
-  })) {
+  if (!isLocalDevelopmentBootstrapAvailable({ nodeEnv: process.env.NODE_ENV, database })) {
     notFound();
   }
-
-  const user = await new SupabaseCurrentUserProvider().getCurrentUser();
-  if (!user) redirect("/platform-control/login");
 
   return (
     <main dir="rtl" className="grid min-h-dvh place-items-center bg-[#17152b] p-4">
@@ -39,22 +25,19 @@ export default async function LocalPlatformAdminBootstrapPage() {
             <p className="text-xs text-[#6f6a80]">Local development only</p>
           </div>
         </div>
-
         <div className="mb-6 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <ShieldCheck className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p>
-            سيُضاف الحساب المسجّل حاليًا إلى PostgreSQL المحلي فقط، دون تعديل بيانات
-            Supabase أو تعطيل فحوص الصلاحيات المعتادة.
+            أدخل بريدًا وكلمة مرور محليين. سيتم تخزين hash كلمة المرور فقط داخل PostgreSQL
+            المحلي، ولن يتم الاتصال بأي مزود هوية خارجي أو تسجيل كلمة المرور.
           </p>
         </div>
-
-        <form action={bootstrapCurrentAdmin}>
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-[#6547d9] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#583bc8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6547d9]"
-          >
-            تهيئة الحساب الحالي كمدير منصة محلي
-          </button>
+        <form action={bootstrapLocalAdmin} className="space-y-4">
+          <label htmlFor="email" className="block text-sm font-bold">البريد الإلكتروني</label>
+          <input id="email" name="email" type="email" required autoComplete="email" className="w-full rounded-xl border border-[#ddd8e9] px-4 py-3 outline-none focus:border-[#6547d9]" />
+          <label htmlFor="password" className="block text-sm font-bold">كلمة المرور</label>
+          <input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" className="w-full rounded-xl border border-[#ddd8e9] px-4 py-3 outline-none focus:border-[#6547d9]" />
+          <button type="submit" className="w-full rounded-xl bg-[#6547d9] px-4 py-3 text-sm font-bold text-white">إنشاء مدير Fresh Auth المحلي</button>
         </form>
       </section>
     </main>

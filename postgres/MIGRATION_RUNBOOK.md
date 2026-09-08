@@ -17,19 +17,22 @@ This runbook migrates the application database away from Supabase PostgreSQL wit
 
 ## Prepared repository assets
 
-1. `postgres/migrations/202609070001_portable_core.sql`
-   - Core tenant/application tables.
-   - Uses `public.app_users` instead of Supabase `auth.users`.
-   - Contains no Supabase `auth.uid()`, `auth.jwt()`, anon/authenticated grants, or Supabase RLS policies.
+1. `postgres/baseline/0001_smart_edu_center_clean.sql`
+   - Canonical Build Mode baseline for the replacement database.
+   - Combines the clean portable domain schema, platform workflows and Fresh Auth tables.
+   - Uses `public.app_users`; it does not preserve the legacy Supabase schema as a compatibility contract.
 
-2. `postgres/migrations/202609070002_portable_platform.sql`
-   - Platform admin, workspace approval, tenant status and manual password-reset data structures.
-   - Supabase-specific RPC authorization is intentionally excluded.
+2. `postgres/reference/schema-fragments/`
+   - Historical source fragments retained for review only.
+   - Do not apply these files; the canonical baseline is self-contained.
 
 3. `postgres/validation/source-row-counts.sql`
    - Source snapshot against Supabase. `auth.users` is reported as `app_users` for comparison.
 
 4. `postgres/validation/row-counts.sql`
+   - Source snapshot against Supabase. `auth.users` is reported as `app_users` for comparison.
+
+5. `postgres/validation/row-counts.sql`
    - Replacement PostgreSQL counts, referential-integrity checks and tenant-level comparisons.
 
 ## Execution sequence once the PostgreSQL service exists
@@ -44,8 +47,8 @@ This runbook migrates the application database away from Supabase PostgreSQL wit
 ### Phase B — empty schema
 
 1. Connect to the replacement database over the private/internal path.
-2. Apply portable migrations in filename order.
-3. Verify all expected tables and indexes exist.
+2. Drop/recreate the disposable replacement database, then apply only `postgres/baseline/0001_smart_edu_center_clean.sql`.
+3. Verify all expected tables and indexes exist, including `auth_password_credentials` and `auth_sessions`.
 4. Run `postgres/validation/row-counts.sql`; all tables should initially be empty and integrity checks zero.
 
 ### Phase C — source snapshot and copy

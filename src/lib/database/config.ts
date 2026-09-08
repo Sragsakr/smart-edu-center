@@ -2,17 +2,12 @@ import "server-only";
 
 import { privateEnv } from "@/lib/server-env";
 
-export type DataBackend = "supabase" | "postgres";
-
 export type DatabaseConfig = {
-  backend: DataBackend;
-  databaseUrl: string | null;
+  backend: "postgres";
+  databaseUrl: string;
 };
 
 export function databaseConfig(): DatabaseConfig {
   const env = privateEnv();
-  return {
-    backend: env.DATA_BACKEND,
-    databaseUrl: env.DATABASE_URL ?? null,
-  };
+  return { backend: "postgres", databaseUrl: env.DATABASE_URL };
 }

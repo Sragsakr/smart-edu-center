@@ -12,7 +12,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Current task protocol
 
-After reading this file and `README.md`, open `docs/MASTER_DELIVERY_PLAN.md` and `docs/TECHNICAL_EXECUTION_BACKLOG.md`. For engineering work, execute only `CURRENT_TECHNICAL_TASK`. When it satisfies acceptance and quality gates, mark it complete, append the commit/test result to the execution log, and advance both task pointers. Never skip dependencies or leave either plan stale.
+After reading this file and `README.md`, open `docs/MASTER_EXECUTION_PLAN.md`, the only authoritative execution plan. For engineering work, execute only its `CURRENT_TASK`. When it satisfies acceptance and quality gates, mark it complete, append the evidence to its execution log, and advance `CURRENT_TASK` and `NEXT_TASK`. Never create a parallel backlog, skip dependencies, or leave the pointer stale. `docs/ENGINEERING_PRINCIPLES.md` and `docs/RBAC_MATRIX.md` are specialist contracts, not competing plans.
 
 ## BUILD MODE — database rule (ACTIVE)
 
@@ -35,8 +35,8 @@ There are four user experiences, but only two login surfaces:
 
 1. **SaaS Platform Admin** — separate private entry at `/platform-control/login`, then `/platform-admin`. It is not linked from the public landing page and requires an explicit `platform_admins` row.
 2. **Tenant Management** — center owner/admin/teacher/staff via the normal `/login`, then the management dashboard.
-3. **Student Portal** — via the same normal `/login`, then `/student` when `students.user_id = auth.uid()`.
-4. **Parent / Guardian Portal** — via the same normal `/login`, then `/parent` when `guardians.user_id = auth.uid()`.
+3. **Student Portal** — via the same normal `/login`, then `/student` when `students.user_id` matches the authenticated `app_users.id`.
+4. **Parent / Guardian Portal** — via the same normal `/login`, then `/parent` when `guardians.user_id` matches the authenticated `app_users.id`.
 
 Do not add role tabs to the login form. Authentication answers “who is this user”; protected database relationships decide which portals the user may enter. If one Auth user has more than one non-platform context, route to `/choose-context` and let the user switch portals without separate credentials.
 
@@ -60,7 +60,7 @@ Build a production-minded, Arabic-first multi-tenant center operating system tha
 - Next.js App Router, React Server Components by default.
 - Add `"use client"` only at the smallest interactive boundary.
 - Reads belong in a server-only Data Access Layer; UI mutations use Server Actions; external webhooks use Route Handlers.
-- Supabase provides Auth, PostgreSQL and Storage. Never expose a service-role/secret key.
+- Self-managed PostgreSQL provides application data and application-owned Fresh Auth. Keep `DATABASE_URL` server-only; do not add external database/auth SDK fallbacks. Protected file storage must use a separately approved private-storage design when that feature is implemented.
 - Read public environment variables through `src/lib/env.ts`, not directly from `process.env`.
 - Every tenant business table must carry tenant scope and RLS. Platform-scope tables such as `platform_admins`, `workspace_requests`, and `platform_audit_logs` are deliberate exceptions.
 - Never authorize from `user_metadata`; authorization comes from protected database relationships/tables.
@@ -84,7 +84,7 @@ Build a production-minded, Arabic-first multi-tenant center operating system tha
 
 Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`.
 
-1. Read `README.md`, this file, the delivery plan/backlog, and relevant local Next.js docs.
+1. Read `README.md`, this file, `docs/MASTER_EXECUTION_PLAN.md`, any specialist contract linked by the current task, and relevant local Next.js docs.
 2. Inspect existing changes; never overwrite unrelated user work.
 3. Confirm whether Build Mode is still active before choosing reset/reseed vs migration strategy.
 4. Implement the smallest complete vertical slice.

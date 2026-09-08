@@ -5,7 +5,7 @@
 ## الحالة الحالية
 
 - Next.js 16 App Router + TypeScript + Tailwind CSS 4.
-- Supabase Auth + PostgreSQL + RLS.
+- PostgreSQL هو application database الوحيد، والمصادقة application-owned Fresh Auth. كل مسارات login/logout/current-user، Platform Admin، onboarding، team/invitations، password recovery، Student وParent portals تعمل عبر PostgreSQL دون SDK أو runtime fallback خارجي.
 - واجهة عربية RTL متجاوبة وقابلة للتثبيت كـPWA.
 - Management SaaS يدعم نموذجين: `center` و`independent_teacher`.
 - Control Plane لإدارة الـSaaS.
@@ -99,17 +99,17 @@ Login واحد فقط: `/login`
 ولي الأمر ليس Tenant Member. الوصول يتم عبر:
 
 ```text
-auth.users
+app_users
   → guardians.user_id
   → student_guardians
   → students
 ```
 
-RLS يسمح له بقراءة بيانات أبنائه المرتبطين فقط. النسخة الحالية تعرض الأبناء، الحضور، الحصص والمستحقات. موديول الرسائل مع المعلم له مكان واضح في الواجهة وسيُبنى كDomain مستقل لاحقًا.
+طبقة الصلاحيات الخادمية وعلاقات قاعدة البيانات تسمح له بقراءة بيانات أبنائه المرتبطين فقط. النسخة الحالية تعرض الأبناء، الحضور، الحصص والمستحقات. موديول الرسائل مع المعلم له مكان واضح في الواجهة وسيُبنى كDomain مستقل لاحقًا.
 
 ## دورة إنشاء حساب المشترك
 
-إنشاء User في Supabase Auth لا ينشئ Tenant تلقائيًا. رحلة السنتر/المدرس الحالية:
+إنشاء User في Fresh Auth لا ينشئ Tenant تلقائيًا. رحلة السنتر/المدرس الحالية:
 
 1. تسجيل البريد وكلمة المرور.
 2. إدخال نوع النشاط واسم المساحة وبيانات التواصل.
@@ -120,31 +120,29 @@ RLS يسمح له بقراءة بيانات أبنائه المرتبطين فق
 
 Platform Admin لا يُمنح تلقائيًا لأي Tenant Owner.
 
-## بيانات Demo الحالية
+## Fresh Auth المحلي
 
-قاعدة التطوير الحالية أُعيد تنظيفها لتكون صغيرة وواضحة وتمثل الـ4 Experiences الأساسية. كل حسابات Demo التالية تستخدم كلمة المرور:
+عند تشغيل `DATA_BACKEND=postgres` تكون قاعدة PostgreSQL المحلية فارغة عمدًا بعد تطبيق الـclean baseline، ولا تُستعاد بيانات مزود الهوية السابق أو legacy dump تلقائيًا.
 
-```text
-DemoPass.123
-```
+لإنشاء أول Platform Admin محليًا في وضع التطوير فقط:
 
-| التجربة | البريد | الدخول |
-|---|---|---|
-| SaaS Platform Admin | `admin.demo@example.com` | `/platform-control/login` |
-| Center Management Owner | `center.demo@example.com` | `/login` |
-| Student | `teacher.demo@example.com` | `/login` |
-| Parent / Guardian | `center.demo2@example.com` | `/login` |
+1. شغّل التطبيق باستخدام `npm run dev` مع `DATA_BACKEND=postgres` و`DATABASE_URL` يشير إلى PostgreSQL على loopback.
+2. افتح `/platform-control/bootstrap`.
+3. أدخل البريد وكلمة المرور محليًا؛ يتم تخزين `scrypt-v1` hash فقط داخل `auth_password_credentials` وإنشاء `app_users` و`platform_admins` داخل transaction واحدة.
+4. افتح `/platform-control/login` وسجّل الدخول، ثم اختبر `/platform-admin` والخروج.
 
-> أسماء بعض Demo emails موروثة من seed قديم لتجنب إعادة إنشاء Auth users أثناء البناء؛ العلاقة الحالية في قاعدة البيانات هي المصدر الحقيقي للدور، وليس اسم البريد.
+لا يعتمد هذا المسار على أي مزود هوية خارجي، ولا يسجل كلمة المرور أو يعيد بيانات قديمة.
 
-Dataset الحالية تحتوي Tenant واحدًا (`سنتر النور التجريبي`) وفرعًا ومجموعة وطالبًا وولي أمر وعلاقة Parent→Student وحصصًا وحضورًا وفواتير ومدفوعًا جزئيًا، كي تكون الـPortals قابلة للاختبار بدون بيانات ضخمة.
+## بيانات التطوير الحالية
 
-لا تعتمد Business Logic على Demo email أو UUID ثابت.
+قاعدة التطوير المحلية `saboraty` تحتوي حاليًا 3 مستخدمين و2 Tenants محفوظين أثناء بناء Fresh Auth. هي ليست قاعدة اختبارات ولا يجوز لأي reset/test harness لمسها. اختبارات التكامل تستخدم قاعدة منفصلة عبر `TEST_DATABASE_URL` وتعيد إنشاءها من الـclean baseline.
+
+لا تعتمد Business Logic على Demo email أو UUID ثابت، وأي Reset/Reseed لبيانات `saboraty` يحتاج موافقة المالك الصريحة.
 
 ## RLS والصلاحيات
 
 - Tenant staff: وصولهم يعتمد على `memberships` والـrole.
-- Student: يرى سجله وما يرتبط به فقط عبر `students.user_id = auth.uid()` وسياسات العلاقات المرتبطة.
+- Student: يرى سجله وما يرتبط به فقط عندما يطابق `students.user_id` هوية `app_users.id` في الجلسة الموثقة.
 - Guardian: يرى فقط الأبناء المرتبطين في `student_guardians` وما يخصهم.
 - Platform Admin: صلاحية SaaS مستقلة في `platform_admins`.
 - لا نستخدم `user_metadata` لاتخاذ قرار Authorization.
@@ -153,7 +151,7 @@ Dataset الحالية تحتوي Tenant واحدًا (`سنتر النور ال
 
 ## Password Recovery
 
-حتى يتوفر Domain/SMTP، الاستعادة الحالية تمر عبر إدارة المنصة: طلب من `/forgot-password` ثم مراجعة من `/platform-admin/password-resets` وكود مؤقت single-use يُرسل يدويًا عبر واتساب. أي Secret/Admin Supabase key يبقى Server-only ولا يوضع في `NEXT_PUBLIC_*` أو Git.
+حتى يتوفر Domain/SMTP، الاستعادة الحالية تمر عبر إدارة المنصة: طلب من `/forgot-password` ثم مراجعة من `/platform-admin/password-resets` وكود مؤقت single-use يُرسل يدويًا عبر واتساب. الكود وكلمات المرور والجلسات تُخزن كـdigests فقط، و`DATABASE_URL` يبقى Server-only ولا يوضع في Git.
 
 ## التشغيل المحلي
 
@@ -170,28 +168,28 @@ npm run dev
 
 ### تهيئة Platform Admin في PostgreSQL المحلي
 
-عند تشغيل التطبيق محليًا مع `DATA_BACKEND=postgres` وPostgreSQL على loopback، سجّل الدخول أولًا بحساب Supabase Auth المطلوب، ثم افتح:
+عند تشغيل التطبيق محليًا مع `DATA_BACKEND=postgres` وPostgreSQL على loopback افتح:
 
 ```text
 http://localhost:3000/platform-control/bootstrap
 ```
 
-اضغط زر التهيئة مرة واحدة. المسار يأخذ UUID والبريد من جلسة Auth الحالية، ثم ينفذ داخل transaction واحدة upsert في `public.users` وإضافة idempotent في `public.platform_admins`. لا يكتب إلى Supabase ولا يحتاج إدخال أي UUID أو بريد أو سر يدويًا.
+أدخل بريدًا وكلمة مرور من اختيارك. ينشئ المسار `app_users` و`auth_password_credentials` و`platform_admins` داخل transaction واحدة، ولا يخزن كلمة المرور الخام.
 
-هذه الأداة متاحة فقط عند اجتماع الشروط الثلاثة: `NODE_ENV=development`، و`DATA_BACKEND=postgres`، واتصال قاعدة البيانات يشير إلى `localhost` أو loopback IP. خارج ذلك يعيد المسار 404، كما تعيد عملية الكتابة نفسها فحص الشروط لمنع استدعائها مباشرة. احذف هذه الآلية بعد اكتمال Fresh Auth ومزامنة الهوية الدائمة.
+هذه الأداة متاحة فقط عند اجتماع الشروط الثلاثة: `NODE_ENV=development`، و`DATA_BACKEND=postgres`، واتصال قاعدة البيانات يشير إلى `localhost` أو loopback IP. خارج ذلك يعيد المسار 404، كما تعيد عملية الكتابة نفسها فحص الشروط لمنع استدعائها مباشرة.
 
-المتغيرات العامة الأساسية:
+المتغيرات المطلوبة:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+DATA_BACKEND=postgres
+DATABASE_URL=postgresql://...
 ```
 
-اقرأها من العقد الموجود في `src/lib/env.ts` بدل `process.env` مباشرة داخل التطبيق.
+`DATABASE_URL` متغير Server-only ويُقرأ عبر `src/lib/server-env.ts`.
 
 ## البيئات الحالية
 
-Development وVercel Preview و`main` تستخدم حاليًا مشروع Supabase واحد باسم `smart-edu-center` بقرار المالك لتقليل التكلفة أثناء البناء. لذلك تعامل مع المشروع الحالي كبيئة Build مشتركة حتى إعلان Production Data Mode.
+الـruntime الحالي PostgreSQL-only. يجب أن تحصل Development وPreview وProduction على قواعد PostgreSQL منفصلة قبل إدخال بيانات عملاء حقيقية؛ لا يشير أي runtime path إلى مزود قاعدة أو Auth بديل.
 
 هذا يعني:
 
@@ -214,6 +212,24 @@ npm run check
 
 ملاحظة: بعض Migration Safety rules الحالية أقدم من قرار Build Mode. إذا منعت Consolidation مقصودة قبل Schema Freeze، حدّث قواعد CI نفسها بدل إضافة migrations وهمية فقط لإرضاء تاريخ تطوير لم يعد مطلوبًا.
 
+## اختبارات Integration والعزل (Disposable database)
+
+`npm run test` يعتمد بالكامل على mocks ولا يحتاج PostgreSQL. اختبارات التكامل والعزل بين Tenants (`**/*.integration.test.ts`) تعمل بشكل منفصل ضد قاعدة بيانات حقيقية قابلة للحذف:
+
+```bash
+export TEST_DATABASE_URL=postgresql://<user>@127.0.0.1:5432/saboraty_test
+npm run test:integration
+```
+
+`TEST_DATABASE_URL` **يجب** ألا يشير إلى `saboraty` (قاعدة التطوير) أو أي قاعدة إنتاج. السكربت (`postgres/scripts/reset-test-database.mjs`) يرفض التنفيذ تلقائيًا لو:
+
+- المتغير غير مضبوط أصلًا.
+- الاسم هو `saboraty` أو `postgres` أو أي اسم محجوز.
+- يطابق `DATABASE_URL` الحالي.
+- المضيف ليس loopback.
+
+عند التشغيل، السكربت يحذف قاعدة الاختبار ويعيد إنشاءها من `postgres/baseline/0001_smart_edu_center_clean.sql` ثم يشغّل `postgres/validation/clean-baseline-smoke.sql` قبل أي اختبار. البيانات المستخدمة كلها Synthetic (`*@example.test`) وتُحذف بالكامل بعد كل تشغيل؛ لا تُكتب أي بيانات Demo أو Legacy داخل `saboraty`.
+
 ## المعمارية
 
 - `src/app`: routes والـmetadata والـportals.
@@ -225,18 +241,20 @@ npm run check
 - `src/components`: مكونات الواجهة.
 - `src/lib/auth/account-access.ts`: Identity/relationship resolver.
 - `src/lib/portal-data.ts`: server-only data access للطالب وولي الأمر.
-- `src/lib/supabase`: عملاء Supabase.
-- `supabase/migrations`: تاريخ المخطط الحالي، وليس Contract نهائية أثناء Build Mode.
+- `src/lib/database`: PostgreSQL configuration وSQL executor.
+- `postgres/baseline`: الـcanonical clean schema الوحيد القابل للتطبيق.
+- `postgres/reference`: ملفات تاريخية للقراءة فقط وليست runtime أو migration path.
 
 ## خارطة التنفيذ
 
-المصدر الأساسي للتطوير المتسلسل:
+يوجد مصدر تنفيذ واحد فقط:
 
-- [`docs/MASTER_DELIVERY_PLAN.md`](docs/MASTER_DELIVERY_PLAN.md)
-- [`docs/TECHNICAL_EXECUTION_BACKLOG.md`](docs/TECHNICAL_EXECUTION_BACKLOG.md)
+- [`docs/MASTER_EXECUTION_PLAN.md`](docs/MASTER_EXECUTION_PLAN.md) — الحالة الحالية، الأولويات، الاعتماديات، المراحل، التاسك الحالية، بوابات القبول وسجل التنفيذ.
 
-راجع `CURRENT_TASK` و`CURRENT_TECHNICAL_TASK` دائمًا قبل بدء شغل جديد، وحدّثهما عند اكتمال التاسك حتى نستطيع دائمًا أخذ «التاسك اللي عليها الدور» بدون فجوات.
+راجع `CURRENT_TASK` داخل هذا الملف قبل أي شغل، ونفّذها وحدها ثم حدّث المؤشر بعد نجاح Acceptance وQuality Gate. لا تُنشأ خطة أو Backlog موازية. المراجع التخصصية مثل [`docs/ENGINEERING_PRINCIPLES.md`](docs/ENGINEERING_PRINCIPLES.md) و[`docs/RBAC_MATRIX.md`](docs/RBAC_MATRIX.md) تصف عقودًا هندسية ولا تحدد ترتيب العمل.
+
+التاسك الحالية هي الاختبار اليدوي الشامل لإغلاق هجرة PostgreSQL/Fresh Auth. تطوير Features المنتج متوقف حتى اكتمال مراحل البنية والصلاحيات `PHASE-00..PHASE-02`.
 
 ## النشر
 
-المصدر على GitHub، التطبيق على Vercel، والبيانات/Auth على Supabase. تحديث `main` ينشر النسخة الأساسية، والفروع يمكن أن تنشئ Preview. قبل اعتبار النظام Production فعليًا يجب إنهاء Schema Freeze، فصل سياسة البيانات الحقيقية عن Demo Build Mode، ومراجعة Security/Backup/Restore gates.
+المصدر على GitHub، التطبيق قابل للنشر كـNext.js runtime، والبيانات/Auth على PostgreSQL application-owned stack. قبل اعتبار النظام Production فعليًا يجب إنهاء Schema Freeze، فصل البيئات، وتأمين PostgreSQL private networking ومراجعة Security/Backup/Restore gates.

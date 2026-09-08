@@ -1,45 +1,28 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  findChangedExistingMigrations,
-  validateMigrationFiles,
-} from "./check-migrations.mjs";
+import { validateCanonicalBaseline } from "./check-migrations.mjs";
 
-describe("migration policy", () => {
-  it("accepts a transactional, forward-only migration", () => {
-    const violations = validateMigrationFiles([
-      {
-        name: "202609060004_add_example.sql",
-        sql: "begin;\ncreate table example (id bigint);\ncommit;\n",
-      },
-    ]);
+const canonicalName = "0001_smart_edu_center_clean.sql";
 
-    expect(violations).toEqual([]);
+describe("Build Mode canonical baseline policy", () => {
+  it("accepts one portable transactional baseline", () => {
+    expect(validateCanonicalBaseline([{ name: canonicalName, sql: "begin;\ncreate table example (id bigint);\ncommit;\n" }])).toEqual([]);
   });
 
-  it("reports invalid filenames and missing transaction boundaries", () => {
-    const violations = validateMigrationFiles([
-      { name: "add-example.sql", sql: "create table example (id bigint);" },
-    ]);
-
-    expect(violations).toEqual([
-      "add-example.sql: invalid migration filename",
-      "add-example.sql: migration must start with BEGIN",
-      "add-example.sql: migration must end with COMMIT",
+  it("rejects extra executable baselines and missing transaction boundaries", () => {
+    expect(validateCanonicalBaseline([
+      { name: canonicalName, sql: "create table example (id bigint);" },
+      { name: "0002_extra.sql", sql: "begin; commit;" },
+    ])).toEqual([
+      `postgres/baseline must contain only ${canonicalName}`,
+      `${canonicalName}: baseline must start with BEGIN`,
+      `${canonicalName}: baseline must end with COMMIT`,
     ]);
   });
 
-  it("rejects modifications and deletions but allows new migrations", () => {
-    const nameStatusOutput = [
-      "A\tsupabase/migrations/202609060004_new.sql",
-      "M\tsupabase/migrations/202609060001_initial_core.sql",
-      "D\tsupabase/migrations/202609060002_indexes.sql",
-      "M\tREADME.md",
-    ].join("\n");
-
-    expect(findChangedExistingMigrations(nameStatusOutput)).toEqual([
-      "supabase/migrations/202609060001_initial_core.sql",
-      "supabase/migrations/202609060002_indexes.sql",
+  it("rejects provider-specific authorization primitives", () => {
+    expect(validateCanonicalBaseline([{ name: canonicalName, sql: "begin; select auth.uid(); commit;" }])).toEqual([
+      `${canonicalName}: provider-specific authorization is not allowed`,
     ]);
   });
 });

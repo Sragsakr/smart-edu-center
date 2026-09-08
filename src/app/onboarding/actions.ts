@@ -1,76 +1,71 @@
 "use server";
 
-import type { User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
-import { firstValidationMessage, workspaceRequestSchema } from "@/lib/auth/validation";
-import { createClient } from "@/lib/supabase/server";
 
-type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
+import { clearPostgresSession, getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
+import { firstValidationMessage, workspaceRequestSchema } from "@/lib/auth/validation";
+import { databaseConfig } from "@/lib/database/config";
+import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
+
 type ParsedWorkspaceRequest = ReturnType<typeof workspaceRequestSchema.parse>;
 
 function onboardingError(message: string): never {
   redirect(`/onboarding?error=${encodeURIComponent(message)}`);
 }
 
-async function verifiedApplicant(supabase: ServerSupabaseClient): Promise<User & { email: string }> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  if (!user.email || !user.email_confirmed_at) onboardingError("يجب تأكيد البريد الإلكتروني أولًا");
-  return user as User & { email: string };
+function postgresOnboardingDependencies() {
+  const config = databaseConfig();
+  if (config.backend !== "postgres" || !config.databaseUrl) {
+    throw new Error("Onboarding requires the PostgreSQL application backend");
+  }
+  return postgresSqlExecutor(config.databaseUrl);
 }
 
-async function provisioningState(supabase: ServerSupabaseClient, userId: string) {
-  const [membershipLookup, requestLookup] = await Promise.all([
-    supabase
-      .from("memberships")
-      .select("tenant_id")
-      .eq("user_id", userId)
-      .eq("active", true)
-      .limit(1)
-      .maybeSingle(),
-    supabase.from("workspace_requests").select("status").eq("user_id", userId).maybeSingle(),
-  ]);
-  if (membershipLookup.error || requestLookup.error) onboardingError("تعذر التحقق من حالة الحساب");
-  return { hasMembership: Boolean(membershipLookup.data), requestStatus: requestLookup.data?.status };
-}
+async function submitPostgresWorkspaceRequest(request: ParsedWorkspaceRequest) {
+  const sql = postgresOnboardingDependencies();
+  const applicant = await getPostgresCurrentUser(sql);
+  if (!applicant) redirect("/login");
 
-function workspaceRequestFields(user: User & { email: string }, request: ParsedWorkspaceRequest) {
-  return {
-    user_id: user.id,
-    email: user.email.toLowerCase(),
-    account_type: request.accountType,
-    workspace_name: request.name,
-    slug: request.slug,
-    mobile_phone: request.mobilePhone,
-    whatsapp_phone: request.whatsappPhone,
-    status: "pending_approval" as const,
-    rejection_reason: null,
-    reviewed_by: null,
-    reviewed_at: null,
-    tenant_id: null,
-    updated_at: new Date().toISOString(),
-  };
-}
+  const state = await sql.query<{ has_membership: boolean; status: string | null }>(
+    `select exists(
+       select 1 from public.memberships where user_id = $1 and active = true
+     ) as has_membership,
+     (select status::text from public.workspace_requests where user_id = $1 limit 1) as status`,
+    [applicant.id],
+  );
+  const currentState = state.rows[0];
+  if (currentState?.has_membership || currentState?.status === "approved") redirect("/");
+  if (currentState?.status === "pending_approval") redirect("/account-status");
 
-function createWorkspaceRequest(
-  supabase: ServerSupabaseClient,
-  user: User & { email: string },
-  request: ParsedWorkspaceRequest,
-) {
-  return supabase.from("workspace_requests").insert(workspaceRequestFields(user, request));
-}
+  try {
+    await sql.query(
+      `insert into public.workspace_requests
+         (user_id, email, account_type, workspace_name, slug, mobile_phone, whatsapp_phone)
+       values ($1, $2, $3, $4, $5, $6, $7)
+       on conflict (user_id) do update set
+         email = excluded.email,
+         account_type = excluded.account_type,
+         workspace_name = excluded.workspace_name,
+         slug = excluded.slug,
+         mobile_phone = excluded.mobile_phone,
+         whatsapp_phone = excluded.whatsapp_phone,
+         status = 'pending_approval',
+         rejection_reason = null,
+         reviewed_by = null,
+         reviewed_at = null,
+         tenant_id = null,
+         updated_at = now()`,
+      [applicant.id, applicant.email.toLowerCase(), request.accountType, request.name, request.slug, request.mobilePhone, request.whatsappPhone],
+    );
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "23505") {
+      onboardingError("الرابط المختصر مستخدم بالفعل، اختر رابطًا آخر");
+    }
+    onboardingError("تعذر إرسال الطلب حاليًا. حاول مرة أخرى");
+  }
 
-function resubmitWorkspaceRequest(
-  supabase: ServerSupabaseClient,
-  user: User & { email: string },
-  request: ParsedWorkspaceRequest,
-) {
-  return supabase
-    .from("workspace_requests")
-    .update(workspaceRequestFields(user, request))
-    .eq("user_id", user.id);
+  await clearPostgresSession(sql);
+  redirect(`/login?message=${encodeURIComponent("تم استلام طلب اشتراكك. ستراجعه إدارة المنصة وتتواصل معك، وبعد التفعيل يمكنك تسجيل الدخول مرة أخرى")}`);
 }
 
 export async function submitWorkspaceRequest(formData: FormData) {
@@ -82,24 +77,5 @@ export async function submitWorkspaceRequest(formData: FormData) {
     whatsappPhone: formData.get("whatsapp_phone"),
   });
   if (!parsedRequest.success) onboardingError(firstValidationMessage(parsedRequest.error));
-
-  const supabase = await createClient();
-  const applicant = await verifiedApplicant(supabase);
-  const state = await provisioningState(supabase, applicant.id);
-  if (state.hasMembership || state.requestStatus === "approved") redirect("/");
-  if (state.requestStatus === "pending_approval") redirect("/account-status");
-
-  const submission =
-    state.requestStatus === "rejected"
-      ? resubmitWorkspaceRequest(supabase, applicant, parsedRequest.data)
-      : createWorkspaceRequest(supabase, applicant, parsedRequest.data);
-  const { error } = await submission;
-  if (error?.code === "23505") onboardingError("الرابط المختصر مستخدم بالفعل، اختر رابطًا آخر");
-  if (error) onboardingError("تعذر إرسال الطلب حاليًا. حاول مرة أخرى");
-
-  const { error: signOutError } = await supabase.auth.signOut();
-  if (signOutError) redirect("/account-status");
-  redirect(
-    `/login?message=${encodeURIComponent("تم استلام طلب اشتراكك. ستراجعه إدارة المنصة وتتواصل معك، وبعد التفعيل يمكنك تسجيل الدخول مرة أخرى")}`,
-  );
+  await submitPostgresWorkspaceRequest(parsedRequest.data);
 }

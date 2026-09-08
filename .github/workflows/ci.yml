@@ -62,14 +62,18 @@ jobs:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
-          psql --host=127.0.0.1 --username=postgres --dbname=saboraty_ci --set=ON_ERROR_STOP=1 --file=postgres/baseline/0001_saboraty_clean_baseline.sql
-          psql --host=127.0.0.1 --username=postgres --dbname=saboraty_ci --set=ON_ERROR_STOP=1 --file=postgres/baseline/0002_platform_identity_workflows.sql
+          psql --host=127.0.0.1 --username=postgres --dbname=saboraty_ci --set=ON_ERROR_STOP=1 --file=postgres/baseline/0001_smart_edu_center_clean.sql
           psql --host=127.0.0.1 --username=postgres --dbname=saboraty_ci --set=ON_ERROR_STOP=1 --tuples-only --no-align --file=postgres/validation/clean-baseline-smoke.sql | tee /tmp/saboraty-baseline-smoke.out
           if grep -Ev '^(t|0)?$' /tmp/saboraty-baseline-smoke.out | grep -q .; then
             echo "Unexpected PostgreSQL smoke output:"
             cat /tmp/saboraty-baseline-smoke.out
             exit 1
           fi
+      - name: Integration & isolation tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/saboraty_ci
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/saboraty_ci_test
+        run: npm run test:integration
       - name: Dependency audit
         run: npm audit --omit=dev --audit-level=high
       - name: Secret scan

@@ -1,6 +1,9 @@
 import "server-only";
 
-import { createClient } from "@/lib/supabase/server";
+import { getPostgresAccountAccess, getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
+import { listPostgresWorkspaceRequests } from "@/lib/auth/postgres-workspace-requests";
+import { databaseConfig } from "@/lib/database/config";
+import { postgresSqlExecutor } from "@/lib/database/postgres-sql-executor";
 
 export type WorkspaceRequestStatus = "pending_approval" | "approved" | "rejected";
 export type WorkspaceRequest = {
@@ -17,30 +20,44 @@ export type WorkspaceRequest = {
   reviewed_at: string | null;
 };
 
-const workspaceRequestFields = "id,email,account_type,workspace_name,slug,mobile_phone,whatsapp_phone,status,rejection_reason,created_at,reviewed_at";
+const workspaceRequestFields = "id,email::text as email,account_type,workspace_name,slug::text as slug,mobile_phone,whatsapp_phone,status::text as status,rejection_reason,created_at::text as created_at,reviewed_at::text as reviewed_at";
 
-export async function getCurrentAccountAccess() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+type PortalAccess = {
+  user: { id: string; email: string } | null;
+  membership: { tenant_id: string; role: string } | null;
+  student: { id: string; tenant_id: string; full_name: string } | null;
+  guardian: { id: string; tenant_id: string; full_name: string } | null;
+  request: WorkspaceRequest | null;
+  isPlatformAdmin: boolean;
+};
+
+function postgresSql() {
+  const config = databaseConfig();
+  if (config.backend !== "postgres" || !config.databaseUrl) {
+    throw new Error("Account access requires the PostgreSQL application backend");
+  }
+  return postgresSqlExecutor(config.databaseUrl);
+}
+
+export async function getCurrentAccountAccess(): Promise<PortalAccess> {
+  const sql = postgresSql();
+  const user = await getPostgresCurrentUser(sql);
   if (!user) return { user: null, membership: null, student: null, guardian: null, request: null, isPlatformAdmin: false };
 
-  const [membershipLookup, studentLookup, guardianLookup, requestLookup, adminLookup] = await Promise.all([
-    supabase.from("memberships").select("tenant_id,role").eq("user_id", user.id).eq("active", true).limit(1).maybeSingle(),
-    supabase.from("students").select("id,tenant_id,full_name").eq("user_id", user.id).eq("active", true).limit(1).maybeSingle(),
-    supabase.from("guardians").select("id,tenant_id,full_name").eq("user_id", user.id).limit(1).maybeSingle(),
-    supabase.from("workspace_requests").select(workspaceRequestFields).eq("user_id", user.id).maybeSingle(),
-    supabase.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle(),
+  const [membership, student, guardian, request, account] = await Promise.all([
+    sql.query<{ tenant_id: string; role: string }>("select tenant_id, role::text as role from public.memberships where user_id = $1 and active = true order by created_at limit 1", [user.id]),
+    sql.query<{ id: string; tenant_id: string; full_name: string }>("select id, tenant_id, full_name from public.students where user_id = $1 and active = true limit 1", [user.id]),
+    sql.query<{ id: string; tenant_id: string; full_name: string }>("select id, tenant_id, full_name from public.guardians where user_id = $1 and active = true limit 1", [user.id]),
+    sql.query<WorkspaceRequest>(`select ${workspaceRequestFields} from public.workspace_requests where user_id = $1 limit 1`, [user.id]),
+    getPostgresAccountAccess(sql, user.id),
   ]);
-  const lookupError = membershipLookup.error ?? studentLookup.error ?? guardianLookup.error ?? requestLookup.error ?? adminLookup.error;
-  if (lookupError) throw new Error("تعذر التحقق من صلاحية الحساب");
-
   return {
     user,
-    membership: membershipLookup.data,
-    student: studentLookup.data,
-    guardian: guardianLookup.data,
-    request: requestLookup.data as WorkspaceRequest | null,
-    isPlatformAdmin: Boolean(adminLookup.data),
+    membership: membership.rows[0] ?? null,
+    student: student.rows[0] ?? null,
+    guardian: guardian.rows[0] ?? null,
+    request: request.rows[0] ?? null,
+    isPlatformAdmin: account.isPlatformAdmin,
   };
 }
 
@@ -48,28 +65,32 @@ export function getPortalCount(access: Awaited<ReturnType<typeof getCurrentAccou
   return Number(Boolean(access.membership)) + Number(Boolean(access.student)) + Number(Boolean(access.guardian));
 }
 
-export type PasswordResetRequest = { id:string; requested_email:string; whatsapp_phone:string; status:"pending"|"code_ready"|"rejected"|"consumed"|"expired"; created_at:string };
+export type PasswordResetRequest = {
+  id: string;
+  requested_email: string;
+  whatsapp_phone: string;
+  status: "pending" | "code_ready" | "rejected" | "consumed" | "expired";
+  created_at: string;
+};
+
+async function requireCurrentPlatformAdmin() {
+  const sql = postgresSql();
+  const user = await getPostgresCurrentUser(sql);
+  if (!user || !(await getPostgresAccountAccess(sql, user.id)).isPlatformAdmin) return null;
+  return sql;
+}
 
 export async function listPendingPasswordResetRequests(): Promise<PasswordResetRequest[] | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: admin, error: adminError } = await supabase.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle();
-  if (adminError) throw new Error("تعذر التحقق من صلاحية إدارة المنصة");
-  if (!admin) return null;
-  const { data, error } = await supabase.from("password_reset_requests").select("id,requested_email,whatsapp_phone,status,created_at").eq("status","pending").order("created_at",{ascending:true});
-  if (error) throw new Error("تعذر تحميل طلبات استعادة كلمة المرور");
-  return data as PasswordResetRequest[];
+  const sql = await requireCurrentPlatformAdmin();
+  if (!sql) return null;
+  return (await sql.query<PasswordResetRequest>(
+    `select id, requested_email::text as requested_email, whatsapp_phone, status::text as status, created_at::text as created_at
+     from public.password_reset_requests where status = 'pending' order by created_at asc`,
+  )).rows;
 }
 
 export async function listPendingWorkspaceRequests(): Promise<WorkspaceRequest[] | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: admin, error: adminError } = await supabase.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle();
-  if (adminError) throw new Error("تعذر التحقق من صلاحية إدارة المنصة");
-  if (!admin) return null;
-  const { data, error } = await supabase.from("workspace_requests").select(workspaceRequestFields).eq("status","pending_approval").order("created_at",{ascending:true});
-  if (error) throw new Error("تعذر تحميل طلبات الحسابات");
-  return data as WorkspaceRequest[];
+  const sql = await requireCurrentPlatformAdmin();
+  if (!sql) return null;
+  return listPostgresWorkspaceRequests(sql);
 }
