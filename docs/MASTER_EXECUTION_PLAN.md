@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_PHASE: PHASE-01 — البنية البديلة وجاهزية Staging
-CURRENT_TASK: P01-01 — جرد وتأكيد حالة Coolify/VPS/PostgreSQL/TLS/domains/secrets
-NEXT_TASK: P01-02 — نشر Staging من GitHub عبر CI إلى Coolify وربط PostgreSQL الخاصة
+CURRENT_TASK: P01-02 — نشر Staging من GitHub عبر CI إلى Coolify وربط PostgreSQL الخاصة
+NEXT_TASK: P01-03 — تطبيق baseline نظيف وإثبات reproducible setup وhealth/readiness
 CURRENT_PRIORITY: P0 — Release blocker
 PRODUCT_FEATURE_FREEZE: ACTIVE حتى اكتمال PHASE-02
 SCHEMA_MODE: BUILD MODE — reset/reseed مصرح به؛ لا توجد production data contract
@@ -171,8 +171,8 @@ Security، accessibility، audit، observability، documentation والاختب�
 **Dependencies:** `G00`.
 **الهدف:** Staging قابلة لإعادة البناء والاستعادة والمراقبة على البنية المملوكة للمشروع.
 
-- [-] `P01-01` **CURRENT:** جرد وتأكيد الحالة الفعلية لـCoolify/VPS/PostgreSQL/TLS/domains/secrets دون افتراض صحة مستندات الهجرة القديمة.
-- [ ] `P01-02` نشر Staging من GitHub عبر CI إلى Coolify وربطها بقاعدة PostgreSQL خاصة غير مكشوفة للإنترنت.
+- [x] `P01-01` جرى جرد الحالة الفعلية: مشروع Coolify قائم ببيئتي production وstaging، مورد التطبيق مرتبط بـGitHub، PostgreSQL داخل شبكة Coolify الداخلية، المتغير التشغيلي المطلوب هو `DATABASE_URL` فقط، أُزيلت أسرار Supabase والمتغيرات المتقاعدة ودُوّرت القيم التي ظهرت في لقطة الإعداد، وفُصل GitHub عن Vercel. أكد المالك إعداد domains/TLS؛ يعاد Smoke الفعلي بعد نشر `P01-02`.
+- [-] `P01-02` **CURRENT:** نشر Staging من GitHub عبر CI إلى Coolify وربطها بقاعدة PostgreSQL خاصة غير مكشوفة للإنترنت.
 - [ ] `P01-03` تطبيق الـbaseline على قاعدة نظيفة وإثبات reproducible setup وhealth/readiness checks.
 - [ ] `P01-04` بناء canonical seed/import صغير لنموذجي center وindependent teacher بهويات/علاقات Synthetic فقط، مع reconciliation counts.
 - [ ] `P01-05` تحديد استراتيجية Private Storage عند أول Feature ملفات؛ إن لم توجد ملفات مطلوبة حاليًا تسجل `N/A until P03/P13` بدل إضافة مزود بلا حاجة.
@@ -550,6 +550,7 @@ Security، accessibility، audit، observability، documentation والاختب�
 | 2026-09-08 | `P00-04` | 42 unit + 56 PostgreSQL integration؛ lint/typecheck/migrations/secrets/build ناجحة؛ reset guards رفضت `saboraty` و`DATABASE_URL` وnon-loopback | `P00-05` اختبار يدوي شامل |
 | 2026-09-08 | `P00-05` | أُغلقت بقرار المالك دون دورة يدوية مستقلة؛ نُقلت مراجعة كل Persona وصلاحياتها ورحلاتها إلى `P02` و`P08` | `P00-06` إغلاق INFRA-011 |
 | 2026-09-09 | `P00-06` | Node.js `22.23.2`: `npm run check` نجح مع 45 unit tests وbuild؛ 56/56 integration على `saboraty_test`؛ Browser smoke أكد login/recovery وFresh Auth error وlocal bootstrap وأن `/auth/callback` أصبح 404؛ المسح أكد عدم وجود Supabase runtime/config/callback نشط، وفُصل GitHub repository عن مشروع Vercel القديم. شُغّلت Advisors قراءةً فقط على مشروع Supabase المتقاعد وأظهرت تحذيرات legacy SECURITY DEFINER/Auth وسياسات RLS وفهارس غير مستخدمة؛ لم تُجرَ تغييرات remote لأنها خارج Runtime الحالي. | `P01-01` جرد البنية الفعلية وجاهزية Staging |
+| 2026-09-09 | `P01-01` | صور Coolify وتأكيد المالك أثبتا بيئتي production/staging وموارد التطبيق/PostgreSQL الداخلية؛ نُظفت المتغيرات إلى `DATABASE_URL`، دُوّرت الأسرار المكشوفة، فُصل Vercel Git، وأُنشئ فرع `staging` الدائم. | `P01-02` نشر Staging عبر CI ثم Smoke فعلي |
 
 ## 12. قواعد صيانة الخطة
 

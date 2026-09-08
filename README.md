@@ -254,8 +254,22 @@ npm run test:integration
 
 راجع `CURRENT_TASK` داخل هذا الملف قبل أي شغل، ونفّذها وحدها ثم حدّث المؤشر بعد نجاح Acceptance وQuality Gate. لا تُنشأ خطة أو Backlog موازية. المراجع التخصصية مثل [`docs/ENGINEERING_PRINCIPLES.md`](docs/ENGINEERING_PRINCIPLES.md) و[`docs/RBAC_MATRIX.md`](docs/RBAC_MATRIX.md) تصف عقودًا هندسية ولا تحدد ترتيب العمل.
 
-التاسك الحالية هي `P00-06`: إغلاق INFRA-011 وتثبيت نقطة الاستئناف بعد هجرة PostgreSQL/Fresh Auth. تطوير Features المنتج متوقف حتى اكتمال مراحل البنية والصلاحيات `PHASE-00..PHASE-02`.
+التاسك الحالية هي `P01-02`: نشر Staging من GitHub عبر CI إلى Coolify وربطها بقاعدة PostgreSQL الخاصة. تطوير Features المنتج متوقف حتى اكتمال مراحل البنية والصلاحيات `PHASE-00..PHASE-02`.
 
 ## النشر
 
-المصدر على GitHub، التطبيق قابل للنشر كـNext.js runtime، والبيانات/Auth على PostgreSQL application-owned stack. قبل اعتبار النظام Production فعليًا يجب إنهاء Schema Freeze، فصل البيئات، وتأمين PostgreSQL private networking ومراجعة Security/Backup/Restore gates.
+المصدر على GitHub، والتطبيق يعمل كـNext.js runtime على Coolify، والبيانات/Auth على PostgreSQL application-owned stack. مسار الترقية ثابت:
+
+```text
+feature/* → staging → main
+                 ↓       ↓
+             Staging   Production
+```
+
+- Pull Requests الخاصة بالعمل تستهدف `staging`.
+- Push إلى `staging` يشغّل بوابة CI كاملة، ثم يستدعي Coolify Staging عبر `COOLIFY_STAGING_DEPLOY_WEBHOOK` عند نجاحها فقط.
+- الترقية إلى Production تتم عبر Pull Request من `staging` إلى `main`؛ Push إلى `main` يستدعي Coolify Production عبر `COOLIFY_DEPLOY_WEBHOOK` بعد نجاح CI.
+- مورد Staging يتصل بقاعدة Staging الداخلية فقط، ومورد Production يتصل بقاعدة Production الداخلية فقط؛ `DATABASE_URL` Server-only ولا تتبادل البيئتان البيانات أو الأسرار.
+- Vercel غير مرتبط بالمستودع ولا يدخل في Runtime أو مسار النشر.
+
+قبل اعتبار النظام Production فعليًا يجب إنهاء Schema Freeze وتأمين ومراجعة Security/Backup/Restore gates.

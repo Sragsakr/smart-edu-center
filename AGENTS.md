@@ -91,6 +91,14 @@ Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`.
 5. Run `npm run check` and visually verify changed screens at mobile and desktop sizes when execution access is available.
 6. Update README/docs/tests whenever behavior, routing, data model, seed accounts or setup changes.
 
+### Delivery branches
+
+- Feature and infrastructure branches open Pull Requests into `staging`, never directly into `main`.
+- A successful push to `staging` deploys only Coolify Staging after the full CI gate.
+- Production promotion uses a reviewed `staging` → `main` Pull Request; a successful push to `main` deploys only Coolify Production.
+- Staging and Production must use separate private PostgreSQL resources and environment values. Never reuse one environment's `DATABASE_URL` in the other.
+- Vercel is not part of the repository integration, runtime, preview, or deployment path.
+
 ## UI rules
 
 - Preserve RTL direction, Arabic copy, keyboard focus and semantic labels.

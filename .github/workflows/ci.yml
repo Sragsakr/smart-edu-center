@@ -7,6 +7,7 @@ on:
       - "docs/**"
   push:
     branches:
+      - staging
       - main
     paths-ignore:
       - "**/*.md"
@@ -79,6 +80,24 @@ jobs:
         run: npm run build
       - name: Client-secret scan
         run: npm run check:client-secrets
+
+  deploy-staging:
+    name: Deploy staging to Coolify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Coolify staging deployment
+        env:
+          COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_STAGING_DEPLOY_WEBHOOK }}
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+        run: |
+          test -n "$COOLIFY_DEPLOY_WEBHOOK"
+          test -n "$COOLIFY_API_TOKEN"
+          curl --fail --show-error --silent \
+            --request POST "$COOLIFY_DEPLOY_WEBHOOK" \
+            --header "Authorization: Bearer $COOLIFY_API_TOKEN"
 
   deploy-production:
     name: Deploy production to Coolify
