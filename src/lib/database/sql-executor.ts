@@ -13,3 +13,9 @@ export interface SqlExecutor {
     values?: readonly unknown[],
   ): Promise<SqlQueryResult<Row>>;
 }
+
+export interface TransactionalSqlExecutor extends SqlExecutor {
+  transaction<Result>(
+    operation: (sql: SqlExecutor) => Promise<Result>,
+  ): Promise<Result>;
+}

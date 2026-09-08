@@ -168,6 +168,18 @@ npm run dev
 
 ثم افتح `http://localhost:3000`.
 
+### تهيئة Platform Admin في PostgreSQL المحلي
+
+عند تشغيل التطبيق محليًا مع `DATA_BACKEND=postgres` وPostgreSQL على loopback، سجّل الدخول أولًا بحساب Supabase Auth المطلوب، ثم افتح:
+
+```text
+http://localhost:3000/platform-control/bootstrap
+```
+
+اضغط زر التهيئة مرة واحدة. المسار يأخذ UUID والبريد من جلسة Auth الحالية، ثم ينفذ داخل transaction واحدة upsert في `public.users` وإضافة idempotent في `public.platform_admins`. لا يكتب إلى Supabase ولا يحتاج إدخال أي UUID أو بريد أو سر يدويًا.
+
+هذه الأداة متاحة فقط عند اجتماع الشروط الثلاثة: `NODE_ENV=development`، و`DATA_BACKEND=postgres`، واتصال قاعدة البيانات يشير إلى `localhost` أو loopback IP. خارج ذلك يعيد المسار 404، كما تعيد عملية الكتابة نفسها فحص الشروط لمنع استدعائها مباشرة. احذف هذه الآلية بعد اكتمال Fresh Auth ومزامنة الهوية الدائمة.
+
 المتغيرات العامة الأساسية:
 
 ```env
