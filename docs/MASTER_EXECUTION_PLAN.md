@@ -6,8 +6,8 @@
 
 ```text
 CURRENT_PHASE: PHASE-01 — البنية البديلة وجاهزية Staging
-CURRENT_TASK: P01-03 — تطبيق baseline نظيف وإثبات reproducible setup وhealth/readiness
-NEXT_TASK: P01-04 — بناء canonical seed/import لنموذجي center وindependent teacher
+CURRENT_TASK: P01-02 — فصل PostgreSQL بين Staging وProduction وإغلاق نشر Staging
+NEXT_TASK: P01-03 — تطبيق baseline نظيف وإثبات reproducible setup وhealth/readiness
 CURRENT_PRIORITY: P0 — Release blocker
 PRODUCT_FEATURE_FREEZE: ACTIVE حتى اكتمال PHASE-02
 SCHEMA_MODE: BUILD MODE — reset/reseed مصرح به؛ لا توجد production data contract
@@ -172,8 +172,8 @@ Security، accessibility، audit، observability، documentation والاختب�
 **الهدف:** Staging قابلة لإعادة البناء والاستعادة والمراقبة على البنية المملوكة للمشروع.
 
 - [x] `P01-01` جرى جرد الحالة الفعلية: مشروع Coolify قائم ببيئتي production وstaging، مورد التطبيق مرتبط بـGitHub، PostgreSQL داخل شبكة Coolify الداخلية، المتغير التشغيلي المطلوب هو `DATABASE_URL` فقط، أُزيلت أسرار Supabase والمتغيرات المتقاعدة ودُوّرت القيم التي ظهرت في لقطة الإعداد، وفُصل GitHub عن Vercel. أكد المالك إعداد domains/TLS؛ يعاد Smoke الفعلي بعد نشر `P01-02`.
-- [x] `P01-02` فُصل مسار التسليم إلى `feature/* → staging → main`: نجح CI ثم نشر Coolify Staging فقط، واتصل التطبيق بقاعدة PostgreSQL الداخلية، وعمل `https://staging.saboraty.online` بشهادة Let’s Encrypt وتحويل HTTP إلى HTTPS، بينما بقي Production دون تغيير.
-- [-] `P01-03` **CURRENT:** تطبيق الـbaseline على قاعدة نظيفة وإثبات reproducible setup وhealth/readiness checks.
+- [-] `P01-02` **CURRENT:** فُصل مسار التسليم إلى `feature/* → staging → main` ونجح نشر Coolify Staging عبر HTTPS، لكن أعيد فتح التاسك بعد اكتشاف أن Staging وProduction يستخدمان `DATABASE_URL` نفسها. قرار المالك: تبقى القاعدة الحالية لـStaging، وتُنشأ PostgreSQL Resource جديدة مستقلة لـProduction قبل إغلاق التاسك.
+- [ ] `P01-03` تطبيق الـbaseline على قاعدة نظيفة وإثبات reproducible setup وhealth/readiness checks.
 - [ ] `P01-04` بناء canonical seed/import صغير لنموذجي center وindependent teacher بهويات/علاقات Synthetic فقط، مع reconciliation counts.
 - [ ] `P01-05` تحديد استراتيجية Private Storage عند أول Feature ملفات؛ إن لم توجد ملفات مطلوبة حاليًا تسجل `N/A until P03/P13` بدل إضافة مزود بلا حاجة.
 - [ ] `P01-06` Backup آلي مشفر Off-server لPostgreSQL وملفات التطبيق، مع retention وchecksums وفشل observable.
@@ -551,7 +551,7 @@ Security، accessibility، audit، observability، documentation والاختب�
 | 2026-09-08 | `P00-05` | أُغلقت بقرار المالك دون دورة يدوية مستقلة؛ نُقلت مراجعة كل Persona وصلاحياتها ورحلاتها إلى `P02` و`P08` | `P00-06` إغلاق INFRA-011 |
 | 2026-09-09 | `P00-06` | Node.js `22.23.2`: `npm run check` نجح مع 45 unit tests وbuild؛ 56/56 integration على `saboraty_test`؛ Browser smoke أكد login/recovery وFresh Auth error وlocal bootstrap وأن `/auth/callback` أصبح 404؛ المسح أكد عدم وجود Supabase runtime/config/callback نشط، وفُصل GitHub repository عن مشروع Vercel القديم. شُغّلت Advisors قراءةً فقط على مشروع Supabase المتقاعد وأظهرت تحذيرات legacy SECURITY DEFINER/Auth وسياسات RLS وفهارس غير مستخدمة؛ لم تُجرَ تغييرات remote لأنها خارج Runtime الحالي. | `P01-01` جرد البنية الفعلية وجاهزية Staging |
 | 2026-09-09 | `P01-01` | صور Coolify وتأكيد المالك أثبتا بيئتي production/staging وموارد التطبيق/PostgreSQL الداخلية؛ نُظفت المتغيرات إلى `DATABASE_URL`، دُوّرت الأسرار المكشوفة، فُصل Vercel Git، وأُنشئ فرع `staging` الدائم. | `P01-02` نشر Staging عبر CI ثم Smoke فعلي |
-| 2026-09-09 | `P01-02` | PRs `#5/#6` اجتازا CI؛ Push `8e00eef` شغّل Verify ثم Coolify Staging فقط. `https://staging.saboraty.online/api/health` أعاد `200` مع PostgreSQL reachable، HTTP يتحول إلى HTTPS، وشهادة Let’s Encrypt صالحة؛ Browser smoke لصفحة الدخول بلا Console errors، وProduction بقي على نسخته السابقة. | `P01-03` تطبيق baseline وreadiness على Staging |
+| 2026-09-09 | `P01-02` | PRs `#5/#6` اجتازا CI؛ Push `8e00eef` شغّل Verify ثم Coolify Staging فقط، ونجح HTTPS/health/browser smoke. أعيد فتح التاسك فور اكتشاف أن Staging وProduction تشتركان في `DATABASE_URL`؛ القرار هو إبقاء القاعدة الحالية لـStaging وإنشاء PostgreSQL Production مستقلة. | يبقى `P01-02` حتى إثبات فصل القاعدتين |
 
 ## 12. قواعد صيانة الخطة
 

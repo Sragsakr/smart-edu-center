@@ -254,7 +254,7 @@ npm run test:integration
 
 راجع `CURRENT_TASK` داخل هذا الملف قبل أي شغل، ونفّذها وحدها ثم حدّث المؤشر بعد نجاح Acceptance وQuality Gate. لا تُنشأ خطة أو Backlog موازية. المراجع التخصصية مثل [`docs/ENGINEERING_PRINCIPLES.md`](docs/ENGINEERING_PRINCIPLES.md) و[`docs/RBAC_MATRIX.md`](docs/RBAC_MATRIX.md) تصف عقودًا هندسية ولا تحدد ترتيب العمل.
 
-التاسك الحالية هي `P01-03`: تطبيق الـbaseline على قاعدة Staging النظيفة وإثبات reproducible setup وhealth/readiness checks. تطوير Features المنتج متوقف حتى اكتمال مراحل البنية والصلاحيات `PHASE-00..PHASE-02`.
+التاسك الحالية هي `P01-02`: إكمال فصل PostgreSQL بين Staging وProduction؛ اكتُشف أن التطبيقين يستخدمان `DATABASE_URL` نفسها، فتبقى القاعدة الحالية لـStaging وتُنشأ قاعدة Production مستقلة قبل الانتقال إلى `P01-03`. تطوير Features المنتج متوقف حتى اكتمال مراحل البنية والصلاحيات `PHASE-00..PHASE-02`.
 
 ## النشر
 
