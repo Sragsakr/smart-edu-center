@@ -143,6 +143,7 @@ Anything that presents the product to a user (landing page, pricing) must label 
 - Keep privileged environment access inside server-only modules.
 - Use signed/private URLs for protected learning files.
 - Record sensitive financial, attendance and role changes in audit logs.
+- Authentication paths are rate limited in PostgreSQL (`private.auth_attempts`), never in an added cache or Redis. Keep two limits: a tight per-account limit and a wider per-source limit, so one shared network cannot lock out everyone. The success path must clear its own counters, and no raw identifier may be stored — only a sha256 bucket key. `x-forwarded-for` is untrusted input and must never be the only bucket.
 - New exposed tables require RLS and positive/negative isolation tests.
 - The academic catalog keeps five separate concepts: `stages` → `grades`, `subjects`, `teachers` (a tenant record that can exist without a login), `courses`, `course_teachers` (N:N assignment), `course_offerings` (the sellable unit), `cohorts` (delivery, referencing an offering), `enrollments` (commercial, on the offering) and `cohort_members` (delivery, on the cohort). A cohort must never carry a subject or a teacher column.
 - `students.user_id` and `guardians.user_id` are unique per tenant (`unique(tenant_id, user_id)`), so one identity can hold student or guardian relationships in more than one tenant.

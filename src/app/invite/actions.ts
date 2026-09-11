@@ -2,10 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { acceptPostgresInvitation, registerAndAcceptPostgresInvitation } from "@/lib/auth/postgres-team";
 import { authenticatePostgresUser, clearPostgresSession, createPostgresSession } from "@/lib/auth/postgres-auth";
 import { withSessionUser } from "@/lib/auth/session-context";
+import { buildRateLimitRules, clientAddress, consumeRateLimit, describeRetryAfter } from "@/lib/security/rate-limit";
 import { applicationSql } from "@/lib/database/application-sql";
 import { getAuthAccountState, getInvitationPreview } from "@/lib/invitations";
 
@@ -33,6 +35,20 @@ export async function acceptNewInvitation(formData: FormData) {
   if (passwordError) inviteError(token, passwordError);
 
   const invitation = await loadPendingInvitation(token);
+
+  // حدّ على قبول الدعوات: الرابط حامل للسر، ومحاولاته المتكررة تخمين.
+  const decision = await consumeRateLimit(applicationSql(), {
+    scope: "invite_accept",
+    rules: buildRateLimitRules({
+      scope: "invite_accept",
+      account: invitation.email,
+      address: clientAddress(await headers()),
+    }),
+  });
+  if (!decision.allowed) {
+    inviteError(token, `${decision.message} (${describeRetryAfter(decision.retryAfterSeconds)})`);
+  }
+
   if (invitation.accountExists || (await getAuthAccountState(invitation.email)) === "registered") {
     inviteError(token, "هذا البريد لديه حساب بالفعل؛ استخدم تسجيل الدخول لإكمال الدعوة");
   }

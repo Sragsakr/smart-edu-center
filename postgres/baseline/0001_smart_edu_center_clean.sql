@@ -676,6 +676,82 @@ language sql stable as $$
 $$;
 
 -- ---------------------------------------------------------------------------
+-- تحديد معدّل المحاولات لمسارات المصادقة.
+--
+-- الجدول في مخطط `private` عمدًا: لا يُمنح للتطبيق أي وصول مباشر له، والوحيد
+-- المتاح هو الدوال أدناه. والمخزَّن مجرد مفاتيح مُبصَّمة (sha256) بلا أي بريد أو
+-- IP خام، فلا يحتاج الجدول سياسات RLS ولا يحمل بيانات شخصية.
+-- ---------------------------------------------------------------------------
+
+create table private.auth_attempts (
+  id bigint generated always as identity primary key,
+  bucket_key text not null check (bucket_key ~ '^[0-9a-f]{64}$'),
+  scope text not null check (char_length(scope) between 3 and 40),
+  occurred_at timestamptz not null default now()
+);
+
+create index auth_attempts_bucket_idx on private.auth_attempts(bucket_key, occurred_at desc);
+create index auth_attempts_occurred_idx on private.auth_attempts(occurred_at);
+
+/**
+ * يسجّل محاولة ويقرر في نداء واحد.
+ *
+ * التسجيل والعدّ داخل نداء واحد يمنع سباق «كل الطلبات ترى العدّ ما قبل الزيادة».
+ * وقفل استشاري لكل مفتاح يُسلسل المحاولات المتزامنة على نفس المفتاح فقط، فلا
+ * يتأثر أي مفتاح آخر.
+ *
+ * يعيد عدد المحاولات داخل النافذة، وهل يُسمح بالمتابعة، وكم ثانية يجب الانتظار
+ * قبل المحاولة التالية عند الرفض.
+ */
+create or replace function private.record_auth_attempt(
+  p_bucket_key text,
+  p_scope text,
+  p_window_seconds integer,
+  p_limit integer
+) returns table (attempts integer, allowed boolean, retry_after_seconds integer)
+language plpgsql security definer set search_path = private, pg_temp as $$
+declare
+  v_attempts integer;
+  v_oldest timestamptz;
+begin
+  if p_window_seconds < 1 or p_limit < 1 then
+    raise exception 'rate limit window and limit must be positive';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_bucket_key));
+
+  insert into private.auth_attempts (bucket_key, scope) values (p_bucket_key, p_scope);
+
+  select count(*)::integer, min(occurred_at)
+    into v_attempts, v_oldest
+    from private.auth_attempts
+   where bucket_key = p_bucket_key
+     and occurred_at > now() - make_interval(secs => p_window_seconds);
+
+  -- التقليم: صفوف أقدم من يوم كامل لا تفيد أي نافذة، وإبقاؤها يضخّم الجدول فقط.
+  delete from private.auth_attempts where occurred_at < now() - interval '1 day';
+
+  attempts := v_attempts;
+  allowed := v_attempts <= p_limit;
+  retry_after_seconds := case
+    when v_attempts <= p_limit then 0
+    else greatest(1, ceil(extract(epoch from (v_oldest + make_interval(secs => p_window_seconds) - now())))::integer)
+  end;
+  return next;
+end $$;
+
+/** يمسح محاولات مفتاح بعد نجاح العملية، فلا يُعاقَب مستخدم نجح دخوله. */
+create or replace function private.clear_auth_attempts(p_bucket_key text)
+returns void
+language sql security definer set search_path = private, pg_temp as $$
+  delete from private.auth_attempts where bucket_key = p_bucket_key
+$$;
+
+revoke all on table private.auth_attempts from public;
+revoke all on function private.record_auth_attempt(text, text, integer, integer) from public;
+revoke all on function private.clear_auth_attempts(text) from public;
+
+-- ---------------------------------------------------------------------------
 -- دوال bootstrap محدودة: تعمل بصلاحية المالك لعمليتين لا يمكن التعبير عنهما
 -- بسياسة عادية، لأن كلتيهما تحدث قبل وجود هوية معروفة.
 -- كلتاهما `security definer` مع `search_path` مثبّت، ومُسحوبة من public.

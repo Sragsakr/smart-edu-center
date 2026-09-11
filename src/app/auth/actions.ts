@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
@@ -12,15 +13,48 @@ import {
 import { withSessionUser } from "@/lib/auth/session-context";
 import { authSubmissionSchema, firstValidationMessage } from "@/lib/auth/validation";
 import { applicationSql } from "@/lib/database/application-sql";
+import {
+  buildRateLimitRules,
+  clearRateLimit,
+  clientAddress,
+  consumeRateLimit,
+  describeRetryAfter,
+  type RateLimitScope,
+} from "@/lib/security/rate-limit";
 
 function loginError(message: string): never { redirect(`/login?error=${encodeURIComponent(message)}`); }
+
+/**
+ * يفرض حدّ المحاولات على مسار مصادقة ويُرجع رسالة الحجب إن وُجدت.
+ *
+ * يُنادى **قبل** أي فحص لكلمة المرور، فلا يستهلك تخمينَ الأسرار دورة تحقق كامل.
+ * ويجمع حدّ الحساب مع حدّ المصدر: تزوير ترويسة العنوان يتجاوز الثاني فقط.
+ */
+async function rateLimitBlock(scope: RateLimitScope, email: string): Promise<string | null> {
+  const requestHeaders = await headers();
+  const decision = await consumeRateLimit(applicationSql(), {
+    scope,
+    rules: buildRateLimitRules({ scope, account: email, address: clientAddress(requestHeaders) }),
+  });
+  if (decision.allowed) return null;
+  return `${decision.message} (${describeRetryAfter(decision.retryAfterSeconds)})`;
+}
 function signupError(message: string): never { redirect(`/signup?error=${encodeURIComponent(message)}`); }
 function platformLoginError(message: string): never { redirect(`/platform-control/login?error=${encodeURIComponent(message)}`); }
 
 async function signInPostgresAccount(email: string, password: string) {
+  const blocked = await rateLimitBlock("login", email);
+  if (blocked) loginError(blocked);
+
   const sql = applicationSql();
   const user = await authenticatePostgresUser(sql, email, password);
   if (!user) loginError("بيانات الدخول غير صحيحة");
+
+  // النجاح يمحو المحاولات، فلا يُعاقَب من دخل بنجاح بسبب محاولات سابقة.
+  await clearRateLimit(sql, {
+    scope: "login",
+    rules: buildRateLimitRules({ scope: "login", account: email, address: clientAddress(await headers()) }),
+  });
 
   // بعد التحقق من كلمة المرور تُفتح جلسة ثم تُقرأ العلاقات داخل سياق الهوية،
   // لأن جداول العلاقات خاضعة لسياسات RLS ولا تُقرأ بلا سياق.
@@ -71,6 +105,10 @@ export async function createAccount(formData: FormData) {
   const parsed = authSubmissionSchema.safeParse({ email: formData.get("email"), password, intent: "sign-up" });
   if (!parsed.success) signupError(firstValidationMessage(parsed.error));
 
+  // إنشاء الحسابات بلا حدّ يسمح بإغراق المستودع بحسابات وهمية.
+  const blocked = await rateLimitBlock("signup", parsed.data.email);
+  if (blocked) signupError(blocked);
+
   const sql = applicationSql();
   try {
     const user = await registerPostgresUser(sql, parsed.data.email, parsed.data.password);
@@ -86,6 +124,10 @@ export async function authenticatePlatformAdmin(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   if (!email || password.length < 8) platformLoginError("أدخل بيانات الدخول الصحيحة");
+
+  // مسار المنصة أضيق: حسابه أعلى قيمة، وعدد المشرفين محدود فالتخمين أقل ضجيجًا.
+  const blocked = await rateLimitBlock("platform_login", email);
+  if (blocked) platformLoginError(blocked);
 
   const sql = applicationSql();
   const user = await authenticatePostgresUser(sql, email, password);
