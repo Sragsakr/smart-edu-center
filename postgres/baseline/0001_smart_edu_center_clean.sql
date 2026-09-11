@@ -331,6 +331,9 @@ create table public.students (
   active boolean not null default true,
   joined_on date not null default current_date,
   created_at timestamptz not null default now(),
+  -- سجل الطالب قابل للتعديل مثل سجل ولي الأمر، فوجود `updated_at` هنا شرط
+  -- لاتساق المخطط وتتبّع آخر تغيير على السجل.
+  updated_at timestamptz not null default now(),
   unique (tenant_id, id),
   unique (tenant_id, code),
   unique (tenant_id, user_id),
@@ -676,6 +679,69 @@ language sql stable as $$
 $$;
 
 -- ---------------------------------------------------------------------------
+-- ربط هوية بحساب طالب أو ولي أمر — مسار موثوق لا كتابة مباشرة.
+--
+-- القاعدة الأمنية: العمود `students.user_id` و`guardians.user_id` يمثّل «من يدخل
+-- البوابة باسم هذا الشخص». كتابته بلا تحقق تعني انتحال صفة. لذلك لا يُكتب إلا
+-- عبر قبول دعوة تحمل ثلاثة قيود معًا: حيازة الرمز، ومطابقة البريد الموثّق للبريد
+-- المدعو، وأن يكون السجل غير مربوط أصلًا.
+-- ---------------------------------------------------------------------------
+
+create type public.portal_subject as enum ('student','guardian');
+create type public.portal_invitation_status as enum ('pending','accepted','revoked','expired');
+
+create table public.portal_invitations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  subject_type public.portal_subject not null,
+  -- عمودان لا عمود واحد: المفتاح الأجنبي لا يشير إلى جدولين، ففصلهما يحفظ سلامة
+  -- المرجعية لكل نوع بدل إسقاط القيد عند الدعم المتعدد. والفحص يضمن أن العمود
+  -- المملوء يطابق `subject_type` بالضبط.
+  student_id uuid,
+  guardian_id uuid,
+  invitee_email citext not null,
+  token_hash text not null unique,
+  status public.portal_invitation_status not null default 'pending',
+  created_by uuid not null,
+  accepted_by uuid references public.app_users(id) on delete set null,
+  expires_at timestamptz not null,
+  accepted_at timestamptz,
+  revoked_at timestamptz,
+  last_sent_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (tenant_id, id),
+  foreign key (tenant_id, created_by)
+    references public.memberships(tenant_id, user_id) on delete restrict,
+  check (expires_at > created_at),
+  check (invitee_email::text ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'),
+  check (
+    (status = 'pending' and accepted_by is null and accepted_at is null and revoked_at is null)
+    or (status = 'accepted' and accepted_by is not null and accepted_at is not null and revoked_at is null)
+    or (status = 'revoked' and accepted_at is null and revoked_at is not null)
+    or (status = 'expired' and accepted_at is null)
+  ),
+  check (
+    (subject_type = 'student' and student_id is not null and guardian_id is null)
+    or (subject_type = 'guardian' and guardian_id is not null and student_id is null)
+  ),
+  -- لا قيد فريد على العمودين منفردين: PostgreSQL يعدّ NULL قيمًا متمايزة، فعمود
+  -- النوع الآخر الفارغ كان سيسمح بدعوتين متزامنتين لنفس السجل. الفهرس التعبيري
+  -- أدناه يجمع العمودين في مفتاح واحد فيمنع التكرار فعلًا.
+  foreign key (tenant_id, student_id)
+    references public.students(tenant_id, id) on delete cascade,
+  foreign key (tenant_id, guardian_id)
+    references public.guardians(tenant_id, id) on delete cascade
+);
+
+-- دعوة معلّقة واحدة لكل سجل: المفتاح يجمع العمودين الفعليين في تعبير واحد.
+create unique index portal_invitations_subject_unique_idx
+  on public.portal_invitations(tenant_id, coalesce(student_id, guardian_id));
+
+create index portal_invitations_lookup_idx on public.portal_invitations(invitee_email, status, expires_at);
+create index portal_invitations_tenant_idx on public.portal_invitations(tenant_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
 -- تحديد معدّل المحاولات لمسارات المصادقة.
 --
 -- الجدول في مخطط `private` عمدًا: لا يُمنح للتطبيق أي وصول مباشر له، والوحيد
@@ -786,6 +852,29 @@ create or replace function private.workspace_request_owner(p_request_id uuid) re
 language sql stable security definer set search_path = public, pg_temp as $$
   select user_id from public.workspace_requests where id = p_request_id limit 1
 $$;
+
+-- تُرجع الدعوة من بصمة رمزها بلا سياق مساحة، لأن قبول الدعوة يسبق معرفة المساحة.
+-- لا تكشف شيئًا يتجاوز صف الدعوة المطابق للرمز.
+create or replace function private.portal_invitation_by_token(p_token_digest text)
+returns table (
+  id uuid,
+  tenant_id uuid,
+  subject_type public.portal_subject,
+  student_id uuid,
+  guardian_id uuid,
+  invitee_email citext,
+  status public.portal_invitation_status,
+  expires_at timestamptz
+)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select i.id, i.tenant_id, i.subject_type, i.student_id, i.guardian_id,
+         i.invitee_email, i.status, i.expires_at
+  from public.portal_invitations i
+  where i.token_hash = p_token_digest
+  limit 1
+$$;
+
+revoke all on function private.portal_invitation_by_token(text) from public;
 
 revoke all on function private.session_user_id(text) from public;
 revoke all on function private.login_lookup(citext) from public;
@@ -931,6 +1020,25 @@ create policy password_reset_platform_update on public.password_reset_requests
   with check (private.has_platform_scope() or user_id = private.current_app_user_id());
 create policy password_reset_platform_delete on public.password_reset_requests
   for delete using (private.has_platform_scope());
+
+-- `portal_invitations`: مديرو المساحة يديرون دعوات بوابتها، والمدعو يقرأ دعوته.
+alter table public.portal_invitations enable row level security;
+alter table public.portal_invitations force row level security;
+
+create policy portal_invitations_tenant_read on public.portal_invitations
+  for select using (private.has_platform_scope() or tenant_id = private.current_tenant_id());
+-- المدعو يقرأ دعوته ببصمة الرمز قبل أن يُعرف أي شيء عنه — مسار bootstrap مثل الجلسة.
+create policy portal_invitations_token_read on public.portal_invitations
+  for select using (
+    token_hash = nullif(current_setting('app.portal_invite_digest', true), '')
+  );
+create policy portal_invitations_tenant_insert on public.portal_invitations
+  for insert with check (private.has_platform_scope() or tenant_id = private.current_tenant_id());
+create policy portal_invitations_tenant_update on public.portal_invitations
+  for update using (private.has_platform_scope() or tenant_id = private.current_tenant_id())
+  with check (private.has_platform_scope() or tenant_id = private.current_tenant_id());
+create policy portal_invitations_tenant_delete on public.portal_invitations
+  for delete using (private.has_platform_scope() or tenant_id = private.current_tenant_id());
 
 -- `platform_audit_logs`: سجل المنصة كله لنطاق المنصة فقط.
 alter table public.platform_audit_logs enable row level security;

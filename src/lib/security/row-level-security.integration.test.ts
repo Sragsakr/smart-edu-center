@@ -3,7 +3,7 @@ import { Client } from "pg";
 
 import { appRoleUrl, TEST_APP_ROLE_PASSWORD } from "../../../postgres/scripts/reset-test-database.mjs";
 import { truncateAllTenantData, testSqlExecutor } from "@/test/postgres/test-database";
-import { addMembership, createBranch, createTenantWithOwner, createUser } from "@/test/postgres/fixtures";
+import { addMembership, createBranch, createGuardian, createStudent, createTenantWithOwner, createUser } from "@/test/postgres/fixtures";
 
 /**
  * إلزام RLS فعليًا.
@@ -234,6 +234,67 @@ describe("RLS is enforced for the runtime role", () => {
     } finally {
       await client.end();
     }
+  });
+
+  it("hides portal invitations from members of other workspaces", async () => {
+    const a = await createTenantWithOwner(ownerSql, { tenantName: "Portal A" });
+    const b = await createTenantWithOwner(ownerSql, { tenantName: "Portal B" });
+    const branchA = await createBranch(ownerSql, a.tenant.id, "A Branch");
+    const branchB = await createBranch(ownerSql, b.tenant.id, "B Branch");
+    const studentA = await createStudent(ownerSql, a.tenant.id, branchA.id, { fullName: "A Student" });
+    const studentB = await createStudent(ownerSql, b.tenant.id, branchB.id, { fullName: "B Student" });
+
+    for (const [tenantId, studentId, ownerId, email] of [
+      [a.tenant.id, studentA.id, a.owner.id, "a.invite@example.test"],
+      [b.tenant.id, studentB.id, b.owner.id, "b.invite@example.test"],
+    ] as const) {
+      await ownerSql.query(
+        `insert into public.portal_invitations
+           (tenant_id, subject_type, student_id, invitee_email, token_hash, created_by, expires_at)
+         values ($1, 'student', $2, $3, encode(gen_random_bytes(32), 'hex'), $4, now() + interval '1 day')`,
+        [tenantId, studentId, email, ownerId],
+      );
+    }
+
+    expect(await countAs("portal_invitations", {})).toBe(0);
+    expect(await countAs("portal_invitations", { tenantId: a.tenant.id })).toBe(1);
+
+    const visible = await asAppRole({ tenantId: a.tenant.id }, (client) =>
+      client.query<{ invitee_email: string }>("select invitee_email::text as invitee_email from public.portal_invitations"),
+    );
+    expect(visible.rows.map((row) => row.invitee_email)).toEqual(["a.invite@example.test"]);
+  });
+
+  it("rejects a portal invitation that would point at another workspace's student", async () => {
+    const a = await createTenantWithOwner(ownerSql, { tenantName: "Portal X" });
+    const b = await createTenantWithOwner(ownerSql, { tenantName: "Portal Y" });
+    const branchB = await createBranch(ownerSql, b.tenant.id, "Y Branch");
+    const studentB = await createStudent(ownerSql, b.tenant.id, branchB.id, { fullName: "Y Student" });
+
+    await expect(
+      ownerSql.query(
+        `insert into public.portal_invitations
+           (tenant_id, subject_type, student_id, invitee_email, token_hash, created_by, expires_at)
+         values ($1, 'student', $2, 'x@example.test', encode(gen_random_bytes(32), 'hex'), $3, now() + interval '1 day')`,
+        [a.tenant.id, studentB.id, a.owner.id],
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("refuses a portal invitation whose type does not match the filled column", async () => {
+    const a = await createTenantWithOwner(ownerSql, { tenantName: "Portal Z" });
+    const branch = await createBranch(ownerSql, a.tenant.id, "Z Branch");
+    const guardian = await createGuardian(ownerSql, a.tenant.id, { fullName: "Z Guardian" });
+
+    await expect(
+      ownerSql.query(
+        `insert into public.portal_invitations
+           (tenant_id, subject_type, guardian_id, invitee_email, token_hash, created_by, expires_at)
+         values ($1, 'student', $2, 'x@example.test', encode(gen_random_bytes(32), 'hex'), $3, now() + interval '1 day')`,
+        [a.tenant.id, guardian.id, a.owner.id],
+      ),
+    ).rejects.toThrow();
+    expect(branch.id).toBeTruthy();
   });
 
   it("exposes the capability catalog to any identity because it holds no business data", async () => {

@@ -133,6 +133,8 @@ Anything that presents the product to a user (landing page, pricing) must label 
 - Prefer a modular monolith. Do not add Redis, queues, microservices, payment or messaging vendors until a demonstrated requirement needs them.
 - `/platform-admin` is the SaaS control plane only. Platform Admin operational control does not imply permanent unrestricted reads of tenant student data; future support access must be time-bound and audited.
 - Tenant staff accounts use memberships/roles. Student and guardian portal identities use verified `user_id` links and RLS; they must not be inserted into `memberships` just to make reads easy.
+- `students.user_id` and `guardians.user_id` are written **only** through the trusted portal-claim flow (`portal_invitations`): token possession **and** a verified-email match **and** an unclaimed record, all three together. Never write that column from a generic CRUD path — it decides who can enter a portal under that person's name.
+- `SELECT ... FOR UPDATE` applies the **UPDATE** policy, not just SELECT. Any locking read must therefore run inside a tenant context; a token-only path cannot lock a row.
 - Parent access is relationship-scoped: guardian RLS may read only students linked through `student_guardians` and only data belonging to those children.
 - LMS enablement must eventually come from an explicit product entitlement, not tenant type or user role.
 
