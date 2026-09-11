@@ -215,6 +215,8 @@ Effective Access = Entitlement(tenant, capability)   ← PRODUCT_VISION + tenant
 
 **تمييز إلزامي في التسمية:** مفاتيح RBAC هنا (`students.read`, `attendance.mark`…) تخص **الأدوار**، ومفاتيح الـEntitlement في [`PRODUCT_VISION.md`](PRODUCT_VISION.md) §3.1 (`ops.core`, `platform.exams`, `learning.video`…) تخص **المساحة**. لا تُدمج في فضاء تسمية واحد، ولا يُستخدم مفتاح RBAC كقرار تجاري.
 
+**ولا يجوز تقاسم البادئة بين الفضاءين.** قائمة بادئات RBAC محجوزة على مفاتيح الاستحقاق، ويفشل تحميل الكتالوج تلقائيًا عند أي تقاطع (`assertNoRbacNamespaceCollision`). السبب أن `payments.read` (صلاحية) بجوار `payments.online` (استحقاق) يسهّل الخطأ عند إضافة قدرة جديدة. ولذلك سُمّي الـadd-on `ops.online_payments` لا `payments.online`، و`ops.extra_branches` لا `branches.extra`.
+
 ## 9. قرارات تنفيذ IAM-005-02
 
 عند تحويل هذه الوثيقة إلى RLS Policies:
@@ -222,7 +224,8 @@ Effective Access = Entitlement(tenant, capability)   ← PRODUCT_VISION + tenant
 - يمنع استخدام Policy عامة من نوع `any active member can update` على Resources متعددة.
 - لكل جدول Policies منفصلة على `SELECT / INSERT / UPDATE / DELETE` حسب هذه المصفوفة.
 - Helpers داخل `private` يمكن استخدامها لتقليل التكرار، بشرط أن تكون Tenant-scoped ولا تسبب RLS recursion.
-- Teacher-scoped helpers يجب أن تتحقق من Assignment الفعلي عبر `course_offerings.teacher_id` / `course_teachers`، لا من عمود على المجموعة.
+- Teacher-scoped helpers يجب أن تتحقق من Assignment الفعلي عبر `course_offerings.teacher_id` / `course_teachers`، لا من عمود على المجموعة. التنفيذ في `src/lib/authorization/resource-scope.ts`.
+- **مساران لا مسار واحد للفحص:** القدرة غير المقيّدة تُفرض بـ`requireTenantCapability`، والقدرة المقيّدة (`scoped`) تُفرض بـ`requireTenantCapabilityWithScope` مع فاحص المورد. استخدام المسار الأول على قدرة مقيّدة يُرفض دائمًا برسالة نطاق — وهو السلوك الصحيح، لأنه يمنع تمرير قدرة بلا تحقق مورد. ومن يحتاج السياق قبل تحديد المورد يستخدم `getTenantAuthorizationContext`.
 - Finance writes يجب أن تقيد `accountant`/`owner`/`admin`، مع الاستثناء التشغيلي المحدد للـReceptionist.
 - اختبارات `IAM-005-05` يجب أن تغطي كل Role × Resource × Action، بما فيها Negative tests وCross-tenant tests.
 

@@ -184,11 +184,13 @@ Effective Access = Entitlement(tenant, capability)   ← تجاري: هل للم
 | `comms.sms` | addon | — | قناة SMS |
 | `storage.extra` | addon | — | مساحة تخزين إضافية |
 | `reporting.advanced` | addon | — | تقارير متقدمة |
-| `branches.extra` | addon | — | فروع إضافية |
+| `ops.extra_branches` | addon | — | فروع إضافية |
 | `staff.extra` | addon | — | مستخدمون/موظفون إضافيون |
-| `payments.online` | addon | — | بوابات دفع مستقبلية |
+| `ops.online_payments` | addon | — | بوابات دفع مستقبلية |
 
 مفاتيح المستوى (Level-included) تُشتق في دالة واحدة `defaultEntitlementsForLevel(level)` — لا قوائم مكررة في الكود.
+
+**قاعدة فضاءَي التسمية:** مفاتيح RBAC (`students.read`) ومفاتيح الاستحقاق (`ops.core`) فضاأن منفصلان، ويُمنع تقاسم البادئة بينهما. أي مفتاح استحقاق يبدأ ببادئة RBAC محجوزة (`payments.`، `branches.`…) يفشل تحميل الكتالوج. لهذا سُمّي الـadd-on `ops.online_payments` لا `payments.online`.
 
 ### 3.2 شكل منح الـEntitlement
 

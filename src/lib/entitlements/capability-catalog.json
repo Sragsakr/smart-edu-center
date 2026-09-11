@@ -176,7 +176,7 @@
     "sortOrder": 460
   },
   {
-    "key": "branches.extra",
+    "key": "ops.extra_branches",
     "kind": "addon",
     "includedFromLevel": null,
     "titleAr": "فروع إضافية",
@@ -192,7 +192,7 @@
     "sortOrder": 480
   },
   {
-    "key": "payments.online",
+    "key": "ops.online_payments",
     "kind": "addon",
     "includedFromLevel": null,
     "titleAr": "الدفع الإلكتروني",

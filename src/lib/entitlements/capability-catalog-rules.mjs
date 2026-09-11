@@ -7,6 +7,27 @@
 
 const KEY_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
+/**
+ * بادئات مسار RBAC (Resource × Action) — ممنوعة على مفاتيح الاستحقاق.
+ *
+ * الفضاءان مختلفان بطبيعتهما: مفتاح RBAC يصف فعلاً لدور، ومفتاح الاستحقاق يصف
+ * قدرة مشتراة. تقاسم بادئة واحدة يجعل `payments.read` (صلاحية) و`payments.online`
+ * (استحقاق) متجاورين بصريًا، وهو ما يسهّل الخطأ عند إضافة قدرة جديدة.
+ * لذلك يُرفض أي مفتاح استحقاق يبدأ ببادئة من هذه القائمة.
+ */
+export const RESERVED_RBAC_PREFIXES = [
+  "tenant", "team", "invitations", "branches", "rooms", "catalog", "teachers",
+  "courses", "offerings", "students", "guardians", "cohorts", "enrollments",
+  "sessions", "attendance", "invoices", "payments", "audit",
+];
+
+/**
+ * يتحقق ألا يتقاطع فضاءا التسمية.
+ *
+ * @param {ReadonlyArray<RawCapability>} entries
+ * @returns {void}
+ */
+
 const CAPABILITY_KINDS = ["feature", "addon", "limit"];
 
 const PRODUCT_LEVELS = ["operations", "management_platform", "learning_platform"];
@@ -30,6 +51,17 @@ const PRODUCT_LEVELS = ["operations", "management_platform", "learning_platform"
  * @param {ReadonlyArray<RawCapability>} entries
  * @returns {void}
  */
+export function assertNoRbacNamespaceCollision(entries) {
+  for (const entry of entries) {
+    const prefix = entry.key.split(".")[0];
+    if (RESERVED_RBAC_PREFIXES.includes(prefix)) {
+      throw new Error(
+        `capability catalog: key "${entry.key}" collides with the RBAC namespace "${prefix}."; use a distinct prefix`,
+      );
+    }
+  }
+}
+
 export function assertValidCapabilityCatalog(entries) {
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new Error("capability catalog: expected a non-empty array");
@@ -66,6 +98,8 @@ export function assertValidCapabilityCatalog(entries) {
       throw new Error(`capability catalog: sortOrder must be an integer (key "${entry.key}")`);
     }
   }
+
+  assertNoRbacNamespaceCollision(entries);
 }
 
 export { CAPABILITY_KINDS, KEY_PATTERN, PRODUCT_LEVELS };
