@@ -757,8 +757,22 @@ create policy guardians_bootstrap_read on public.guardians
 -- `tenants` نفسها مفتاحها `id` لا `tenant_id`.
 alter table public.tenants enable row level security;
 alter table public.tenants force row level security;
-create policy tenants_tenant_read on public.tenants
-  for select using (private.has_platform_scope() or id = private.current_tenant_id());
+-- العضو يقرأ صف المساحة التي ينتمي إليها فعليًا.
+-- هذا هو حل الدائرة المغلقة: لمعرفة المساحة النشطة يجب أولًا قراءة العضوية،
+-- ولتسمية المساحة في الواجهة يجب قراءة صفها. الاستعلام الفرعي على `memberships`
+-- مسموح بسياسة `memberships_bootstrap_read` نفسها، فلا recursion بين الجدولين.
+create policy tenants_member_read on public.tenants
+  for select using (
+    private.has_platform_scope()
+    or id = private.current_tenant_id()
+    or exists (
+      select 1
+      from public.memberships m
+      where m.tenant_id = tenants.id
+        and m.user_id = private.current_app_user_id()
+        and m.active = true
+    )
+  );
 create policy tenants_tenant_insert on public.tenants
   for insert with check (private.has_platform_scope());
 create policy tenants_tenant_update on public.tenants
@@ -777,6 +791,24 @@ create policy app_users_own_row on public.app_users
     or id = private.current_app_user_id()
     -- مسار bootstrap: من يحمل رمز جلسة صالح يقرأ صفّه قبل أن تُعرف هويته بعد.
     or id = private.session_user_id(nullif(current_setting('app.session_digest', true), ''))
+  );
+
+-- الزملاء في نفس المساحة يقرأون هوية بعضهم الأساسية.
+-- لولا هذه السياسة لعرضت قائمة الفريق صف المستخدم وحده، لأن `app_users` محمي
+-- بسياسة الصف الشخصي. النطاق مضبوط: نفس المساحة وعضوية نشطة في الطرفين،
+-- ولا تكشف شيئًا خارج نطاق العمل المشترك.
+-- لا recursion: سياسات `memberships` تقرأ السياق فقط ولا تقرأ `app_users`.
+create policy app_users_colleague_read on public.app_users
+  for select using (
+    exists (
+      select 1
+      from public.memberships theirs
+      join public.memberships mine on mine.tenant_id = theirs.tenant_id
+      where theirs.user_id = app_users.id
+        and mine.user_id = private.current_app_user_id()
+        and theirs.active = true
+        and mine.active = true
+    )
   );
 -- التسجيل الجديد عملية غير موثقة بطبيعتها (لا جلسة بعد)، فالسياسة تسمح بالإضافة
 -- فقط. ولا تمنح أي قراءة لصف موجود، فالمستخدم الجديد لا يرى شيئًا قبل إنشاء جلسة.

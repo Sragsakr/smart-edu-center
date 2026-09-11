@@ -133,6 +133,57 @@ function hasKey(keys: Iterable<string>, required: string): boolean {
   return false;
 }
 
+/**
+ * تقرير قدرات كامل لطبقة العرض.
+ *
+ * يُستخدم لتعطيل الأزرار وتوضيح السبب، **ولا يُستخدم كحماية**: الخادم يعيد الفحص
+ * عبر `requireTenantCapability` عند كل إجراء. الغرض هنا أن يعرف المستخدم لماذا
+ * الزر غير متاح قبل أن يضغطه، وأن يفرّق بين صلاحية ناقصة واشتراك ناقص.
+ */
+export function capabilityReport({
+  role,
+  entitlements,
+  capabilities,
+}: {
+  role: MemberRole;
+  entitlements: Iterable<string>;
+  capabilities: readonly TenantCapability[];
+}): CapabilityReport {
+  const subject: AccessSubject = {
+    tenantStatus: "active",
+    membership: { role, active: true },
+    entitlements,
+  };
+  const report: CapabilityReport = {};
+  for (const capability of capabilities) {
+    const verdict = evaluateAccess({ subject, capability });
+    report[capability] = {
+      allowed: isAllowed(verdict),
+      reason: verdict.reason,
+      missingEntitlement: verdict.missingEntitlement,
+    };
+  }
+  return report;
+}
+
+export type CapabilityReportEntry = {
+  allowed: boolean;
+  reason: AccessReason;
+  missingEntitlement?: string;
+};
+
+export type CapabilityReport = Partial<Record<TenantCapability, CapabilityReportEntry>>;
+
+/** هل الرفض سببه غياب الاشتراك؟ تُستخدم لاختيار الرسالة المناسبة في الواجهة. */
+export function isEntitlementBlocked(entry: CapabilityReportEntry | undefined): boolean {
+  return entry?.reason === "no_entitlement";
+}
+
+/** هل الرفض سببه صلاحية الدور؟ */
+export function isRoleBlocked(entry: CapabilityReportEntry | undefined): boolean {
+  return entry?.reason === "role_denied";
+}
+
 /** هل القرار يسمح بالمتابعة؟ `scoped` يسمح، بشرط تحقق النطاق لاحقًا. */
 export function isAllowed(verdict: AccessVerdict): boolean {
   return verdict.decision !== "deny";

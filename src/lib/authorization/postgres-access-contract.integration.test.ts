@@ -161,8 +161,20 @@ describe("server capability enforcement combines entitlement, role and scope", (
     await loginAs(accountant.id);
 
     const report = await tenantCapabilityReport(tenant.id, ["invoices.create", "attendance.mark", "students.read"]);
-    expect(report["invoices.create"]).toEqual({ allowed: true, reason: "granted" });
+    expect(report["invoices.create"]?.allowed).toBe(true);
     expect(report["attendance.mark"]).toEqual({ allowed: false, reason: "role_denied" });
     expect(report["students.read"]?.allowed).toBe(true);
+  });
+
+  it("reports no_entitlement for a role that would otherwise be allowed", async () => {
+    // مساحة بلا استحقاقات: الدور يسمح، لكن الميزة غير مشتراة — وهما سببان مختلفان.
+    const { tenant } = await createTenantWithOwner(sql, { productLevel: "operations" });
+    const owner = await createUser(sql);
+    await addMembership(sql, tenant.id, owner.id, "owner");
+    await loginAs(owner.id);
+
+    const report = await tenantCapabilityReport(tenant.id, ["students.read", "invoices.create"]);
+    expect(report["students.read"]?.reason).toBe("no_entitlement");
+    expect(report["students.read"]?.allowed).toBe(false);
   });
 });

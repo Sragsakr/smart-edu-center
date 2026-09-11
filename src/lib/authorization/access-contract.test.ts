@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import { tenantCapabilities } from "./policy";
 import {
   accessDenialMessage,
+  capabilityReport,
   entitlementForTenantCapability,
   entitlementRequiredFor,
   evaluateAccess,
   isAllowed,
+  isEntitlementBlocked,
+  isRoleBlocked,
   type AccessSubject,
 } from "./access-contract";
 
@@ -148,5 +151,60 @@ describe("access verdict helpers", () => {
     ];
     expect(new Set(messages).size).toBe(messages.length);
     for (const message of messages) expect(message.length).toBeGreaterThan(5);
+  });
+});
+
+
+describe("capabilityReport for UI display", () => {
+  const capabilities = ["students.read", "attendance.mark", "payments.correct"] as const;
+
+  it("marks entitlements and roles independently", () => {
+    const report = capabilityReport({
+      role: "accountant",
+      entitlements: ["ops.core"],
+      capabilities,
+    });
+    expect(report["payments.correct"]?.allowed).toBe(true);
+    expect(report["attendance.mark"]).toEqual({ allowed: false, reason: "role_denied" });
+    expect(report["students.read"]?.allowed).toBe(true);
+  });
+
+  it("reports no_entitlement ahead of role_denied so the UI shows the upgrade state", () => {
+    const report = capabilityReport({ role: "accountant", entitlements: [], capabilities });
+    expect(report["attendance.mark"]?.reason).toBe("no_entitlement");
+    expect(report["attendance.mark"]?.missingEntitlement).toBe("ops.core");
+    expect(isEntitlementBlocked(report["attendance.mark"])).toBe(true);
+    expect(isRoleBlocked(report["attendance.mark"])).toBe(false);
+  });
+
+  it("covers every declared capability when asked for all of them", () => {
+    const report = capabilityReport({ role: "owner", entitlements: ["ops.core"], capabilities: tenantCapabilities });
+    expect(Object.keys(report)).toHaveLength(tenantCapabilities.length);
+    for (const capability of tenantCapabilities) expect(report[capability]?.allowed).toBe(true);
+  });
+
+  it("treats a scoped decision as permitted so the button is not hidden from a teacher", () => {
+    const report = capabilityReport({ role: "teacher", entitlements: ["ops.core"], capabilities });
+    expect(report["students.read"]?.allowed).toBe(true);
+    expect(report["students.read"]?.reason).toBe("scope_required");
+  });
+
+  it("omits capabilities that were not requested", () => {
+    const report = capabilityReport({ role: "owner", entitlements: ["ops.core"], capabilities: ["students.read"] });
+    expect(report["payments.correct"]).toBeUndefined();
+  });
+
+  it("accepts a Set from the entitlement service", () => {
+    const report = capabilityReport({
+      role: "owner",
+      entitlements: new Set(["ops.core"]),
+      capabilities: ["students.read"],
+    });
+    expect(report["students.read"]?.allowed).toBe(true);
+  });
+
+  it("keeps helper guards false for an undefined entry", () => {
+    expect(isEntitlementBlocked(undefined)).toBe(false);
+    expect(isRoleBlocked(undefined)).toBe(false);
   });
 });

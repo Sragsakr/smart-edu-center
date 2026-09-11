@@ -3,7 +3,7 @@ import { Client } from "pg";
 
 import { appRoleUrl, TEST_APP_ROLE_PASSWORD } from "../../../postgres/scripts/reset-test-database.mjs";
 import { truncateAllTenantData, testSqlExecutor } from "@/test/postgres/test-database";
-import { createBranch, createTenantWithOwner } from "@/test/postgres/fixtures";
+import { addMembership, createBranch, createTenantWithOwner, createUser } from "@/test/postgres/fixtures";
 
 /**
  * إلزام RLS فعليًا.
@@ -139,6 +139,72 @@ describe("RLS is enforced for the runtime role", () => {
       client.query<{ tenant_id: string }>("select tenant_id from public.memberships"),
     );
     expect(memberships.rows).toEqual([{ tenant_id: a.tenant.id }]);
+  });
+
+  it("lets colleagues in one workspace read each other's basic identity", async () => {
+    const a = await createTenantWithOwner(ownerSql, { tenantName: "Colleagues" });
+    const colleague = await createUser(ownerSql);
+    await addMembership(ownerSql, a.tenant.id, colleague.id, "accountant");
+
+    const visible = await asAppRole({ userId: a.owner.id, tenantId: a.tenant.id }, (client) =>
+      client.query<{ email: string }>("select email::text as email from public.app_users order by email"),
+    );
+    const emails = visible.rows.map((row) => row.email);
+    expect(emails).toContain(a.owner.email);
+    expect(emails).toContain(colleague.email);
+  });
+
+  it("does not expose a user who shares no workspace", async () => {
+    const a = await createTenantWithOwner(ownerSql, { tenantName: "Sep A" });
+    const b = await createTenantWithOwner(ownerSql, { tenantName: "Sep B" });
+
+    const visible = await asAppRole({ userId: a.owner.id, tenantId: a.tenant.id }, (client) =>
+      client.query<{ email: string }>("select email::text as email from public.app_users"),
+    );
+    expect(visible.rows.map((row) => row.email)).not.toContain(b.owner.email);
+  });
+
+  it("stops exposing a colleague once their membership is deactivated", async () => {
+    const a = await createTenantWithOwner(ownerSql, { tenantName: "Removed Colleague" });
+    const colleague = await createUser(ownerSql);
+    await addMembership(ownerSql, a.tenant.id, colleague.id, "teacher", false);
+
+    const visible = await asAppRole({ userId: a.owner.id, tenantId: a.tenant.id }, (client) =>
+      client.query<{ email: string }>("select email::text as email from public.app_users"),
+    );
+    expect(visible.rows.map((row) => row.email)).not.toContain(colleague.email);
+  });
+
+  it("lets a member read the tenant row of a workspace they actively belong to", async () => {
+    const a = await createTenantWithOwner(ownerSql, { tenantName: "Named A" });
+    await createTenantWithOwner(ownerSql, { tenantName: "Named B" });
+
+    const visible = await asAppRole({ userId: a.owner.id }, (client) =>
+      client.query<{ name: string }>("select name from public.tenants"),
+    );
+    expect(visible.rows.map((row) => row.name)).toEqual(["Named A"]);
+  });
+
+  it("does not let a member read a tenant they do not belong to, even with the tenant id known", async () => {
+    await createTenantWithOwner(ownerSql, { tenantName: "Known A" });
+    const b = await createTenantWithOwner(ownerSql, { tenantName: "Known B" });
+    const outsider = await createTenantWithOwner(ownerSql, { tenantName: "Outsider" });
+
+    const visible = await asAppRole({ userId: outsider.owner.id, tenantId: outsider.tenant.id }, (client) =>
+      client.query<{ name: string }>("select name from public.tenants"),
+    );
+    expect(visible.rows.map((row) => row.name)).toEqual(["Outsider"]);
+    expect(visible.rows.map((row) => row.name)).not.toContain(b.tenant.name);
+  });
+
+  it("stops exposing a workspace name once the membership is deactivated", async () => {
+    const a = await createTenantWithOwner(ownerSql, { tenantName: "Revoked Member" });
+    await ownerSql.query("update public.memberships set active = false where tenant_id = $1 and user_id = $2", [
+      a.tenant.id,
+      a.owner.id,
+    ]);
+
+    expect(await countAs("tenants", { userId: a.owner.id })).toBe(0);
   });
 
   it("grants every tenant to platform scope", async () => {

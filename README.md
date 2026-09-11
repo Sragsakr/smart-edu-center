@@ -402,6 +402,19 @@ APP_DB_PASSWORD=<16+ chars> MIGRATION_DATABASE_URL=... npm run provision:app-rol
 
 اختبارات إلزام RLS (`src/lib/security/row-level-security.integration.test.ts`) تعمل **بدور التطبيق نفسه** لا بدور المالك، لأن الاختبار بدور المالك يختبر شيئًا غير الذي يعمل به التطبيق.
 
+### سياسات تفكّ الدائرة المغلقة
+
+معرفة «ما هي مساحتي؟» تحتاج قراءة قبل أن تُعرف المساحة، لذلك توجد سياسات محدودة النطاق:
+
+| السياسة | تسمح بـ |
+|---|---|
+| `memberships_bootstrap_read` · `students_bootstrap_read` · `guardians_bootstrap_read` | قراءة صف العلاقة الشخصية قبل معرفة المساحة |
+| `tenants_member_read` | قراءة صف المساحة التي ينتمي إليها العضو فعليًا |
+| `app_users_colleague_read` | قراءة هوية الزملاء في نفس المساحة وعضوية نشطة في الطرفين |
+| `private.session_user_id` · `login_lookup` | حل الهوية من بصمة الجلسة، وإتمام الدخول قبل وجود هوية |
+
+وكلها مضبوطة النطاق، ومغطاة باختبارات عدم تسريب بعد تعطيل العضوية.
+
 ## الكتالوج الأكاديمي في قاعدة البيانات
 
 `Subject` ≠ `Teacher` ≠ `Course` ≠ `Course Offering` ≠ `Cohort` — خمسة مفاهيم منفصلة ([`docs/adr/0003`](docs/adr/0003-academic-catalog-model.md)):

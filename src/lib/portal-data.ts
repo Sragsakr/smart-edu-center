@@ -43,14 +43,14 @@ export async function getStudentPortalData() {
   const entitled = await hasActiveEntitlement(sql, tenantId, portalEntitlementKey("student"));
   if (!entitled) return { student, entitled: false as const };
 
-  const [enrollments, cohorts, sessions, attendance, invoices, payments] = await Promise.all([
-    sql.query<{ course_offering_id: string; enrolled_on: string; active: boolean }>(
+  const [enrollments, cohorts, sessions, attendance, invoices, payments] = [
+    await sql.query<{ course_offering_id: string; enrolled_on: string; active: boolean }>(
       `select course_offering_id, enrolled_on::text as enrolled_on, active
        from public.enrollments
        where tenant_id = $1 and student_id = $2 and active = true`,
       [tenantId, studentId],
     ),
-    sql.query<{ id: string; name: string; subject_name: string | null; teacher_name: string | null }>(
+    await sql.query<{ id: string; name: string; subject_name: string | null; teacher_name: string | null }>(
       `select c.id, c.name, sub.name as subject_name, t.display_name as teacher_name
        from public.cohort_members cm
        join public.cohorts c on c.tenant_id = cm.tenant_id and c.id = cm.cohort_id
@@ -61,7 +61,7 @@ export async function getStudentPortalData() {
        where cm.tenant_id = $1 and cm.student_id = $2 and cm.active = true`,
       [tenantId, studentId],
     ),
-    sql.query<{ id: string; cohort_id: string; starts_at: string; ends_at: string | null; notes: string | null }>(
+    await sql.query<{ id: string; cohort_id: string; starts_at: string; ends_at: string | null; notes: string | null }>(
       `select cs.id, cs.cohort_id, cs.starts_at::text as starts_at, cs.ends_at::text as ends_at, cs.notes
        from public.class_sessions cs
        join public.cohort_members cm
@@ -71,7 +71,7 @@ export async function getStudentPortalData() {
        limit 12`,
       [tenantId, studentId],
     ),
-    sql.query<{ session_id: string; status: string; marked_at: string }>(
+    await sql.query<{ session_id: string; status: string; marked_at: string }>(
       `select session_id, status::text as status, marked_at::text as marked_at
        from public.attendance
        where tenant_id = $1 and student_id = $2
@@ -79,7 +79,7 @@ export async function getStudentPortalData() {
        limit 12`,
       [tenantId, studentId],
     ),
-    sql.query<{ id: string; title: string; amount: string; due_date: string | null; status: string; created_at: string }>(
+    await sql.query<{ id: string; title: string; amount: string; due_date: string | null; status: string; created_at: string }>(
       `select id, title, amount::text as amount, due_date::text as due_date,
               status::text as status, created_at::text as created_at
        from public.invoices
@@ -87,7 +87,7 @@ export async function getStudentPortalData() {
        order by created_at desc`,
       [tenantId, studentId],
     ),
-    sql.query<{ invoice_id: string; amount: string; method: string; paid_at: string }>(
+    await sql.query<{ invoice_id: string; amount: string; method: string; paid_at: string }>(
       `select p.invoice_id, p.amount::text as amount, p.method, p.paid_at::text as paid_at
        from public.payments p
        join public.invoices i on i.tenant_id = p.tenant_id and i.id = p.invoice_id
@@ -95,7 +95,9 @@ export async function getStudentPortalData() {
        order by p.paid_at desc`,
       [tenantId, studentId],
     ),
-  ]);
+
+  
+  ];
 
   return {
     student,
@@ -135,14 +137,14 @@ export async function getParentPortalData() {
   const entitled = await hasActiveEntitlement(sql, tenantId, portalEntitlementKey("guardian"));
   if (!entitled) return { guardian, entitled: false as const };
 
-  const [links, children, attendance, invoices, enrollments, cohortMemberships, sessions] = await Promise.all([
-    sql.query<{ student_id: string; relationship: string }>(
+  const [links, children, attendance, invoices, enrollments, cohortMemberships, sessions] = [
+    await sql.query<{ student_id: string; relationship: string }>(
       `select student_id, relationship
        from public.student_guardians
        where tenant_id = $1 and guardian_id = $2`,
       [tenantId, guardianId],
     ),
-    sql.query<{ id: string; code: string; full_name: string; grade_name: string | null; phone: string | null; active: boolean }>(
+    await sql.query<{ id: string; code: string; full_name: string; grade_name: string | null; phone: string | null; active: boolean }>(
       `select s.id, s.code, s.full_name, g.name as grade_name, s.phone, s.active
        from public.students s
        join public.student_guardians sg on sg.tenant_id = s.tenant_id and sg.student_id = s.id
@@ -150,7 +152,7 @@ export async function getParentPortalData() {
        where sg.tenant_id = $1 and sg.guardian_id = $2`,
       [tenantId, guardianId],
     ),
-    sql.query<{ student_id: string; session_id: string; status: string; marked_at: string }>(
+    await sql.query<{ student_id: string; session_id: string; status: string; marked_at: string }>(
       `select a.student_id, a.session_id, a.status::text as status, a.marked_at::text as marked_at
        from public.attendance a
        join public.student_guardians sg on sg.tenant_id = a.tenant_id and sg.student_id = a.student_id
@@ -159,7 +161,7 @@ export async function getParentPortalData() {
        limit 20`,
       [tenantId, guardianId],
     ),
-    sql.query<{ id: string; student_id: string; title: string; amount: string; due_date: string | null; status: string }>(
+    await sql.query<{ id: string; student_id: string; title: string; amount: string; due_date: string | null; status: string }>(
       `select i.id, i.student_id, i.title, i.amount::text as amount,
               i.due_date::text as due_date, i.status::text as status
        from public.invoices i
@@ -168,21 +170,21 @@ export async function getParentPortalData() {
        order by i.due_date`,
       [tenantId, guardianId],
     ),
-    sql.query<{ student_id: string; course_offering_id: string; active: boolean }>(
+    await sql.query<{ student_id: string; course_offering_id: string; active: boolean }>(
       `select e.student_id, e.course_offering_id, e.active
        from public.enrollments e
        join public.student_guardians sg on sg.tenant_id = e.tenant_id and sg.student_id = e.student_id
        where sg.tenant_id = $1 and sg.guardian_id = $2 and e.active = true`,
       [tenantId, guardianId],
     ),
-    sql.query<{ student_id: string; cohort_id: string; active: boolean }>(
+    await sql.query<{ student_id: string; cohort_id: string; active: boolean }>(
       `select cm.student_id, cm.cohort_id, cm.active
        from public.cohort_members cm
        join public.student_guardians sg on sg.tenant_id = cm.tenant_id and sg.student_id = cm.student_id
        where sg.tenant_id = $1 and sg.guardian_id = $2 and cm.active = true`,
       [tenantId, guardianId],
     ),
-    sql.query<{ id: string; cohort_id: string; starts_at: string; ends_at: string | null; notes: string | null }>(
+    await sql.query<{ id: string; cohort_id: string; starts_at: string; ends_at: string | null; notes: string | null }>(
       `select distinct cs.id, cs.cohort_id, cs.starts_at::text as starts_at,
               cs.ends_at::text as ends_at, cs.notes
        from public.class_sessions cs
@@ -195,7 +197,9 @@ export async function getParentPortalData() {
        limit 20`,
       [tenantId, guardianId],
     ),
-  ]);
+
+  
+  ];
 
   return {
     guardian,

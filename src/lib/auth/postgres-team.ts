@@ -4,7 +4,14 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { hashPassword } from "./password";
 import { withSessionUser } from "@/lib/auth/session-context";
-import { capabilitiesForRole, capabilityDecision, type MemberRole, type TenantCapability } from "@/lib/authorization/policy";
+import { capabilityReport } from "@/lib/authorization/access-contract";
+import {
+  capabilityDecision,
+  tenantCapabilities,
+  type MemberRole,
+  type TenantCapability,
+} from "@/lib/authorization/policy";
+import { activeEntitlementKeys } from "@/lib/entitlements/entitlement-service";
 import type {
   AccessScopedSqlExecutor,
   SqlExecutor,
@@ -79,7 +86,14 @@ async function loadTeamWorkspaceData(
   await sql.enterTenantScope(chosen.tenant_id);
 
   const workspaces = memberships.rows.map((row) => ({ tenant_id: row.tenant_id, role: row.role, tenant_name: row.tenant_name }));
-  const capabilities = capabilitiesForRole(chosen.role);
+
+  // التقرير يُحسب من الطبقات الثلاث معًا: اشتراك المساحة، ثم صلاحية الدور.
+  // الاعتماد على الدور وحده كان يُظهر أزرارًا لمساحة لا تملك الميزة أصلًا.
+  const capabilities = capabilityReport({
+    role: chosen.role,
+    entitlements: await activeEntitlementKeys(sql, chosen.tenant_id),
+    capabilities: tenantCapabilities,
+  });
   const members = (await sql.query<{ user_id: string; role: MemberRole; active: boolean; created_at: string; email: string }>(
     `select m.user_id, m.role::text as role, m.active, m.created_at::text as created_at, u.email::text as email
      from public.memberships m
@@ -90,7 +104,7 @@ async function loadTeamWorkspaceData(
   )).rows;
 
   let invitations: TeamWorkspaceData["invitations"] = [];
-  if (capabilities["invitations.read"] === "allow") {
+  if (capabilities["invitations.read"]?.allowed) {
     await sql.query(
       `update public.invitations
        set status = 'expired', updated_at = now()

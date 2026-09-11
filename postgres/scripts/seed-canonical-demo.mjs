@@ -494,6 +494,16 @@ async function seedDemo(client, passwordDigest) {
     [demoGuardianUser, deterministicId("guardian:center:g3"), centerTenant],
   );
 
+  // عضو غير مالك داخل السنتر: لازم لاختبار قيود الدور، لأن المالك يملك كل الصلاحيات
+  // فيخفى الفرق بين «الدور غير مسموح» و«الميزة غير مشتراة» في الاختبار اليدوي.
+  const demoAccountantUser = await upsertUser({ email: "accountant.demo@saboraty.test", name: "محاسب السنتر" });
+  await insert(
+    `insert into public.memberships (tenant_id, user_id, role, active)
+     values ($1, $2, 'accountant', true)
+     on conflict (tenant_id, user_id) do update set role = 'accountant', active = true`,
+    [centerTenant, demoAccountantUser],
+  );
+
   for (const student of students) {
     const invoiceId = deterministicId(`invoice:center:${student.key}`);
     await insert(
