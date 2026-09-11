@@ -3,6 +3,7 @@ import { resetCookieState } from "@/test/postgres/test-cookies";
 import { truncateAllTenantData, testSqlExecutor } from "@/test/postgres/test-database";
 import { createTenantWithOwner, createUser, uniqueEmail } from "@/test/postgres/fixtures";
 import { createPostgresSession } from "@/lib/auth/postgres-auth";
+import type { AccessScopedSqlExecutor } from "@/lib/database/sql-executor";
 import {
   acceptPostgresInvitation,
   createPostgresInvitation,
@@ -16,6 +17,17 @@ import {
 } from "@/lib/auth/postgres-team";
 
 const sql = testSqlExecutor();
+
+/**
+ * يشغّل عملية داخل سياق معاملة، كما يفعل التطبيق عبر `withTeamContext`.
+ *
+ * `setPostgresMembershipActive` تقرأ ثم تكتب، فتوقيعها يشترط مُنفّذًا داخل معاملة
+ * حتى لا يُحرَّر قفل «آخر مالك» قبل الكتابة.
+ */
+function inTransaction<T>(operation: (scoped: AccessScopedSqlExecutor) => Promise<T>): Promise<T> {
+  return sql.withoutSession(operation);
+}
+
 
 beforeEach(() => {
   resetCookieState();
@@ -150,11 +162,15 @@ describe("Team & invitation flows (real database)", () => {
     // الرسالة تسمّي السبب الدقيق: آخر مالك، لا مالك عمومًا. مساحة بمالكين يمكن
     // لأحدهما أن يُعطَّل، أما الأخير فتعطيله يجعل المساحة بلا مالك.
     // غير المالك لا يمسّ المالك إطلاقًا — أعمّ من حماية «آخر مالك» وأسبق منها.
-    await expect(setPostgresMembershipActive(sql, tenant.id, adminA.id, "admin", owner.id, false)).rejects.toThrow(
-      "إلا من مالك آخر",
-    );
-    await expect(setPostgresMembershipActive(sql, tenant.id, adminA.id, "admin", adminB.id, false)).rejects.toThrow("لا يستطيع تعديل مشرف آخر");
-    await expect(setPostgresMembershipActive(sql, tenant.id, adminA.id, "admin", adminA.id, false)).rejects.toThrow("لا يمكنك تعطيل عضويتك");
+    await expect(
+      inTransaction((scoped) => setPostgresMembershipActive(scoped, tenant.id, adminA.id, "admin", owner.id, false)),
+    ).rejects.toThrow("إلا من مالك آخر");
+    await expect(
+      inTransaction((scoped) => setPostgresMembershipActive(scoped, tenant.id, adminA.id, "admin", adminB.id, false)),
+    ).rejects.toThrow("لا يستطيع تعديل مشرف آخر");
+    await expect(
+      inTransaction((scoped) => setPostgresMembershipActive(scoped, tenant.id, adminA.id, "admin", adminA.id, false)),
+    ).rejects.toThrow("لا يمكنك تعطيل عضويتك");
   });
 
   it("owner can disable and re-enable a regular staff member and each action is audited", async () => {
@@ -162,11 +178,11 @@ describe("Team & invitation flows (real database)", () => {
     const teacher = await createUser(sql);
     await sql.query("insert into public.memberships (tenant_id, user_id, role, active) values ($1, $2, 'teacher', true)", [tenant.id, teacher.id]);
 
-    await setPostgresMembershipActive(sql, tenant.id, owner.id, "owner", teacher.id, false);
+    await inTransaction((scoped) => setPostgresMembershipActive(scoped, tenant.id, owner.id, "owner", teacher.id, false));
     let membership = await sql.query<{ active: boolean }>("select active from public.memberships where tenant_id = $1 and user_id = $2", [tenant.id, teacher.id]);
     expect(membership.rows[0]?.active).toBe(false);
 
-    await setPostgresMembershipActive(sql, tenant.id, owner.id, "owner", teacher.id, true);
+    await inTransaction((scoped) => setPostgresMembershipActive(scoped, tenant.id, owner.id, "owner", teacher.id, true));
     membership = await sql.query<{ active: boolean }>("select active from public.memberships where tenant_id = $1 and user_id = $2", [tenant.id, teacher.id]);
     expect(membership.rows[0]?.active).toBe(true);
 

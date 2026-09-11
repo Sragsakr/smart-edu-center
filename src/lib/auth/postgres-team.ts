@@ -298,24 +298,24 @@ export async function acceptPostgresInvitation(
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
 
   const resolved = await resolveInvitationByToken(scoped, tokenHash);
-    if (resolved.inviteeEmail.trim().toLowerCase() !== email.trim().toLowerCase()) {
-      throw new Error("هذه الدعوة موجهة إلى بريد إلكتروني آخر");
-    }
+  if (resolved.inviteeEmail.trim().toLowerCase() !== email.trim().toLowerCase()) {
+    throw new Error("هذه الدعوة موجهة إلى بريد إلكتروني آخر");
+  }
 
-    await scoped.enterTenantScope(resolved.tenantId);
-    const invitation = await lockInvitationInTenant(scoped, tokenHash);
-    await scoped.query(
-      `insert into public.memberships (tenant_id, user_id, role, active)
-       values ($1, $2, $3, true)
-       on conflict (tenant_id, user_id) do update set role = excluded.role, active = true, updated_at = now()`,
-      [invitation.tenantId, userId, invitation.role],
-    );
-    await scoped.query(
-      `update public.invitations
-       set status = 'accepted', accepted_by = $1, accepted_at = now(), updated_at = now()
-       where id = $2`,
-      [userId, invitation.id],
-    );
+  await scoped.enterTenantScope(resolved.tenantId);
+  const invitation = await lockInvitationInTenant(scoped, tokenHash);
+  await scoped.query(
+    `insert into public.memberships (tenant_id, user_id, role, active)
+     values ($1, $2, $3, true)
+     on conflict (tenant_id, user_id) do update set role = excluded.role, active = true, updated_at = now()`,
+    [invitation.tenantId, userId, invitation.role],
+  );
+  await scoped.query(
+    `update public.invitations
+     set status = 'accepted', accepted_by = $1, accepted_at = now(), updated_at = now()
+     where id = $2`,
+    [userId, invitation.id],
+  );
   await insertTeamAudit(scoped, invitation.tenantId, userId, "membership.invitation.accepted", invitation.id, {
     email,
   });
@@ -338,19 +338,21 @@ export async function createPostgresInvitation(
   expiresAt: Date,
 ): Promise<{ id: string; rawToken: string }> {
   const { raw, hash } = tokenPair();
-  return (async (transaction: SqlExecutor) => {
-    const result = await transaction.query<{ id: string }>(
-      `insert into public.invitations
-         (tenant_id, invitee_email, role, token_hash, expires_at, created_by, last_sent_at)
-       values ($1, $2, $3, $4, $5, $6, now())
-       returning id`,
-      [tenantId, email, role, hash, expiresAt, userId],
-    );
-    const invitation = result.rows[0];
-    if (!invitation) throw new Error("تعذر إنشاء الدعوة");
-    await insertTeamAudit(transaction, tenantId, userId, "membership.invitation.created", invitation.id, { email, role, delivery: "share-link" });
-    return { id: invitation.id, rawToken: raw };
-  })(sql)
+  const result = await sql.query<{ id: string }>(
+    `insert into public.invitations
+       (tenant_id, invitee_email, role, token_hash, expires_at, created_by, last_sent_at)
+     values ($1, $2, $3, $4, $5, $6, now())
+     returning id`,
+    [tenantId, email, role, hash, expiresAt, userId],
+  );
+  const invitation = result.rows[0];
+  if (!invitation) throw new Error("تعذر إنشاء الدعوة");
+  await insertTeamAudit(sql, tenantId, userId, "membership.invitation.created", invitation.id, {
+    email,
+    role,
+    delivery: "share-link",
+  });
+  return { id: invitation.id, rawToken: raw };
 }
 
 export async function insertTeamAudit(
@@ -375,37 +377,47 @@ export async function updatePostgresInvitation(
   invitationId: string,
   mode: "resend" | "revoke",
 ): Promise<{ rawToken?: string; email?: string; role?: MemberRole }> {
-  return (async (transaction: SqlExecutor) => {
-    const current = await transaction.query<{ invitee_email: string; role: MemberRole; status: string }>(
-      `select invitee_email, role::text as role, status::text as status
-       from public.invitations where id = $1 and tenant_id = $2 for update`,
+  const current = await sql.query<{ invitee_email: string; role: MemberRole; status: string }>(
+    `select invitee_email, role::text as role, status::text as status
+     from public.invitations where id = $1 and tenant_id = $2 for update`,
+    [invitationId, tenantId],
+  );
+  const invitation = current.rows[0];
+  if (!invitation || invitation.status !== "pending") throw new Error("الدعوة غير قابلة للتعديل");
+  if (mode === "revoke") {
+    await sql.query(
+      `update public.invitations set status = 'revoked', revoked_at = now(), updated_at = now()
+       where id = $1 and tenant_id = $2 and status = 'pending'`,
       [invitationId, tenantId],
     );
-    const invitation = current.rows[0];
-    if (!invitation || invitation.status !== "pending") throw new Error("الدعوة غير قابلة للتعديل");
-    if (mode === "revoke") {
-      await transaction.query(
-        `update public.invitations set status = 'revoked', revoked_at = now(), updated_at = now()
-         where id = $1 and tenant_id = $2 and status = 'pending'`,
-        [invitationId, tenantId],
-      );
-      await insertTeamAudit(transaction, tenantId, userId, "membership.invitation.revoked", invitationId, {});
-      return {};
-    }
-    const { raw, hash } = tokenPair();
-    await transaction.query(
-      `update public.invitations
-       set token_hash = $1, expires_at = now() + interval '7 days', last_sent_at = now(), updated_at = now()
-       where id = $2 and tenant_id = $3 and status = 'pending'`,
-      [hash, invitationId, tenantId],
-    );
-    await insertTeamAudit(transaction, tenantId, userId, "membership.invitation.resent", invitationId, { email: invitation.invitee_email, role: invitation.role, delivery: "share-link" });
-    return { rawToken: raw, email: invitation.invitee_email, role: invitation.role };
-  })(sql)
+    await insertTeamAudit(sql, tenantId, userId, "membership.invitation.revoked", invitationId, {});
+    return {};
+  }
+  const { raw, hash } = tokenPair();
+  await sql.query(
+    `update public.invitations
+     set token_hash = $1, expires_at = now() + interval '7 days', last_sent_at = now(), updated_at = now()
+     where id = $2 and tenant_id = $3 and status = 'pending'`,
+    [hash, invitationId, tenantId],
+  );
+  await insertTeamAudit(sql, tenantId, userId, "membership.invitation.resent", invitationId, {
+    email: invitation.invitee_email,
+    role: invitation.role,
+    delivery: "share-link",
+  });
+  return { rawToken: raw, email: invitation.invitee_email, role: invitation.role };
 }
 
+/**
+ * يعطّل عضوية أو يعيد تنشيطها.
+ *
+ * النوع `AccessScopedSqlExecutor` مقصود: العملية تقرأ ثم تكتب (`for update` ثم تحديث)،
+ * وحماية «آخر مالك» تعتمد على أن القفل والكتابة في معاملة واحدة. تمرير مُنفّذ بلا
+ * معاملة كان يحرّر القفل فورًا ويُسقط الذرّية **بصمت** — سباق على خاصية أمنية.
+ * والنوع يمنع ذلك وقت الترجمة بدل الاعتماد على انتباه القارئ.
+ */
 export async function setPostgresMembershipActive(
-  sql: SqlExecutor,
+  sql: AccessScopedSqlExecutor,
   tenantId: string,
   actorUserId: string,
   actorRole: MemberRole,
@@ -413,31 +425,36 @@ export async function setPostgresMembershipActive(
   active: boolean,
 ): Promise<void> {
   if (targetUserId === actorUserId && !active) throw new Error("لا يمكنك تعطيل عضويتك الحالية من هنا");
-  return (async (transaction: SqlExecutor) => {
-    const result = await transaction.query<{ role: MemberRole; active: boolean; owner_count: number }>(
-      `select m.role::text as role, m.active,
-              (select count(*)::int from public.memberships o
-                where o.tenant_id = m.tenant_id and o.role = 'owner' and o.active = true) as owner_count
-       from public.memberships m
-       where m.tenant_id = $1 and m.user_id = $2 for update`,
-      [tenantId, targetUserId],
-    );
-    const target = result.rows[0];
-    if (!target) throw new Error("العضوية غير موجودة");
-    // حماية المالك على ثلاث درجات، مرتّبة من الأعم إلى الأدق:
-    // 1) غير المالك لا يمسّ المالك إطلاقًا — مطابقة للمصفوفة (إدارة المالك للمالك فقط).
-    // 2) تعطيل مالك مسموح إن بقي مالك نشط آخر.
-    // 3) تعطيل الأخير ممنوع: المساحة تصبح بلا مالك ولا سبيل لإدارتها، فالبديل نقل الملكية.
-    // وإعادة تنشيط مالك معطّل مسموحة لأنها لا تُفقد المساحة مالكًا.
-    if (target.role === "owner") {
-      if (actorRole !== "owner") throw new Error("لا يمكن تعديل مالك المساحة إلا من مالك آخر");
-      if (!active && target.owner_count <= 1) {
-        throw new Error("لا يمكن تعطيل آخر مالك للمساحة. انقل الملكية إلى عضو آخر أولًا");
-      }
+
+  const result = await sql.query<{ role: MemberRole; active: boolean; owner_count: number }>(
+    `select m.role::text as role, m.active,
+            (select count(*)::int from public.memberships o
+              where o.tenant_id = m.tenant_id and o.role = 'owner' and o.active = true) as owner_count
+     from public.memberships m
+     where m.tenant_id = $1 and m.user_id = $2 for update`,
+    [tenantId, targetUserId],
+  );
+  const target = result.rows[0];
+  if (!target) throw new Error("العضوية غير موجودة");
+  // حماية المالك على ثلاث درجات، مرتّبة من الأعم إلى الأدق:
+  // 1) غير المالك لا يمسّ المالك إطلاقًا — مطابقة للمصفوفة (إدارة المالك للمالك فقط).
+  // 2) تعطيل مالك مسموح إن بقي مالك نشط آخر.
+  // 3) تعطيل الأخير ممنوع: المساحة تصبح بلا مالك ولا سبيل لإدارتها، فالبديل نقل الملكية.
+  // وإعادة تنشيط مالك معطّل مسموحة لأنها لا تُفقد المساحة مالكًا.
+  if (target.role === "owner") {
+    if (actorRole !== "owner") throw new Error("لا يمكن تعديل مالك المساحة إلا من مالك آخر");
+    if (!active && target.owner_count <= 1) {
+      throw new Error("لا يمكن تعطيل آخر مالك للمساحة. انقل الملكية إلى عضو آخر أولًا");
     }
-    if (actorRole === "admin" && target.role === "admin") throw new Error("المشرف لا يستطيع تعديل مشرف آخر");
-    if (target.active === active) throw new Error(active ? "العضوية نشطة بالفعل" : "العضوية معطلة بالفعل");
-    await transaction.query("update public.memberships set active = $1, updated_at = now() where tenant_id = $2 and user_id = $3", [active, tenantId, targetUserId]);
-    await insertTeamAudit(transaction, tenantId, actorUserId, active ? "membership.reactivated" : "membership.disabled", targetUserId, { restored_role: target.role });
-  })(sql)
+  }
+  if (actorRole === "admin" && target.role === "admin") throw new Error("المشرف لا يستطيع تعديل مشرف آخر");
+  if (target.active === active) throw new Error(active ? "العضوية نشطة بالفعل" : "العضوية معطلة بالفعل");
+
+  await sql.query(
+    "update public.memberships set active = $1, updated_at = now() where tenant_id = $2 and user_id = $3",
+    [active, tenantId, targetUserId],
+  );
+  await insertTeamAudit(sql, tenantId, actorUserId, active ? "membership.reactivated" : "membership.disabled", targetUserId, {
+    restored_role: target.role,
+  });
 }

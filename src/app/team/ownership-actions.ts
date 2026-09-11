@@ -3,13 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { requirePostgresTenantCapability } from "@/lib/auth/postgres-team";
 import {
   OwnershipError,
   listTenantMembers,
   ownershipErrorMessages,
   transferTenantOwnership,
 } from "@/lib/auth/tenant-ownership";
-import { withSessionUser } from "@/lib/auth/session-context";
 import { logError, logEvent } from "@/lib/observability/server-logger";
 
 /**
@@ -30,17 +30,11 @@ export async function transferOwnership(formData: FormData) {
     redirect(`/team?tenant=${tenantId}&error=${encodeURIComponent("اكتب بريد العضو الجديد كما هو لتأكيد النقل")}`);
   }
 
-  const outcome = await withSessionUser(async ({ sql, user }) => {
-    // كل القراءات والكتابة داخل **معاملة واحدة** تحمل سياق المساحة. استخدام مُنفّذ
-    // خارج معاملته يعمل بلا سياق ويرجع صفر صفوف، فالتجميع هنا شرط صحة لا تنظيم.
-    await sql.enterTenantScope(tenantId);
-
+  // الفحص يمر بالحارس الموحّد لا بفحص محلي: هو الذي يتأكد أن العضوية **نشطة**،
+  // ويمنح نطاق المساحة، ويشغّل العملية داخل معاملة واحدة. الفحص المحلي الذي كان
+  // هنا قرأ الدور ولم يقرأ `active`، فأتاح لمالك معطَّل أن ينقل الملكية.
+  const outcome = await requirePostgresTenantCapability(tenantId, "team.manage", async ({ sql, userId, role }) => {
     const members = await listTenantMembers(sql, tenantId);
-    const actor = members.find((member) => member.userId === user.id);
-    if (!actor || actor.role !== "owner") {
-      return { ok: false as const, message: ownershipErrorMessages.not_owner };
-    }
-
     const target = members.find((member) => member.userId === targetUserId);
     if (!target) {
       return { ok: false as const, message: ownershipErrorMessages.target_missing };
@@ -57,20 +51,31 @@ export async function transferOwnership(formData: FormData) {
         ok: true as const,
         result: await transferTenantOwnership(sql, {
           tenantId,
-          actorUserId: user.id,
-          actorRole: actor.role,
+          actorUserId: userId,
+          actorRole: role,
           targetUserId,
         }),
       };
     } catch (error) {
       if (error instanceof OwnershipError) return { ok: false as const, message: error.message };
-      logError("ownership.transfer_failed", error, { tenantId, actorUserId: user.id, targetUserId });
+      logError("ownership.transfer_failed", error, { tenantId, actorUserId: userId, targetUserId });
       return { ok: false as const, message: "تعذر نقل الملكية. حاول مرة أخرى" };
     }
-  });
+  }).catch((error: unknown) => ({
+    // رفض الحارس: عضوية معطّلة، أو دور لا يملك `team.manage`. ورسالته هي ما يُعرض.
+    ok: false as const,
+    message: error instanceof Error ? error.message : "تعذر نقل الملكية",
+  }));
 
-  if (!outcome) redirect("/login");
   if (!outcome.ok) {
+    // الرفض حدث متوقع (عضوية معطّلة، أو دور لا يملك `team.manage`، أو تأكيد خاطئ)،
+    // فيُسجَّل للمراقبة الأمنية بلا معاملته كخطأ نظام.
+    logEvent({
+      level: "warn",
+      event: "ownership.transfer_refused",
+      message: "ownership transfer refused",
+      context: { tenantId, targetUserId, reason: outcome.message },
+    });
     redirect(`/team?tenant=${tenantId}&error=${encodeURIComponent(outcome.message)}`);
   }
 

@@ -339,7 +339,9 @@ describe("service-level ownership guards and messages", () => {
   it("stops a non-owner from touching an owner at all", async () => {
     const fixture = await seedWorkspaceWithMembers("Non Owner Guard");
     await expect(
-      setPostgresMembershipActive(sql, fixture.tenant.id, fixture.admin.id, "admin", fixture.owner.id, false),
+      sql.withoutSession((scoped) =>
+        setPostgresMembershipActive(scoped, fixture.tenant.id, fixture.admin.id, "admin", fixture.owner.id, false),
+      ),
     ).rejects.toThrow("إلا من مالك آخر");
 
     const owners = await sql.query<{ n: number }>(
