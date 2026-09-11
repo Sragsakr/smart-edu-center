@@ -292,7 +292,7 @@ describe("Cross-tenant application-path isolation (real repository code)", () =>
     const a = await seedTenantWithClassroom("App A");
     const b = await seedTenantWithClassroom("App B");
     await loginAs(a.owner.id);
-    const data = await getPostgresTeamWorkspaceData(sql);
+    const data = await getPostgresTeamWorkspaceData();
     expect(data?.tenant.id).toBe(a.tenant.id);
     expect(data?.members.every((m) => m.user_id !== b.owner.id && m.user_id !== b.teacher.id)).toBe(true);
   });

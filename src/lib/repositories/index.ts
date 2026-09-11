@@ -7,7 +7,7 @@ import { PostgresPlatformAdminRepository } from "@/lib/repositories/postgres-pla
 
 function resolvePlatformAdminRepository(): PlatformAdminRepository {
   const sql = applicationSql();
-  return new PostgresPlatformAdminRepository(sql, new PostgresCurrentUserProvider(sql));
+  return new PostgresPlatformAdminRepository(sql, new PostgresCurrentUserProvider());
 }
 
 export const platformAdminRepository: PlatformAdminRepository = {

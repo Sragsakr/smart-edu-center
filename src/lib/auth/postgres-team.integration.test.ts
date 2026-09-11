@@ -40,7 +40,7 @@ describe("Team & invitation flows (real database)", () => {
     const { tenant: tenantB } = await createTenantWithOwner(sql, { tenantName: "Tenant B" });
 
     await loginAs(ownerA.id);
-    const data = await getPostgresTeamWorkspaceData(sql, tenantB.id);
+    const data = await getPostgresTeamWorkspaceData(tenantB.id);
     expect(data?.tenant.id).toBe(tenantA.id);
     expect(data?.workspaces.map((w) => w.tenant_id)).not.toContain(tenantB.id);
   });
@@ -173,6 +173,6 @@ describe("Team & invitation flows (real database)", () => {
     const { tenant } = await createTenantWithOwner(sql);
     const outsider = await createUser(sql);
     await loginAs(outsider.id);
-    await expect(requirePostgresTenantCapability(sql, tenant.id, "team.manage")).rejects.toThrow("ليس لديك وصول");
+    await expect(requirePostgresTenantCapability(tenant.id, "team.manage")).rejects.toThrow("ليس لديك وصول");
   });
 });

@@ -379,6 +379,29 @@ npm run seed:capability-catalog
 
 السكربت Idempotent، ويعمل داخل Transaction واحدة، ويرفض التشغيل على مضيف غير loopback إلا مع `--allow-remote`، ولا يستطيع حذف قدرة ما زالت ممنوحة لمساحة (`on delete restrict`).
 
+## عزل الـTenants بـRow-Level Security
+
+العزل لم يعد يعتمد على فلترة التطبيق وحدها. كل جدول أعمال يحمل `tenant_id` عليه سياسات RLS مفعّلة مع `FORCE ROW LEVEL SECURITY`، وكل عملية DAL تُنفَّذ داخل معاملة تحمل سياق وصول يُضبط بـ`LOCAL` فلا يتسرّب بين الطلبات ([`docs/adr/0007`](docs/adr/0007-tenant-isolation-row-level-security.md)).
+
+| السياق | يُضبط من | يفتح |
+|---|---|---|
+| `app.app_user_id` | بصمة الجلسة عبر `private.session_user_id` | صف المستخدم وعلاقته الخاصة |
+| `app.current_tenant_id` | العلاقة المحلولة داخل نفس المعاملة | جداول المساحة النشطة |
+| `app.platform_scope` | مسار `/platform-admin` بعد التحقق من `platform_admins` | عبور المساحات لمسار المنصة |
+
+### ⚠️ دور قاعدة البيانات إلزامي
+
+**`FORCE ROW LEVEL SECURITY` لا يُلزم الـsuperuser.** أي دور بـ`usesuper` أو `bypassrls` يتجاوز كل السياسات، فتصبح موجودة بلا أثر. لذلك:
+
+- **`DATABASE_URL`** يجب أن يستخدم دور التطبيق `saboraty_app` (`NOSUPERUSER NOBYPASSRLS`).
+- **`MIGRATION_DATABASE_URL`** لدور المالك، ويُستخدم فقط لتطبيق الـbaseline والبذر وإعادة إنشاء قاعدة الاختبار.
+
+```bash
+APP_DB_PASSWORD=<16+ chars> MIGRATION_DATABASE_URL=... npm run provision:app-role
+```
+
+اختبارات إلزام RLS (`src/lib/security/row-level-security.integration.test.ts`) تعمل **بدور التطبيق نفسه** لا بدور المالك، لأن الاختبار بدور المالك يختبر شيئًا غير الذي يعمل به التطبيق.
+
 ## الكتالوج الأكاديمي في قاعدة البيانات
 
 `Subject` ≠ `Teacher` ≠ `Course` ≠ `Course Offering` ≠ `Cohort` — خمسة مفاهيم منفصلة ([`docs/adr/0003`](docs/adr/0003-academic-catalog-model.md)):

@@ -1,6 +1,5 @@
 import "server-only";
 
-import { applicationSql } from "@/lib/database/application-sql";
 import { getPostgresTeamWorkspaceData } from "@/lib/auth/postgres-team";
 import type { CapabilityMap, MemberRole } from "@/lib/authorization/policy";
 
@@ -18,5 +17,5 @@ export type TeamWorkspaceData = {
 };
 
 export async function getTeamWorkspaceData(requestedTenantId?: string): Promise<TeamWorkspaceData | null> {
-  return getPostgresTeamWorkspaceData(applicationSql(), requestedTenantId);
+  return getPostgresTeamWorkspaceData(requestedTenantId);
 }

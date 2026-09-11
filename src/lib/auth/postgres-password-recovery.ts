@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { hashPassword } from "@/lib/auth/password";
-import type { SqlExecutor, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
+import type { SqlExecutor } from "@/lib/database/sql-executor";
 
 type PasswordResetRow = {
   id: string;
@@ -67,12 +67,12 @@ export async function requestPostgresPasswordReset(
 }
 
 export async function approvePostgresPasswordReset(
-  sql: TransactionalSqlExecutor,
+  sql: SqlExecutor,
   requestId: string,
   reviewerId: string,
 ): Promise<ApprovedReset> {
   const recoveryCode = generateRecoveryCode();
-  return sql.transaction(async (transaction) => {
+  return (async (transaction: SqlExecutor) => {
     const request = await lockPendingReset(transaction, requestId);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await transaction.query(
@@ -84,7 +84,7 @@ export async function approvePostgresPasswordReset(
     );
     await recordPasswordResetAudit(transaction, reviewerId, "password_reset.approved", request);
     return { recoveryCode, whatsappPhone: request.whatsapp_phone };
-  });
+  })(sql)
 }
 
 async function lockPendingReset(
@@ -141,13 +141,13 @@ async function recordPasswordResetAudit(
 }
 
 export async function consumePostgresPasswordReset(
-  sql: TransactionalSqlExecutor,
+  sql: SqlExecutor,
   email: string,
   recoveryCode: string,
   password: string,
 ): Promise<boolean> {
   const passwordDigest = await hashPassword(password);
-  return sql.transaction(async (transaction) => {
+  return (async (transaction: SqlExecutor) => {
     const request = await findLatestReset(transaction, email);
     if (!request) return false;
     if (!isValidRecoveryCode(request, recoveryCode)) {
@@ -172,7 +172,7 @@ export async function consumePostgresPasswordReset(
       [request.user_id],
     );
     return true;
-  });
+  })(sql)
 }
 
 async function recordFailedRecoveryAttempt(

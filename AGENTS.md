@@ -123,7 +123,9 @@ Anything that presents the product to a user (landing page, pricing) must label 
 - Reads belong in a server-only Data Access Layer; UI mutations use Server Actions; external webhooks use Route Handlers.
 - Self-managed PostgreSQL provides application data and application-owned Fresh Auth. Keep `DATABASE_URL` server-only; do not add external database/auth SDK fallbacks. Protected file storage must use a separately approved private-storage design when that feature is implemented.
 - No public runtime environment variables are currently required. If one is introduced, expose it through a typed public-env module and never expose server secrets; private values remain centralized in `src/lib/server-env.ts`.
-- Every tenant business table must carry tenant scope and RLS. Platform-scope tables such as `platform_admins`, `workspace_requests`, `capability_catalog` and `platform_audit_logs` are deliberate exceptions.
+- Every tenant business table must carry tenant scope **and enforced row-level security**. The SQL runtime must connect as the dedicated application role (`saboraty_app`, `NOSUPERUSER NOBYPASSRLS`); superusers and `BYPASSRLS` roles bypass every policy, so connecting as the owner silently disables isolation. See [`docs/adr/0007`](docs/adr/0007-tenant-isolation-row-level-security.md).
+- Every DAL operation runs inside one transaction carrying an access context (`app.app_user_id`, `app.current_tenant_id`, `app.platform_scope`) set with `LOCAL` so it can never leak across pooled requests. Never query a protected table outside such a context, and never set a context without `LOCAL`.
+- Platform scope is granted only from the verified `/platform-admin` path. `capability_catalog` is readable by any identity because it holds no business data; its writes are platform-scoped.
 - Never authorize from `user_metadata`; authorization comes from protected database relationships/tables.
 - Commercial capability must be centralized in the entitlement layer. Never scatter `product_level` comparisons through UI or domain code — call the entitlement helper.
 - A student/guardian `user_id` link is scoped per tenant (`unique(tenant_id, user_id)`), so one person can be a student or guardian in more than one tenant through separate relationships on one identity.
@@ -148,7 +150,7 @@ Anything that presents the product to a user (landing page, pricing) must label 
 
 ## Working method
 
-Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`. PostgreSQL 18 is the target for every environment; the local machine runs it on port `5433` alongside the older 16 instance.
+Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`. PostgreSQL 18 is the target for every environment; the local machine runs it on port `5433` alongside the older 16 instance. `DATABASE_URL` is the application role, `MIGRATION_DATABASE_URL` is the owner used only for the baseline, seeding and test-database recreation.
 
 1. Read `README.md`, this file, `docs/MASTER_EXECUTION_PLAN.md`, any specialist contract linked by the current task, and relevant local Next.js docs.
 2. Inspect existing changes; never overwrite unrelated user work.

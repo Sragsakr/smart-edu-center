@@ -1,26 +1,28 @@
 import "server-only";
 
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 
-import type { SqlExecutor, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
+import type {
+  AccessScopedSqlExecutor,
+  SqlExecutor,
+  TransactionalSqlExecutor,
+} from "@/lib/database/sql-executor";
+import { digestSessionToken, SESSION_COOKIE } from "@/lib/auth/session-context";
 import { hashPassword, verifyPassword } from "./password";
 
-const SESSION_COOKIE = "saboraty_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 type AuthUserRow = { id: string; email: string };
-type SessionUserRow = AuthUserRow & { session_id: string };
+
+/** صف نتيجة دالة الدخول — بصمة فقط، ولا تُعاد كلمة المرور الخام أبدًا. */
+type LoginLookupRow = { user_id: string; email: string; password_digest: string };
 
 type PostgresAccountAccess = {
   isPlatformAdmin: boolean;
   hasMembership: boolean;
   requestStatus: string | null;
 };
-
-function digestToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
 
 function sessionCookieOptions(expiresAt: Date) {
   return {
@@ -46,7 +48,7 @@ export async function createPostgresSession(
   await sql.query(
     `insert into public.auth_sessions (user_id, token_digest, expires_at)
      values ($1, $2, $3)`,
-    [userId, digestToken(token), expiresAt],
+    [userId, digestSessionToken(token), expiresAt],
   );
   await setSessionCookie(token, expiresAt);
 }
@@ -59,51 +61,48 @@ export async function clearPostgresSession(sql: SqlExecutor): Promise<void> {
       `update public.auth_sessions
        set revoked_at = now(), last_seen_at = now()
        where token_digest = $1 and revoked_at is null`,
-      [digestToken(token)],
+      [digestSessionToken(token)],
     );
   }
   cookieStore.delete(SESSION_COOKIE);
 }
 
+/**
+ * صف المستخدم الموثق داخل معاملة تحمل بصمة جلسة صالحة.
+ *
+ * لا تقرأ الجلسة من الكوكي بنفسها: من فتح السياق هو من يعرف البصمة، وقاعدة
+ * البيانات تشتق الهوية منها عبر دالة `security definer`. لذلك تقرأ هذه الدالة
+ * صف المستخدم من السياسة وحدها ولا تحتاج أي قراءة خارج RLS.
+ */
 export async function getPostgresCurrentUser(
-  sql: SqlExecutor,
+  sql: AccessScopedSqlExecutor,
 ): Promise<AuthUserRow | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-
-  const result = await sql.query<SessionUserRow>(
-    `select s.id as session_id, u.id, u.email
-     from public.auth_sessions s
-     join public.app_users u on u.id = s.user_id
-     where s.token_digest = $1
-       and u.active = true
-       and s.revoked_at is null
-       and s.expires_at > now()
+  const result = await sql.query<AuthUserRow>(
+    `select id, email::text as email
+     from public.app_users
+     where id = private.current_app_user_id()
      limit 1`,
-    [digestToken(token)],
   );
-  const user = result.rows[0];
-  if (!user) return null;
-
-  await sql.query(
-    `update public.auth_sessions set last_seen_at = now() where id = $1`,
-    [user.session_id],
-  );
-  return { id: user.id, email: user.email };
+  return result.rows[0] ?? null;
 }
 
+/**
+ * إنشاء حساب جديد.
+ *
+ * يعمل بلا جلسة بطبيعته (لا هوية بعد)، والسياسة تسمح بالإضافة فقط حين لا توجد
+ * جلسة صالحة — فلا يستطيع حساب موثّق إنشاء حسابات أخرى من هذا المسار.
+ */
 export async function registerPostgresUser(
   sql: TransactionalSqlExecutor,
   email: string,
   password: string,
 ): Promise<AuthUserRow> {
   const passwordDigest = await hashPassword(password);
-  return sql.transaction(async (transaction) => {
+  return sql.withoutSession(async (transaction) => {
     const userResult = await transaction.query<AuthUserRow>(
       `insert into public.app_users (id, email)
        values (gen_random_uuid(), $1)
-       returning id, email`,
+       returning id, email::text as email`,
       [email],
     );
     const user = userResult.rows[0];
@@ -117,37 +116,48 @@ export async function registerPostgresUser(
   });
 }
 
+/**
+ * إتمام الدخول.
+ *
+ * يمر عبر `private.login_lookup` المحدودة (`security definer`) لأن هذه اللحظة
+ * تسبق وجود أي هوية، ولا يمكن لسياسة عادية أن تسمح بمطابقة بريد بكلمة مرور.
+ * الدالة تُرجع صفًا مطابقًا واحدًا كحد أقصى، ولا تكشف غيره.
+ */
 export async function authenticatePostgresUser(
   sql: TransactionalSqlExecutor,
   email: string,
   password: string,
 ): Promise<AuthUserRow | null> {
-  const result = await sql.query<AuthUserRow & { password_digest: string }>(
-    `select u.id, u.email, c.password_digest
-     from public.app_users u
-     join public.auth_password_credentials c on c.user_id = u.id
-     where lower(u.email) = lower($1)
-       and u.active = true
-     limit 1`,
-    [email],
-  );
-  const user = result.rows[0];
-  if (!user || !(await verifyPassword(password, user.password_digest))) return null;
-  return { id: user.id, email: user.email };
+  return sql.withoutSession(async (scoped) => {
+    const result = await scoped.query<LoginLookupRow>(
+      `select user_id, email::text as email, password_digest from private.login_lookup($1::citext)`,
+      [email],
+    );
+    const row = result.rows[0];
+    if (!row || !(await verifyPassword(password, row.password_digest))) return null;
+    return { id: row.user_id, email: row.email };
+  });
 }
 
+/**
+ * ملخص صلاحيات الحساب — يُقرأ داخل سياق يحمل الهوية.
+ *
+ * الاستعلامات متسلسلة لا متوازية: كلها على اتصال واحد داخل نفس المعاملة، وهذا
+ * ما يجعلها خاضعة للسياسات وتقرأ من لحظة واحدة.
+ */
 export async function getPostgresAccountAccess(
-  sql: SqlExecutor,
+  sql: AccessScopedSqlExecutor,
   userId: string,
 ): Promise<PostgresAccountAccess> {
-  const [admin, membership, request] = await Promise.all([
-    sql.query(`select 1 from public.platform_admins where user_id = $1 limit 1`, [userId]),
-    sql.query(`select 1 from public.memberships where user_id = $1 and active = true limit 1`, [userId]),
-    sql.query<{ status: string }>(
-      `select status from public.workspace_requests where user_id = $1 limit 1`,
-      [userId],
-    ),
-  ]);
+  const admin = await sql.query(`select 1 from public.platform_admins where user_id = $1 limit 1`, [userId]);
+  const membership = await sql.query(
+    `select 1 from public.memberships where user_id = $1 and active = true limit 1`,
+    [userId],
+  );
+  const request = await sql.query<{ status: string }>(
+    `select status::text as status from public.workspace_requests where user_id = $1 limit 1`,
+    [userId],
+  );
   return {
     isPlatformAdmin: admin.rows.length > 0,
     hasMembership: membership.rows.length > 0,

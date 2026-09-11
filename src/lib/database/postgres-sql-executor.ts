@@ -3,6 +3,7 @@ import "server-only";
 import { Pool, type PoolClient } from "pg";
 
 import type {
+  AccessScopedSqlExecutor,
   SqlExecutor,
   SqlQueryResult,
   SqlRow,
@@ -32,7 +33,7 @@ async function executeQuery<Row extends SqlRow>(
   };
 }
 
-function transactionExecutor(client: PoolClient): SqlExecutor {
+function queryAdapter(client: PoolClient): SqlExecutor {
   return {
     query: <Row extends SqlRow = SqlRow>(
       text: string,
@@ -42,6 +43,28 @@ function transactionExecutor(client: PoolClient): SqlExecutor {
       text,
       values,
     ),
+  };
+}
+
+/**
+ * يضبط سياق وصول داخل المعاملة الحالية.
+ *
+ * `set_config(..., true)` أي `LOCAL`: القيمة تُصفَّر مع نهاية المعاملة، فلا تتسرّب
+ * أبدًا إلى طلب لاحق يستخدم نفس الاتصال من الـpool. واستخدام `set_config` بدل
+ * `SET LOCAL` يسمح بتمرير القيمة كوسيط مُعامَل بدل تركيب نص SQL.
+ */
+async function setLocalSetting(client: PoolClient, name: string, value: string): Promise<void> {
+  await client.query("select set_config($1, $2, true)", [name, value]);
+}
+
+function accessScopedExecutor(client: PoolClient): AccessScopedSqlExecutor {
+  const base = queryAdapter(client);
+  return {
+    query: base.query,
+    enterTenantScope: (tenantId: string) => setLocalSetting(client, "app.current_tenant_id", tenantId),
+    leaveTenantScope: () => setLocalSetting(client, "app.current_tenant_id", ""),
+    enterPlatformScope: () => setLocalSetting(client, "app.platform_scope", "on"),
+    leavePlatformScope: () => setLocalSetting(client, "app.platform_scope", ""),
   };
 }
 
@@ -81,12 +104,53 @@ export class PostgresSqlExecutor implements TransactionalSqlExecutor {
 
     try {
       await client.query("BEGIN");
-      const result = await operation(transactionExecutor(client));
+      const result = await operation(queryAdapter(client));
       await client.query("COMMIT");
       return result;
     } catch (operationError) {
       return rollbackAndThrow(client, operationError);
     } finally {
+      client.release();
+    }
+  }
+
+  async withSession<Result>(
+    sessionDigest: string,
+    operation: (sql: AccessScopedSqlExecutor) => Promise<Result>,
+  ): Promise<Result> {
+    if (!sessionDigest) throw new Error("withSession requires a session digest");
+    return this.runScoped(async (client, scoped) => {
+      // بصمة الجلسة أولًا: منها تشتق قاعدة البيانات الهوية عبر دالة `security definer`،
+      // فتقرأ الهوية صفّها ثم تُحل علاقتها ثم تُضبط مساحتها — كل ذلك في معاملة واحدة.
+      await setLocalSetting(client, "app.session_digest", sessionDigest);
+      await client.query(
+        "select set_config('app.app_user_id', coalesce(private.session_user_id($1)::text, ''), true)",
+        [sessionDigest],
+      );
+      return operation(scoped);
+    });
+  }
+
+  async withoutSession<Result>(
+    operation: (sql: AccessScopedSqlExecutor) => Promise<Result>,
+  ): Promise<Result> {
+    return this.runScoped(async (_client, scoped) => operation(scoped));
+  }
+
+  private async runScoped<Result>(
+    operation: (client: PoolClient, scoped: AccessScopedSqlExecutor) => Promise<Result>,
+  ): Promise<Result> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await operation(client, accessScopedExecutor(client));
+      await client.query("COMMIT");
+      return result;
+    } catch (operationError) {
+      return rollbackAndThrow(client, operationError);
+    } finally {
+      // كل ما ضُبط كان `LOCAL`، فتصرّف القيم مع نهاية المعاملة ولا تُعاد أي حالة
+      // محمّلة مع الاتصال إلى الـpool.
       client.release();
     }
   }

@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { acceptPostgresInvitation, registerAndAcceptPostgresInvitation } from "@/lib/auth/postgres-team";
-import { authenticatePostgresUser, clearPostgresSession, createPostgresSession, getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
+import { authenticatePostgresUser, clearPostgresSession, createPostgresSession } from "@/lib/auth/postgres-auth";
+import { withSessionUser } from "@/lib/auth/session-context";
 import { applicationSql } from "@/lib/database/application-sql";
 import { getAuthAccountState, getInvitationPreview } from "@/lib/invitations";
 
@@ -73,14 +74,13 @@ export async function loginAndAcceptInvitation(formData: FormData) {
 
 export async function acceptExistingInvitation(formData: FormData) {
   const token = String(formData.get("token") ?? "");
-  const sql = applicationSql();
-  const user = await getPostgresCurrentUser(sql);
-  if (!user) inviteError(token, "انتهت جلسة الدخول. أدخل كلمة المرور لإكمال الدعوة");
-  try {
+  // قبول الدعوة يقرأ ويحدّث `invitations` و`memberships`، وكلاهما خاضع للسياسات،
+  // فيُفتح سياق الهوية أولًا ثم تُنفَّذ العملية داخل معاملة واحدة.
+  const accepted = await withSessionUser(async ({ sql, user }) => {
     await acceptPostgresInvitation(sql, token, user.id, user.email);
-  } catch (error) {
-    inviteError(token, error instanceof Error ? error.message : "تعذر قبول الدعوة");
-  }
+    return true;
+  });
+  if (!accepted) inviteError(token, "انتهت جلسة الدخول. أدخل كلمة المرور لإكمال الدعوة");
   revalidatePath("/");
   revalidatePath("/team");
   redirect("/");

@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import type { MemberRole, TenantCapability } from "@/lib/authorization/policy";
-import { applicationSql } from "@/lib/database/application-sql";
 import {
   assertAssignableRole,
   createPostgresInvitation,
@@ -31,9 +30,9 @@ async function requestOrigin(): Promise<string> {
 }
 
 async function postgresTeamContext(tenantId: string, capability: TenantCapability) {
-  const sql = applicationSql();
-  const access = await requirePostgresTenantCapability(sql, tenantId, capability);
-  return { sql, ...access };
+  // السياق يفتح نفسه: يحل الهوية ثم يدخل المساحة، فلا يمر أي استعلام على جدول
+  // محمي خارج معاملة خاضعة للسياسات.
+  return requirePostgresTenantCapability(tenantId, capability);
 }
 
 function errorMessage(error: unknown): string {

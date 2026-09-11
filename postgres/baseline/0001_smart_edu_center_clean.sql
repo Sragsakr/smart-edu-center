@@ -643,6 +643,213 @@ comment on table public.tenant_branding is
 comment on table public.tenant_domains is
   'Verified hostnames per tenant. The Host header is untrusted: resolve the tenant from this table, never by guessing.';
 
+-- ============================================================================
+-- عزل الـTenants بـRow-Level Security
+--
+-- كل مسار DAL يجب أن ينفّذ عمليته داخل معاملة تحمل سياقًا:
+--   app.app_user_id        الهوية الموثقة
+--   app.current_tenant_id  المساحة النشطة
+--   app.platform_scope     'on' لمسار Control Plane المصرّح به فقط
+--
+-- تُضبط بـset_config(..., true) أي LOCAL، فتُصفَّر مع نهاية المعاملة ولا تتسرّب
+-- بين الطلبات عبر اتصال الـpool المُعاد استخدامه.
+--
+-- النطاق: RLS يضمن **عزل المساحات** حصرًا. تقييد الدور والمورد يبقى في DAL عبر
+-- Entitlement AND RBAC AND Scope. المرجع: docs/adr/0007
+-- ============================================================================
+
+create schema if not exists private;
+
+create or replace function private.current_app_user_id() returns uuid
+language sql stable as $$
+  select nullif(current_setting('app.app_user_id', true), '')::uuid
+$$;
+
+create or replace function private.current_tenant_id() returns uuid
+language sql stable as $$
+  select nullif(current_setting('app.current_tenant_id', true), '')::uuid
+$$;
+
+create or replace function private.has_platform_scope() returns boolean
+language sql stable as $$
+  select coalesce(current_setting('app.platform_scope', true), '') = 'on'
+$$;
+
+-- ---------------------------------------------------------------------------
+-- دوال bootstrap محدودة: تعمل بصلاحية المالك لعمليتين لا يمكن التعبير عنهما
+-- بسياسة عادية، لأن كلتيهما تحدث قبل وجود هوية معروفة.
+-- كلتاهما `security definer` مع `search_path` مثبّت، ومُسحوبة من public.
+-- ---------------------------------------------------------------------------
+
+-- تُرجع هوية صاحب الجلسة من بصمة الرمز. حيازة الرمز هي إثبات الهوية.
+create or replace function private.session_user_id(p_token_digest text) returns uuid
+language sql stable security definer set search_path = public, pg_temp as $$
+  select s.user_id
+  from public.auth_sessions s
+  join public.app_users u on u.id = s.user_id and u.active = true
+  where s.token_digest = p_token_digest
+    and s.revoked_at is null
+    and s.expires_at > now()
+  limit 1
+$$;
+
+-- تُرجع بصمة كلمة المرور لمحاولة دخول واحدة. لا تكشف أكثر من صف مطابق واحد.
+create or replace function private.login_lookup(p_email citext)
+returns table (user_id uuid, email citext, password_digest text)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select u.id, u.email, c.password_digest
+  from public.app_users u
+  join public.auth_password_credentials c on c.user_id = u.id
+  where lower(u.email::text) = lower(p_email::text)
+    and u.active = true
+  limit 1
+$$;
+
+-- إنشاء أول مساحة: مقدّم الطلب يسجّل بنفسه ثم يُنشئ طلب مساحة بلا عضوية أو مساحة.
+create or replace function private.workspace_request_owner(p_request_id uuid) returns uuid
+language sql stable security definer set search_path = public, pg_temp as $$
+  select user_id from public.workspace_requests where id = p_request_id limit 1
+$$;
+
+revoke all on function private.session_user_id(text) from public;
+revoke all on function private.login_lookup(citext) from public;
+revoke all on function private.workspace_request_owner(uuid) from public;
+
+-- جداول الأعمال التي تحمل tenant_id: سياسة موحّدة مشتقة من نفس الشرط.
+do $$
+declare
+  table_name text;
+  tenant_scoped_tables text[] := array[
+    'memberships','invitations','staff_profiles','branches','rooms','stages','grades','subjects',
+    'teachers','courses','course_teachers','course_offerings','students','guardians','student_guardians',
+    'cohorts','enrollments','cohort_members','class_sessions','attendance','invoices','payments',
+    'audit_logs','tenant_entitlements','tenant_branding','tenant_domains'
+  ];
+begin
+  foreach table_name in array tenant_scoped_tables loop
+    execute format('alter table public.%I enable row level security', table_name);
+    execute format('alter table public.%I force row level security', table_name);
+
+    execute format(
+      'create policy %I on public.%I for select using (private.has_platform_scope() or tenant_id = private.current_tenant_id())',
+      table_name || '_tenant_read', table_name);
+    execute format(
+      'create policy %I on public.%I for insert with check (private.has_platform_scope() or tenant_id = private.current_tenant_id())',
+      table_name || '_tenant_insert', table_name);
+    execute format(
+      'create policy %I on public.%I for update using (private.has_platform_scope() or tenant_id = private.current_tenant_id()) with check (private.has_platform_scope() or tenant_id = private.current_tenant_id())',
+      table_name || '_tenant_update', table_name);
+    execute format(
+      'create policy %I on public.%I for delete using (private.has_platform_scope() or tenant_id = private.current_tenant_id())',
+      table_name || '_tenant_delete', table_name);
+  end loop;
+end $$;
+
+-- سياسات bootstrap: يقرأ المستخدم علاقته الخاصة قبل أن تُعرف مساحته، وهي الخطوة
+-- التي منها تُكتشف المساحة النشطة ثم تُضبط داخل نفس المعاملة.
+create policy memberships_bootstrap_read on public.memberships
+  for select using (user_id = private.current_app_user_id());
+create policy students_bootstrap_read on public.students
+  for select using (user_id = private.current_app_user_id());
+create policy guardians_bootstrap_read on public.guardians
+  for select using (user_id = private.current_app_user_id());
+
+-- `tenants` نفسها مفتاحها `id` لا `tenant_id`.
+alter table public.tenants enable row level security;
+alter table public.tenants force row level security;
+create policy tenants_tenant_read on public.tenants
+  for select using (private.has_platform_scope() or id = private.current_tenant_id());
+create policy tenants_tenant_insert on public.tenants
+  for insert with check (private.has_platform_scope());
+create policy tenants_tenant_update on public.tenants
+  for update using (private.has_platform_scope() or id = private.current_tenant_id())
+  with check (private.has_platform_scope() or id = private.current_tenant_id());
+create policy tenants_tenant_delete on public.tenants
+  for delete using (private.has_platform_scope());
+
+-- `app_users`: صف المستخدم نفسه متاح للهوية الموثقة (لازم لحل الجلسة والعلاقات)،
+-- وتُفتح بقية الصفوف لنطاق المنصة فقط.
+alter table public.app_users enable row level security;
+alter table public.app_users force row level security;
+create policy app_users_own_row on public.app_users
+  for select using (
+    private.has_platform_scope()
+    or id = private.current_app_user_id()
+    -- مسار bootstrap: من يحمل رمز جلسة صالح يقرأ صفّه قبل أن تُعرف هويته بعد.
+    or id = private.session_user_id(nullif(current_setting('app.session_digest', true), ''))
+  );
+-- التسجيل الجديد عملية غير موثقة بطبيعتها (لا جلسة بعد)، فالسياسة تسمح بالإضافة
+-- فقط. ولا تمنح أي قراءة لصف موجود، فالمستخدم الجديد لا يرى شيئًا قبل إنشاء جلسة.
+create policy app_users_self_signup on public.app_users
+  for insert with check (private.has_platform_scope() or private.session_user_id(nullif(current_setting('app.session_digest', true), '')) is null);
+create policy app_users_own_update on public.app_users
+  for update using (private.has_platform_scope() or id = private.current_app_user_id())
+  with check (private.has_platform_scope() or id = private.current_app_user_id());
+create policy app_users_platform_delete on public.app_users
+  for delete using (private.has_platform_scope());
+
+-- `platform_admins`: يقرأ المستخدم صفّه فقط ليعرف صلاحيته، والإدارة لنطاق المنصة.
+alter table public.platform_admins enable row level security;
+alter table public.platform_admins force row level security;
+create policy platform_admins_own_row on public.platform_admins
+  for select using (private.has_platform_scope() or user_id = private.current_app_user_id());
+create policy platform_admins_platform_write on public.platform_admins
+  for insert with check (private.has_platform_scope());
+create policy platform_admins_platform_delete on public.platform_admins
+  for delete using (private.has_platform_scope());
+
+-- `workspace_requests`: مقدّم الطلب يرى طلبه، والمراجعة لنطاق المنصة.
+alter table public.workspace_requests enable row level security;
+alter table public.workspace_requests force row level security;
+create policy workspace_requests_own_row on public.workspace_requests
+  for select using (private.has_platform_scope() or user_id = private.current_app_user_id());
+create policy workspace_requests_own_insert on public.workspace_requests
+  for insert with check (private.has_platform_scope() or user_id = private.current_app_user_id());
+create policy workspace_requests_own_update on public.workspace_requests
+  for update using (private.has_platform_scope() or user_id = private.current_app_user_id())
+  with check (private.has_platform_scope() or user_id = private.current_app_user_id());
+create policy workspace_requests_platform_delete on public.workspace_requests
+  for delete using (private.has_platform_scope());
+
+-- `password_reset_requests`: صاحب الحساب يرى طلبه، والمراجعة لنطاق المنصة.
+alter table public.password_reset_requests enable row level security;
+alter table public.password_reset_requests force row level security;
+create policy password_reset_own_row on public.password_reset_requests
+  for select using (private.has_platform_scope() or user_id = private.current_app_user_id());
+create policy password_reset_own_insert on public.password_reset_requests
+  for insert with check (private.has_platform_scope() or user_id = private.current_app_user_id());
+create policy password_reset_platform_update on public.password_reset_requests
+  for update using (private.has_platform_scope() or user_id = private.current_app_user_id())
+  with check (private.has_platform_scope() or user_id = private.current_app_user_id());
+create policy password_reset_platform_delete on public.password_reset_requests
+  for delete using (private.has_platform_scope());
+
+-- `platform_audit_logs`: سجل المنصة كله لنطاق المنصة فقط.
+alter table public.platform_audit_logs enable row level security;
+alter table public.platform_audit_logs force row level security;
+create policy platform_audit_platform_read on public.platform_audit_logs
+  for select using (private.has_platform_scope());
+create policy platform_audit_platform_insert on public.platform_audit_logs
+  for insert with check (private.has_platform_scope() or actor_user_id = private.current_app_user_id());
+
+-- `capability_catalog`: بيانات مرجعية بلا بيانات أعمال ولا أسرار، فقراءتها عامة
+-- لأي هوية موثقة، وتعديلها لنطاق المنصة.
+alter table public.capability_catalog enable row level security;
+alter table public.capability_catalog force row level security;
+create policy capability_catalog_read on public.capability_catalog
+  for select using (true);
+create policy capability_catalog_platform_write on public.capability_catalog
+  for insert with check (private.has_platform_scope());
+create policy capability_catalog_platform_update on public.capability_catalog
+  for update using (private.has_platform_scope()) with check (private.has_platform_scope());
+create policy capability_catalog_platform_delete on public.capability_catalog
+  for delete using (private.has_platform_scope());
+
+-- جداول المصادقة (`auth_sessions`, `auth_password_credentials`) خارج RLS عمدًا:
+-- لا تحمل tenant_id ولا بيانات أعمال، ومحتواها بصمات فقط، وقراءتها مبنية على
+-- حيازة الرمز لا على هوية معروفة. تبقى محميّة بـrevoke وبالبحث بالبصمة.
+-- المرجع: docs/adr/0007
+
 -- Authorization is enforced by the application layer for this self-managed PostgreSQL target.
 
 commit;

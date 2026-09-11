@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { SqlExecutor, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
+import type { SqlExecutor } from "@/lib/database/sql-executor";
 import { defaultEntitlementsForLevel } from "@/lib/entitlements/default-entitlements";
 import type { WorkspaceRequest } from "@/lib/auth/account-access";
 
@@ -25,11 +25,13 @@ export async function listPostgresWorkspaceRequests(
 }
 
 export async function approvePostgresWorkspaceRequest(
-  sql: TransactionalSqlExecutor,
+  sql: SqlExecutor,
   requestId: string,
   reviewerId: string,
 ): Promise<ApprovedWorkspace> {
-  return sql.transaction(async (transaction) => {
+  // لا معاملة متداخلة: المستدعي يفتح معاملة واحدة بنطاق المنصة، وهي التي تضمن
+  // ذرية الموافقة كاملة. تكرار BEGIN هنا كان سيكسر الضمان لا يقوّيه.
+  return (async (transaction: SqlExecutor) => {
     const request = await lockPendingWorkspaceRequest(transaction, requestId);
     const tenant = await createTenant(transaction, request, reviewerId);
     await grantPlanEntitlements(transaction, tenant.tenantId, request);
@@ -60,7 +62,7 @@ export async function approvePostgresWorkspaceRequest(
       ],
     );
     return tenant;
-  });
+  })(sql)
 }
 
 /**

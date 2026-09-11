@@ -88,6 +88,20 @@ RPO:         0s   (نسخة أُخذت قبل التجربة مباشرة)
 
 ---
 
+## 2.5 عزل الـTenants (`P02-03`)
+
+```bash
+APP_DB_PASSWORD=<16+ chars> MIGRATION_DATABASE_URL=<owner> npm run provision:app-role
+```
+
+**تحقق إلزامي بعد أي إعداد بيئة:** يجب أن يكون دور `DATABASE_URL` بلا `rolsuper` وبلا `rolbypassrls`، وإلا فسياسات RLS غير مُلزمة.
+
+```sql
+select current_user, rolsuper, rolbypassrls from pg_roles where rolname = current_user;
+```
+
+كل الصفوف يجب أن تكون `f`. أي `t` يعني أن العزل مُعطَّل فعليًا رغم وجود 132 سياسة. افحص ذلك ضمن فحص الاستعادة أيضًا: `npm run restore:drill` يتحقق من رفض الكتابة العابرة للمساحات بعد الاستعادة.
+
 ## 3. المراقبة (`P01-13`)
 
 ### ما يعمل اليوم

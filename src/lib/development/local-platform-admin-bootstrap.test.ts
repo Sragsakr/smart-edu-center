@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { SqlExecutor, SqlQueryResult, SqlRow, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
+import type { AccessScopedSqlExecutor, SqlExecutor, SqlQueryResult, SqlRow, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
 
 vi.mock("server-only", () => ({}));
 
@@ -23,6 +23,18 @@ class RecordingSql implements TransactionalSqlExecutor {
     this.transactionCount += 1;
     return operation(this);
   }
+  async withSession<Result>(_digest: string, operation: (sql: AccessScopedSqlExecutor) => Promise<Result>): Promise<Result> {
+    this.transactionCount += 1;
+    return operation(this as unknown as AccessScopedSqlExecutor);
+  }
+  async withoutSession<Result>(operation: (sql: AccessScopedSqlExecutor) => Promise<Result>): Promise<Result> {
+    this.transactionCount += 1;
+    return operation(this as unknown as AccessScopedSqlExecutor);
+  }
+  async enterTenantScope(): Promise<void> {}
+  async leaveTenantScope(): Promise<void> {}
+  async enterPlatformScope(): Promise<void> {}
+  async leavePlatformScope(): Promise<void> {}
 }
 
 describe("local Fresh Auth platform-admin bootstrap", () => {

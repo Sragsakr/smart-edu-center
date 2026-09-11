@@ -1,8 +1,8 @@
 import "server-only";
 
-import { getPostgresAccountAccess, getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
+import { getPostgresAccountAccess } from "@/lib/auth/postgres-auth";
 import { listPostgresWorkspaceRequests } from "@/lib/auth/postgres-workspace-requests";
-import { applicationSql } from "@/lib/database/application-sql";
+import { withPlatformScope, withSessionUser } from "@/lib/auth/session-context";
 import type { ProductLevel } from "@/lib/tenant/product-level";
 import type { TenantType } from "@/lib/tenant/tenant-type";
 
@@ -22,9 +22,10 @@ export type WorkspaceRequest = {
   reviewed_at: string | null;
 };
 
-const workspaceRequestFields = "id,email::text as email,tenant_type::text as tenant_type,requested_product_level::text as requested_product_level,workspace_name,slug::text as slug,mobile_phone,whatsapp_phone,status::text as status,rejection_reason,created_at::text as created_at,reviewed_at::text as reviewed_at";
+const workspaceRequestFields =
+  "id,email::text as email,tenant_type::text as tenant_type,requested_product_level::text as requested_product_level,workspace_name,slug::text as slug,mobile_phone,whatsapp_phone,status::text as status,rejection_reason,created_at::text as created_at,reviewed_at::text as reviewed_at";
 
-type PortalAccess = {
+export type PortalAccess = {
   user: { id: string; email: string } | null;
   membership: { tenant_id: string; role: string } | null;
   student: { id: string; tenant_id: string; full_name: string } | null;
@@ -33,29 +34,67 @@ type PortalAccess = {
   isPlatformAdmin: boolean;
 };
 
-export async function getCurrentAccountAccess(): Promise<PortalAccess> {
-  const sql = applicationSql();
-  const user = await getPostgresCurrentUser(sql);
-  if (!user) return { user: null, membership: null, student: null, guardian: null, request: null, isPlatformAdmin: false };
+const emptyAccess: PortalAccess = {
+  user: null,
+  membership: null,
+  student: null,
+  guardian: null,
+  request: null,
+  isPlatformAdmin: false,
+};
 
-  const [membership, student, guardian, request, account] = await Promise.all([
-    sql.query<{ tenant_id: string; role: string }>("select tenant_id, role::text as role from public.memberships where user_id = $1 and active = true order by created_at limit 1", [user.id]),
-    sql.query<{ id: string; tenant_id: string; full_name: string }>("select id, tenant_id, full_name from public.students where user_id = $1 and active = true limit 1", [user.id]),
-    sql.query<{ id: string; tenant_id: string; full_name: string }>("select id, tenant_id, full_name from public.guardians where user_id = $1 and active = true limit 1", [user.id]),
-    sql.query<WorkspaceRequest>(`select ${workspaceRequestFields} from public.workspace_requests where user_id = $1 limit 1`, [user.id]),
-    getPostgresAccountAccess(sql, user.id),
-  ]);
-  return {
-    user,
-    membership: membership.rows[0] ?? null,
-    student: student.rows[0] ?? null,
-    guardian: guardian.rows[0] ?? null,
-    request: request.rows[0] ?? null,
-    isPlatformAdmin: account.isPlatformAdmin,
-  };
+/**
+ * يحل كل الوصول المحتمل للهوية الموثقة: عضوية إدارة، أو علاقة طالب، أو علاقة ولي أمر.
+ *
+ * تُنفَّذ كل القراءات داخل معاملة واحدة تحمل الهوية، فتُقرأ من لحظة واحدة متسقة.
+ * القراءات متسلسلة لا متوازية لأنها على اتصال واحد، وهذا شرط أن تكون خاضعة للسياسات.
+ *
+ * العلاقة المحلولة لا تفتح بوابة بذاتها: البوابة تحتاج استحقاقًا في طبقة المنتج.
+ */
+export async function getCurrentAccountAccess(): Promise<PortalAccess> {
+  const access = await withSessionUser(async ({ sql, user }) => {
+    const membership = await sql.query<{ tenant_id: string; role: string }>(
+      `select tenant_id, role::text as role
+       from public.memberships
+       where user_id = $1 and active = true
+       order by created_at
+       limit 1`,
+      [user.id],
+    );
+    const student = await sql.query<{ id: string; tenant_id: string; full_name: string }>(
+      `select id, tenant_id, full_name
+       from public.students
+       where user_id = $1 and active = true
+       limit 1`,
+      [user.id],
+    );
+    const guardian = await sql.query<{ id: string; tenant_id: string; full_name: string }>(
+      `select id, tenant_id, full_name
+       from public.guardians
+       where user_id = $1 and active = true
+       limit 1`,
+      [user.id],
+    );
+    const request = await sql.query<WorkspaceRequest>(
+      `select ${workspaceRequestFields} from public.workspace_requests where user_id = $1 limit 1`,
+      [user.id],
+    );
+    const account = await getPostgresAccountAccess(sql, user.id);
+
+    return {
+      user,
+      membership: membership.rows[0] ?? null,
+      student: student.rows[0] ?? null,
+      guardian: guardian.rows[0] ?? null,
+      request: request.rows[0] ?? null,
+      isPlatformAdmin: account.isPlatformAdmin,
+    };
+  });
+
+  return access ?? emptyAccess;
 }
 
-export function getPortalCount(access: Awaited<ReturnType<typeof getCurrentAccountAccess>>) {
+export function getPortalCount(access: PortalAccess): number {
   return Number(Boolean(access.membership)) + Number(Boolean(access.student)) + Number(Boolean(access.guardian));
 }
 
@@ -67,24 +106,23 @@ export type PasswordResetRequest = {
   created_at: string;
 };
 
-async function requireCurrentPlatformAdmin() {
-  const sql = applicationSql();
-  const user = await getPostgresCurrentUser(sql);
-  if (!user || !(await getPostgresAccountAccess(sql, user.id)).isPlatformAdmin) return null;
-  return sql;
-}
-
+/** طلبات استعادة كلمة المرور المعلّقة — لنطاق المنصة فقط. */
 export async function listPendingPasswordResetRequests(): Promise<PasswordResetRequest[] | null> {
-  const sql = await requireCurrentPlatformAdmin();
-  if (!sql) return null;
-  return (await sql.query<PasswordResetRequest>(
-    `select id, requested_email::text as requested_email, whatsapp_phone, status::text as status, created_at::text as created_at
-     from public.password_reset_requests where status = 'pending' order by created_at asc`,
-  )).rows;
+  const outcome = await withPlatformScope(async ({ sql }) => {
+    const result = await sql.query<PasswordResetRequest>(
+      `select id, requested_email::text as requested_email, whatsapp_phone,
+              status::text as status, created_at::text as created_at
+       from public.password_reset_requests
+       where status = 'pending'
+       order by created_at asc`,
+    );
+    return result.rows;
+  });
+  return outcome.status === "authorized" ? outcome.value : null;
 }
 
+/** طلبات إنشاء المساحات المعلّقة — لنطاق المنصة فقط. */
 export async function listPendingWorkspaceRequests(): Promise<WorkspaceRequest[] | null> {
-  const sql = await requireCurrentPlatformAdmin();
-  if (!sql) return null;
-  return listPostgresWorkspaceRequests(sql);
+  const outcome = await withPlatformScope(({ sql }) => listPostgresWorkspaceRequests(sql));
+  return outcome.status === "authorized" ? outcome.value : null;
 }

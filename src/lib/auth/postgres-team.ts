@@ -2,10 +2,13 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import { getPostgresCurrentUser } from "./postgres-auth";
 import { hashPassword } from "./password";
+import { withSessionUser } from "@/lib/auth/session-context";
 import { capabilitiesForRole, capabilityDecision, type MemberRole, type TenantCapability } from "@/lib/authorization/policy";
-import type { SqlExecutor, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
+import type {
+  AccessScopedSqlExecutor,
+  SqlExecutor,
+} from "@/lib/database/sql-executor";
 import type { TeamWorkspaceData } from "@/lib/team-access";
 
 const ASSIGNABLE_ROLES = new Set<MemberRole>(["admin", "teacher", "receptionist", "accountant"]);
@@ -19,33 +22,48 @@ export function assertAssignableRole(role: string): asserts role is MemberRole {
   if (!ASSIGNABLE_ROLES.has(role as MemberRole)) throw new Error("اختر صلاحية صحيحة");
 }
 
+/**
+ * يفرض عضوية نشطة + صلاحية الدور داخل مساحة عمل محددة.
+ *
+ * يفتح سياقه بنفسه: يحل الهوية من الجلسة ثم يدخل المساحة النشطة داخل نفس المعاملة،
+ * لأنه لا يجوز قراءة `memberships` خارج سياق خاضع لسياسات RLS.
+ */
 export async function requirePostgresTenantCapability(
-  sql: SqlExecutor,
   tenantId: string,
   capability: TenantCapability,
-): Promise<{ userId: string; role: MemberRole }> {
+): Promise<{ sql: AccessScopedSqlExecutor; userId: string; role: MemberRole }> {
   if (!tenantId) throw new Error("مساحة العمل غير محددة");
-  const user = await getPostgresCurrentUser(sql);
-  if (!user) throw new Error("Unauthenticated");
-  const result = await sql.query<{ role: MemberRole }>(
-    `select role::text as role
-     from public.memberships
-     where tenant_id = $1 and user_id = $2 and active = true
-     limit 1`,
-    [tenantId, user.id],
-  );
-  const role = result.rows[0]?.role;
-  if (!role) throw new Error("ليس لديك وصول إلى مساحة العمل المطلوبة");
-  if (capabilityDecision(role, capability) !== "allow") throw new Error("ليس لديك صلاحية لتنفيذ هذه العملية");
-  return { userId: user.id, role };
+  const resolved = await withSessionUser(async ({ sql, user }) => {
+    await sql.enterTenantScope(tenantId);
+    const result = await sql.query<{ role: MemberRole }>(
+      `select role::text as role
+       from public.memberships
+       where tenant_id = $1 and user_id = $2 and active = true
+       limit 1`,
+      [tenantId, user.id],
+    );
+    return { sql, userId: user.id, role: result.rows[0]?.role as MemberRole | undefined };
+  });
+  if (!resolved) throw new Error("Unauthenticated");
+  if (!resolved.role) throw new Error("ليس لديك وصول إلى مساحة العمل المطلوبة");
+  if (capabilityDecision(resolved.role, capability) !== "allow") {
+    throw new Error("ليس لديك صلاحية لتنفيذ هذه العملية");
+  }
+  return { sql: resolved.sql, userId: resolved.userId, role: resolved.role };
 }
 
 export async function getPostgresTeamWorkspaceData(
-  sql: SqlExecutor,
   requestedTenantId?: string,
 ): Promise<TeamWorkspaceData | null> {
-  const user = await getPostgresCurrentUser(sql);
-  if (!user) return null;
+  return withSessionUser(({ sql, user }) => loadTeamWorkspaceData(sql, user.id, requestedTenantId));
+}
+
+async function loadTeamWorkspaceData(
+  sql: AccessScopedSqlExecutor,
+  userId: string,
+  requestedTenantId?: string,
+): Promise<TeamWorkspaceData | null> {
+  const user = { id: userId };
   const memberships = await sql.query<{ tenant_id: string; role: MemberRole; tenant_name: string }>(
     `select m.tenant_id, m.role::text as role, t.name as tenant_name
      from public.memberships m
@@ -56,6 +74,10 @@ export async function getPostgresTeamWorkspaceData(
   );
   if (!memberships.rows.length) return null;
   const chosen = memberships.rows.find((row) => row.tenant_id === requestedTenantId) ?? memberships.rows[0];
+
+  // الدخول إلى المساحة المختارة بعد حلّ العلاقة، فتفتح سياسات RLS جداولها.
+  await sql.enterTenantScope(chosen.tenant_id);
+
   const workspaces = memberships.rows.map((row) => ({ tenant_id: row.tenant_id, role: row.role, tenant_name: row.tenant_name }));
   const capabilities = capabilitiesForRole(chosen.role);
   const members = (await sql.query<{ user_id: string; role: MemberRole; active: boolean; created_at: string; email: string }>(
@@ -87,7 +109,7 @@ export async function getPostgresTeamWorkspaceData(
   }
 
   return {
-    currentUserId: user.id,
+    currentUserId: userId,
     tenant: { id: chosen.tenant_id, name: chosen.tenant_name },
     role: chosen.role,
     capabilities,
@@ -132,14 +154,14 @@ export async function getPostgresInvitationPreview(sql: SqlExecutor, rawToken: s
 }
 
 export async function registerAndAcceptPostgresInvitation(
-  sql: TransactionalSqlExecutor,
+  sql: SqlExecutor,
   email: string,
   password: string,
   rawToken: string,
 ): Promise<{ id: string; email: string }> {
   const passwordDigest = await hashPassword(password);
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-  return sql.transaction(async (transaction) => {
+  return (async (transaction: SqlExecutor) => {
     const userResult = await transaction.query<{ id: string; email: string }>(
       `insert into public.app_users (id, email, active)
        values (gen_random_uuid(), $1, true)
@@ -173,17 +195,17 @@ export async function registerAndAcceptPostgresInvitation(
     );
     await insertTeamAudit(transaction, invitation.tenant_id, user.id, "membership.invitation.accepted", invitation.id, { email: user.email });
     return user;
-  });
+  })(sql)
 }
 
 export async function acceptPostgresInvitation(
-  sql: TransactionalSqlExecutor,
+  sql: SqlExecutor,
   rawToken: string,
   userId: string,
   email: string,
 ): Promise<void> {
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-  return sql.transaction(async (transaction) => {
+  return (async (transaction: SqlExecutor) => {
     const result = await transaction.query<{ id: string; tenant_id: string; invitee_email: string; role: MemberRole; status: string; expires_at: string }>(
       `select id, tenant_id, invitee_email, role::text as role, status::text as status, expires_at
        from public.invitations where token_hash = $1 for update`,
@@ -206,7 +228,7 @@ export async function acceptPostgresInvitation(
       [userId, invitation.id],
     );
     await insertTeamAudit(transaction, invitation.tenant_id, userId, "membership.invitation.accepted", invitation.id, { email });
-  });
+  })(sql)
 }
 
 export async function ensurePostgresInvitableEmail(sql: SqlExecutor, email: string): Promise<void> {
@@ -218,7 +240,7 @@ export async function ensurePostgresInvitableEmail(sql: SqlExecutor, email: stri
 }
 
 export async function createPostgresInvitation(
-  sql: TransactionalSqlExecutor,
+  sql: SqlExecutor,
   tenantId: string,
   userId: string,
   email: string,
@@ -226,7 +248,7 @@ export async function createPostgresInvitation(
   expiresAt: Date,
 ): Promise<{ id: string; rawToken: string }> {
   const { raw, hash } = tokenPair();
-  return sql.transaction(async (transaction) => {
+  return (async (transaction: SqlExecutor) => {
     const result = await transaction.query<{ id: string }>(
       `insert into public.invitations
          (tenant_id, invitee_email, role, token_hash, expires_at, created_by, last_sent_at)
@@ -238,7 +260,7 @@ export async function createPostgresInvitation(
     if (!invitation) throw new Error("تعذر إنشاء الدعوة");
     await insertTeamAudit(transaction, tenantId, userId, "membership.invitation.created", invitation.id, { email, role, delivery: "share-link" });
     return { id: invitation.id, rawToken: raw };
-  });
+  })(sql)
 }
 
 export async function insertTeamAudit(
@@ -257,13 +279,13 @@ export async function insertTeamAudit(
 }
 
 export async function updatePostgresInvitation(
-  sql: TransactionalSqlExecutor,
+  sql: SqlExecutor,
   tenantId: string,
   userId: string,
   invitationId: string,
   mode: "resend" | "revoke",
 ): Promise<{ rawToken?: string; email?: string; role?: MemberRole }> {
-  return sql.transaction(async (transaction) => {
+  return (async (transaction: SqlExecutor) => {
     const current = await transaction.query<{ invitee_email: string; role: MemberRole; status: string }>(
       `select invitee_email, role::text as role, status::text as status
        from public.invitations where id = $1 and tenant_id = $2 for update`,
@@ -289,11 +311,11 @@ export async function updatePostgresInvitation(
     );
     await insertTeamAudit(transaction, tenantId, userId, "membership.invitation.resent", invitationId, { email: invitation.invitee_email, role: invitation.role, delivery: "share-link" });
     return { rawToken: raw, email: invitation.invitee_email, role: invitation.role };
-  });
+  })(sql)
 }
 
 export async function setPostgresMembershipActive(
-  sql: TransactionalSqlExecutor,
+  sql: SqlExecutor,
   tenantId: string,
   actorUserId: string,
   actorRole: MemberRole,
@@ -301,7 +323,7 @@ export async function setPostgresMembershipActive(
   active: boolean,
 ): Promise<void> {
   if (targetUserId === actorUserId && !active) throw new Error("لا يمكنك تعطيل عضويتك الحالية من هنا");
-  return sql.transaction(async (transaction) => {
+  return (async (transaction: SqlExecutor) => {
     const result = await transaction.query<{ role: MemberRole; active: boolean }>(
       `select role::text as role, active from public.memberships
        where tenant_id = $1 and user_id = $2 for update`,
@@ -314,5 +336,5 @@ export async function setPostgresMembershipActive(
     if (target.active === active) throw new Error(active ? "العضوية نشطة بالفعل" : "العضوية معطلة بالفعل");
     await transaction.query("update public.memberships set active = $1, updated_at = now() where tenant_id = $2 and user_id = $3", [active, tenantId, targetUserId]);
     await insertTeamAudit(transaction, tenantId, actorUserId, active ? "membership.reactivated" : "membership.disabled", targetUserId, { restored_role: target.role });
-  });
+  })(sql)
 }

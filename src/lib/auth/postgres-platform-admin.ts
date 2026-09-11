@@ -1,18 +1,20 @@
 import "server-only";
 
-import { getPostgresAccountAccess, getPostgresCurrentUser } from "./postgres-auth";
-import { applicationSql } from "@/lib/database/application-sql";
-import type { TransactionalSqlExecutor } from "@/lib/database/sql-executor";
+import { withPlatformScope } from "@/lib/auth/session-context";
+import type { AccessScopedSqlExecutor } from "@/lib/database/sql-executor";
 
+/**
+ * بوابة Control Plane: لا تُمنح إلا بعد إثبات أن المستخدم في `platform_admins`.
+ *
+ * نطاق المنصة يُفتح هنا وحده، وهو ما يسمح بعبور المساحات في `/platform-admin`.
+ * المرجع: docs/adr/0007.
+ */
 export async function requirePostgresPlatformAdmin(): Promise<{
-  sql: TransactionalSqlExecutor;
+  sql: AccessScopedSqlExecutor;
   user: { id: string; email: string };
 }> {
-  const sql = applicationSql();
-  const user = await getPostgresCurrentUser(sql);
-  if (!user) throw new Error("Unauthenticated");
-  if (!(await getPostgresAccountAccess(sql, user.id)).isPlatformAdmin) {
-    throw new Error("Forbidden");
-  }
-  return { sql, user };
+  const outcome = await withPlatformScope(async ({ sql, user }) => ({ sql, user }));
+  if (outcome.status === "unauthenticated") throw new Error("Unauthenticated");
+  if (outcome.status === "forbidden") throw new Error("Forbidden");
+  return outcome.value;
 }

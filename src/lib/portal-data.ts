@@ -1,7 +1,6 @@
 import "server-only";
 
-import { getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
-import { applicationSql } from "@/lib/database/application-sql";
+import { withSessionUser } from "@/lib/auth/session-context";
 import { hasActiveEntitlement } from "@/lib/entitlements/entitlement-service";
 import { portalEntitlementKey } from "@/lib/entitlements/portal-access";
 
@@ -12,9 +11,7 @@ import { portalEntitlementKey } from "@/lib/entitlements/portal-access";
  * التسليم (`cohort_members` + `class_sessions`). الصف يُقرأ من `grades` وليس نصًا حرًا.
  */
 export async function getStudentPortalData() {
-  const sql = applicationSql();
-  const user = await getPostgresCurrentUser(sql);
-  if (!user) return null;
+  return withSessionUser(async ({ sql, user }) => {
   const student = (
     await sql.query<{
       id: string;
@@ -38,6 +35,9 @@ export async function getStudentPortalData() {
 
   const tenantId = student.tenant_id;
   const studentId = student.id;
+
+  // الدخول إلى مساحة الطالب بعد حلّ العلاقة، فتفتح سياسات RLS جداول هذه المساحة.
+  await sql.enterTenantScope(tenantId);
 
   // الفرض التجاري قبل أي قراءة: وجود علاقة الطالب لا يكفي لفتح البوابة.
   const entitled = await hasActiveEntitlement(sql, tenantId, portalEntitlementKey("student"));
@@ -107,15 +107,14 @@ export async function getStudentPortalData() {
     invoices: invoices.rows,
     payments: payments.rows,
   };
+  });
 }
 
 /**
  * قراءات بوابة ولي الأمر — مقيّدة فقط بالأبناء المرتبطين في `student_guardians`.
  */
 export async function getParentPortalData() {
-  const sql = applicationSql();
-  const user = await getPostgresCurrentUser(sql);
-  if (!user) return null;
+  return withSessionUser(async ({ sql, user }) => {
   const guardian = (
     await sql.query<{ id: string; tenant_id: string; full_name: string; phone: string; email: string | null }>(
       `select id, tenant_id, full_name, phone, email::text as email
@@ -129,6 +128,8 @@ export async function getParentPortalData() {
 
   const tenantId = guardian.tenant_id;
   const guardianId = guardian.id;
+
+  await sql.enterTenantScope(tenantId);
 
   // الفرض التجاري قبل أي قراءة: وجود علاقة ولي الأمر لا يكفي لفتح البوابة.
   const entitled = await hasActiveEntitlement(sql, tenantId, portalEntitlementKey("guardian"));
@@ -207,4 +208,5 @@ export async function getParentPortalData() {
     cohortMemberships: cohortMemberships.rows,
     sessions: sessions.rows,
   };
+  });
 }

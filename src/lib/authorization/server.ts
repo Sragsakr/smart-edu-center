@@ -2,7 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 
-import { getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
+import { withSessionUser } from "@/lib/auth/session-context";
 import type { MemberRole, TenantCapability } from "@/lib/authorization/policy";
 import {
   accessDenialMessage,
@@ -12,8 +12,7 @@ import {
   type AccessVerdict,
 } from "@/lib/authorization/access-contract";
 import { activeEntitlementKeys } from "@/lib/entitlements/entitlement-service";
-import { applicationSql } from "@/lib/database/application-sql";
-import type { SqlExecutor } from "@/lib/database/sql-executor";
+import type { AccessScopedSqlExecutor, SqlExecutor } from "@/lib/database/sql-executor";
 
 export type AuthorizedTenantContext = {
   sql: SqlExecutor;
@@ -48,7 +47,11 @@ export class EntitlementError extends AuthorizationError {
 }
 
 /** يقرأ حالة المساحة ودور العضو والاستحقاقات في قراءتين محدودتين. */
-async function loadAccessSubject(sql: SqlExecutor, tenantId: string, userId: string): Promise<AccessSubject> {
+async function loadAccessSubject(
+  sql: AccessScopedSqlExecutor,
+  tenantId: string,
+  userId: string,
+): Promise<AccessSubject> {
   const tenant = await sql.query<{ status: string }>(
     `select status::text as status from public.tenants where id = $1 limit 1`,
     [tenantId],
@@ -79,15 +82,21 @@ async function loadAccessSubject(sql: SqlExecutor, tenantId: string, userId: str
  */
 export async function getTenantAuthorizationContext(tenantId: string): Promise<AuthorizedTenantContext> {
   if (!tenantId) throw new AuthorizationError("مساحة العمل غير محددة");
-  const sql = applicationSql();
-  const user = await getPostgresCurrentUser(sql);
-  if (!user) redirect("/login");
 
-  const subject = await loadAccessSubject(sql, tenantId, user.id);
+  const resolved = await withSessionUser(async ({ sql, user }) => {
+    const subject = await loadAccessSubject(sql, tenantId, user.id);
+    return { sql, user, subject };
+  });
+  if (!resolved) redirect("/login");
+  const { sql, user, subject } = resolved;
+
   if (subject.tenantStatus === "missing") throw new AuthorizationError("مساحة العمل غير موجودة");
   if (subject.tenantStatus === "suspended") throw new AuthorizationError("مساحة العمل موقوفة حاليًا");
   if (!subject.membership) throw new AuthorizationError("ليس لديك وصول إلى مساحة العمل المطلوبة");
   if (!subject.membership.active) throw new AuthorizationError("عضويتك في مساحة العمل غير مفعّلة");
+
+  // الدخول إلى المساحة النشطة: به تصبح جداولها مرئية لبقية العملية.
+  await sql.enterTenantScope(tenantId);
 
   return {
     sql,

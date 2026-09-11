@@ -1,7 +1,6 @@
 import { MailCheck, ShieldCheck } from "lucide-react";
 
-import { getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
-import { applicationSql } from "@/lib/database/application-sql";
+import { withSessionUser } from "@/lib/auth/session-context";
 import { getInvitationPreview } from "@/lib/invitations";
 import { ExistingAccountPasswordForm, ExistingInviteForm, NewInviteAccountForm, SwitchInviteAccountForm } from "./invite-client";
 
@@ -13,7 +12,7 @@ export default async function InvitePage({ searchParams }: { searchParams: Searc
   const token = typeof params.token === "string" ? params.token : "";
   const error = typeof params.error === "string" ? params.error : null;
   const invitation = token ? await getInvitationPreview(token) : null;
-  const user = await getPostgresCurrentUser(applicationSql());
+  const user = await withSessionUser<{ id: string; email: string } | null>(async ({ user: sessionUser }) => sessionUser);
 
   return (
     <main dir="rtl" className="grid min-h-dvh place-items-center bg-[#f6f5fb] px-4 py-10 text-[#17152b]">

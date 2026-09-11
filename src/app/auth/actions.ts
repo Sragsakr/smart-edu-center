@@ -9,6 +9,7 @@ import {
   getPostgresAccountAccess,
   registerPostgresUser,
 } from "@/lib/auth/postgres-auth";
+import { withSessionUser } from "@/lib/auth/session-context";
 import { authSubmissionSchema, firstValidationMessage } from "@/lib/auth/validation";
 import { applicationSql } from "@/lib/database/application-sql";
 
@@ -20,18 +21,28 @@ async function signInPostgresAccount(email: string, password: string) {
   const sql = applicationSql();
   const user = await authenticatePostgresUser(sql, email, password);
   if (!user) loginError("بيانات الدخول غير صحيحة");
-  const [access, portalRelations] = await Promise.all([
-    getPostgresAccountAccess(sql, user.id),
-    sql.query<{ has_student: boolean; has_guardian: boolean }>(
-      `select
-         exists(select 1 from public.students where user_id = $1 and active = true) as has_student,
-         exists(select 1 from public.guardians where user_id = $1 and active = true) as has_guardian`,
-      [user.id],
-    ),
-  ]);
-  const relations = portalRelations.rows[0];
-  const hasStudent = Boolean(relations?.has_student);
-  const hasGuardian = Boolean(relations?.has_guardian);
+
+  // بعد التحقق من كلمة المرور تُفتح جلسة ثم تُقرأ العلاقات داخل سياق الهوية،
+  // لأن جداول العلاقات خاضعة لسياسات RLS ولا تُقرأ بلا سياق.
+  await createPostgresSession(sql, user.id);
+
+  const resolved = await withSessionUser(async ({ sql: scoped }) => {
+    const [access, portalRelations] = [
+      await getPostgresAccountAccess(scoped, user.id),
+      await scoped.query<{ has_student: boolean; has_guardian: boolean }>(
+        `select
+           exists(select 1 from public.students where user_id = $1 and active = true) as has_student,
+           exists(select 1 from public.guardians where user_id = $1 and active = true) as has_guardian`,
+        [user.id],
+      ),
+    ];
+    return { access, relations: portalRelations.rows[0] };
+  });
+
+  const access = resolved?.access;
+  if (!access) loginError("تعذر إكمال الدخول. حاول مرة أخرى");
+  const hasStudent = Boolean(resolved?.relations?.has_student);
+  const hasGuardian = Boolean(resolved?.relations?.has_guardian);
   const portalCount = Number(access.hasMembership) + Number(hasStudent) + Number(hasGuardian);
 
   if (access.isPlatformAdmin && portalCount === 0) {
@@ -40,8 +51,6 @@ async function signInPostgresAccount(email: string, password: string) {
   if (access.requestStatus === "pending_approval") {
     loginError("طلب اشتراكك قيد المراجعة. ستتواصل معك إدارة المنصة، ويمكنك الدخول بعد التفعيل");
   }
-
-  await createPostgresSession(sql, user.id);
   if (portalCount > 1) redirect("/choose-context");
   if (access.hasMembership) redirect("/");
   if (hasStudent) redirect("/student");
@@ -81,9 +90,10 @@ export async function authenticatePlatformAdmin(formData: FormData) {
   const sql = applicationSql();
   const user = await authenticatePostgresUser(sql, email, password);
   if (!user) platformLoginError("بيانات الدخول غير صحيحة");
-  const access = await getPostgresAccountAccess(sql, user.id);
-  if (!access.isPlatformAdmin) platformLoginError("هذا الحساب غير مصرح له بإدارة المنصة");
   await createPostgresSession(sql, user.id);
+
+  const resolved = await withSessionUser(({ sql: scoped }) => getPostgresAccountAccess(scoped, user.id));
+  if (!resolved?.isPlatformAdmin) platformLoginError("هذا الحساب غير مصرح له بإدارة المنصة");
   redirect("/platform-admin");
 }
 
