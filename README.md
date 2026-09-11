@@ -188,6 +188,12 @@ DATABASE_URL=postgresql://...
 
 `DATABASE_URL` متغير Server-only ويُقرأ عبر `src/lib/server-env.ts`.
 
+## Health وReadiness
+
+- `GET /api/health` يفحص إمكانية الاتصال بـPostgreSQL فقط؛ يعيد `200` عند وصول قاعدة البيانات و`503` عند تعذر الاتصال.
+- `GET /api/readiness` يفحص الاتصال ووجود جميع جداول الـcanonical baseline؛ يعيد `200` مع `schema: "ready"` أو `503` مع `schema: "incomplete"`/`"unknown"`.
+- لا يعرض المساران connection strings أو أسماء الجداول المفقودة أو تفاصيل أخطاء PostgreSQL.
+
 ## البيئات الحالية
 
 الـruntime الحالي PostgreSQL-only. يجب أن تحصل Development وPreview وProduction على قواعد PostgreSQL منفصلة قبل إدخال بيانات عملاء حقيقية؛ لا يشير أي runtime path إلى مزود قاعدة أو Auth بديل.
