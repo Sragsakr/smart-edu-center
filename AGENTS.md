@@ -96,6 +96,8 @@ Use Node.js `22.23.2` from `.nvmrc`; CI installs dependencies with `npm ci`.
 - Feature and infrastructure branches open Pull Requests into `staging`, never directly into `main`.
 - A successful push to `staging` deploys only Coolify Staging after the full CI gate.
 - Production promotion uses a reviewed `staging` → `main` Pull Request; a successful push to `main` deploys only Coolify Production.
+- Before promotion, rehearse against a fresh, approved Production-data snapshot restored into Staging when Production data exists. Scrub or exclude secrets, session/recovery/invitation tokens, password hashes, and unnecessary PII; never point Staging at the live Production database. For an empty initial Production database, record the rehearsal as `N/A — empty source`.
+- After successful Production verification, delete the task branch locally and remotely. End delivery with only the permanent `main` and `staging` branches and verify their repository trees represent the same delivered code.
 - Staging and Production must use separate private PostgreSQL resources and environment values. Never reuse one environment's `DATABASE_URL` in the other.
 - Vercel is not part of the repository integration, runtime, preview, or deployment path.
 

@@ -6,12 +6,12 @@
 
 ```text
 CURRENT_PHASE: PHASE-01 — البنية البديلة وجاهزية Staging
-CURRENT_TASK: P01-03 — تطبيق baseline نظيف وإثبات reproducible setup وhealth/readiness
-NEXT_TASK: P01-04 — بناء canonical seed/import لنموذجي center وindependent teacher
+CURRENT_TASK: P01-04 — بناء canonical seed/import لنموذجي center وindependent teacher
+NEXT_TASK: P01-05 — تحديد استراتيجية Private Storage عند أول Feature ملفات
 CURRENT_PRIORITY: P0 — Release blocker
 PRODUCT_FEATURE_FREEZE: ACTIVE حتى اكتمال PHASE-02
 SCHEMA_MODE: BUILD MODE — reset/reseed مصرح به؛ لا توجد production data contract
-LAST_VERIFIED_AUTOMATED_GATE: 45 unit tests + 56 PostgreSQL integration tests + lint + typecheck + migration/secrets checks + build
+LAST_VERIFIED_AUTOMATED_GATE: 45 unit tests + 58 PostgreSQL integration tests + lint + typecheck + migration/secrets checks + build
 ```
 
 لا يجوز بدء `NEXT_TASK` أو أي Task أخرى قبل تحويل `CURRENT_TASK` إلى `DONE`، إلا إذا أصبحت `BLOCKED` وسُجل السبب واختيرت Task مستقلة عنها صراحة داخل هذا الملف.
@@ -173,8 +173,8 @@ Security، accessibility، audit، observability، documentation والاختب�
 
 - [x] `P01-01` جرى جرد الحالة الفعلية: مشروع Coolify قائم ببيئتي production وstaging، مورد التطبيق مرتبط بـGitHub، PostgreSQL داخل شبكة Coolify الداخلية، المتغير التشغيلي المطلوب هو `DATABASE_URL` فقط، أُزيلت أسرار Supabase والمتغيرات المتقاعدة ودُوّرت القيم التي ظهرت في لقطة الإعداد، وفُصل GitHub عن Vercel. أكد المالك إعداد domains/TLS؛ يعاد Smoke الفعلي بعد نشر `P01-02`.
 - [x] `P01-02` فُصل مسار التسليم إلى `feature/* → staging → main` ونشر Coolify Staging عبر HTTPS. أُنشئت PostgreSQL Production مستقلة، وأثبت اختلاف `system_identifier` فصل الـclusters، ثم حُفظت Internal `DATABASE_URL` الخاصة بها في تطبيق Production دون Deploy؛ بقي Staging متصلًا بقاعدته وعمل Health، وبقي Production على نسخته المنشورة السابقة.
-- [-] `P01-03` **CURRENT:** تطبيق الـbaseline على قاعدة نظيفة وإثبات reproducible setup وhealth/readiness checks.
-- [ ] `P01-04` بناء canonical seed/import صغير لنموذجي center وindependent teacher بهويات/علاقات Synthetic فقط، مع reconciliation counts.
+- [x] `P01-03` طُبقت الـcanonical baseline ذريًا على قاعدتي Staging وProduction المستقلتين بعد إثبات خلوهما؛ نجحت 21/21 smoke checks و58 integration tests، وأضيف `/api/readiness` لتمييز الاتصال عن اكتمال الـSchema. نُشر نفس Runtime على البيئتين وأعاد Health وReadiness `200`.
+- [-] `P01-04` **CURRENT:** بناء canonical seed/import صغير لنموذجي center وindependent teacher بهويات/علاقات Synthetic فقط، مع reconciliation counts.
 - [ ] `P01-05` تحديد استراتيجية Private Storage عند أول Feature ملفات؛ إن لم توجد ملفات مطلوبة حاليًا تسجل `N/A until P03/P13` بدل إضافة مزود بلا حاجة.
 - [ ] `P01-06` Backup آلي مشفر Off-server لPostgreSQL وملفات التطبيق، مع retention وchecksums وفشل observable.
 - [ ] `P01-07` Restore drill داخل بيئة معزولة، وقياس RPO/RTO والتحقق من Auth وtenant isolation بعد الاستعادة.
@@ -552,6 +552,7 @@ Security، accessibility، audit، observability، documentation والاختب�
 | 2026-09-09 | `P00-06` | Node.js `22.23.2`: `npm run check` نجح مع 45 unit tests وbuild؛ 56/56 integration على `saboraty_test`؛ Browser smoke أكد login/recovery وFresh Auth error وlocal bootstrap وأن `/auth/callback` أصبح 404؛ المسح أكد عدم وجود Supabase runtime/config/callback نشط، وفُصل GitHub repository عن مشروع Vercel القديم. شُغّلت Advisors قراءةً فقط على مشروع Supabase المتقاعد وأظهرت تحذيرات legacy SECURITY DEFINER/Auth وسياسات RLS وفهارس غير مستخدمة؛ لم تُجرَ تغييرات remote لأنها خارج Runtime الحالي. | `P01-01` جرد البنية الفعلية وجاهزية Staging |
 | 2026-09-09 | `P01-01` | صور Coolify وتأكيد المالك أثبتا بيئتي production/staging وموارد التطبيق/PostgreSQL الداخلية؛ نُظفت المتغيرات إلى `DATABASE_URL`، دُوّرت الأسرار المكشوفة، فُصل Vercel Git، وأُنشئ فرع `staging` الدائم. | `P01-02` نشر Staging عبر CI ثم Smoke فعلي |
 | 2026-09-09 | `P01-02` | PRs `#5/#6` اجتازا CI ونُشر Staging فقط؛ نجح HTTPS/health/browser smoke. بعد اكتشاف اشتراك البيئتين في `DATABASE_URL`، أُنشئت Production PostgreSQL مستقلة؛ أثبت `system_identifier` اختلاف الـclusters (`…5510` مقابل `…4726`) وحُفظت URL الداخلية الجديدة في تطبيق Production دون Deploy. إعادة الفحص: Staging PostgreSQL health `200` وProduction القديمة ما زالت `200` دون تغيير. | `P01-03` baseline/readiness على Staging |
+| 2026-09-11 | `P01-03` | ثبت أن 26 جدول Staging القديمة بلا صفوف؛ طُبقت baseline من ملفين متحققي SHA-256 على قاعدة مؤقتة ثم ذريًا على Staging وProduction المستقلتين. نجحت 21/21 smoke checks، و45 unit + 58 integration، وCI على PRs `#10/#11`. أعاد `/api/health` و`/api/readiness` في البيئتين `200`، ونُشر Runtime نفسه على Production. | `P01-04` canonical Synthetic seed/import |
 
 ## 12. قواعد صيانة الخطة
 
