@@ -56,7 +56,7 @@ export default async function PlatformReportsPage() {
             </div>
           </article>
         </div>
-        <p className="mt-6 text-xs text-[#6f6a80]">كل الأرقام والمخططات محسوبة لحظيًا من سجلات Supabase الحالية، ولا توجد قيم ثابتة في الواجهة.</p>
+        <p className="mt-6 text-xs text-[#6f6a80]">كل الأرقام والمخططات محسوبة لحظيًا من سجلات PostgreSQL الحالية، ولا توجد قيم ثابتة في الواجهة.</p>
       </div>
     </main>
   );

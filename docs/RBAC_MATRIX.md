@@ -69,7 +69,7 @@
 - الدعوة مربوطة بـTenant + Email + Role + Token Hash + Expiry، ولا تمنح Membership إلا بعد القبول الصحيح.
 
 ### Students
-- `teacher R*`: فقط الطلاب الملتحقون بمجموعات يكون `teacher_user_id = auth.uid()` فيها.
+- `teacher R*`: فقط الطلاب الملتحقون بمجموعات يكون `teacher_user_id` فيها مطابقًا لهوية `app_users.id` في الجلسة الموثقة.
 - `receptionist`: إنشاء وتحديث البيانات التشغيلية للطالب؛ لا يغير روابط هوية Auth أو حقول أمنية مستقبلية.
 - `accountant`: قراءة بيانات التعريف اللازمة للفواتير والتحصيل فقط.
 - الحذف يفضل أن يكون `active=false`; Hard Delete محجوز Owner/Admin عندما لا توجد تبعيات تمنعه.
@@ -141,7 +141,7 @@
 ## 7. Scope rules الإلزامية
 
 1. **Tenant isolation first:** كل Query/Mutation يجب أن يثبت `tenant_id` قبل فحص الدور.
-2. **Teacher scope:** الوصول الأكاديمي للمدرس يعتمد على `cohorts.teacher_user_id = auth.uid()` ثم يتفرع منه الطلاب/Enrollments/Sessions/Attendance.
+2. **Teacher scope:** الوصول الأكاديمي للمدرس يعتمد على مطابقة `cohorts.teacher_user_id` لهوية `app_users.id` في الجلسة الموثقة، ثم يتفرع منه الطلاب/Enrollments/Sessions/Attendance.
 3. **No cross-role escalation:** `admin` لا يستطيع تعديل نفسه إلى Owner أو إدارة Owner، ولا إدارة Admin آخر في العمليات الحساسة.
 4. **Self relationships:** Student/Guardian لا يحصلان على صلاحيات Member بمجرد وجود Auth user.
 5. **Inactive membership = no member capability:** أي Membership بـ`active=false` تفقد كل صلاحيات Tenant فورًا.

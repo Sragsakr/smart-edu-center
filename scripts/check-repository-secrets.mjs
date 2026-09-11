@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
@@ -19,6 +20,7 @@ function trackedFiles() {
   return execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
     .split("\0")
     .filter(Boolean)
+    .filter((filePath) => existsSync(filePath))
     .filter((filePath) => !filePath.endsWith("check-repository-secrets.test.ts"));
 }
 

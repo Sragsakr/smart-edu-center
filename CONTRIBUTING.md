@@ -2,9 +2,9 @@
 
 ## اختيار العمل
 
-- نفّذ فقط `CURRENT_TECHNICAL_TASK` من `docs/TECHNICAL_EXECUTION_BACKLOG.md`.
-- لا تتجاوز اعتماديات غير مكتملة.
-- حدّث README وAGENTS والخطط عندما يتغير السلوك أو البنية أو التشغيل.
+- نفّذ فقط `CURRENT_TASK` من `docs/MASTER_EXECUTION_PLAN.md`، وهو مصدر ترتيب العمل الوحيد.
+- لا تتجاوز اعتماديات غير مكتملة ولا تنشئ Backlog موازية.
+- حدّث README وAGENTS وخطة التنفيذ والمراجع التخصصية المتأثرة عندما يتغير السلوك أو البنية أو التشغيل.
 
 ## الفروع
 
@@ -57,7 +57,7 @@ docs: document environment promotion flow
 ## Pull Requests
 
 1. افتح PR إلى `main` باستخدام القالب.
-2. انتظر نجاح GitHub Actions وVercel Preview.
+2. انتظر نجاح GitHub Actions وبيئة الـPreview/Staging المعتمدة في `docs/MASTER_EXECUTION_PLAN.md`.
 3. راجع المسارات المتأثرة وحالات الخطأ والصلاحيات وRTL حسب نوع التغيير.
 4. لا تطبق migration على Production قبل نجاحها على Preview.
 5. ادمج بعد اكتمال القبول، ثم تحقق من Production وسجّل النتيجة في خطة التنفيذ.

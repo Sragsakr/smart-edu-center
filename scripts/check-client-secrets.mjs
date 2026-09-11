@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -34,7 +35,8 @@ function trackedApplicationFiles() {
       (filePath.startsWith("src/") ||
         filePath === ".env.example" ||
         filePath.startsWith("next.config.")) &&
-      !/\.(test|spec)\.[cm]?[jt]sx?$/.test(filePath),
+      !/\.(test|spec)\.[cm]?[jt]sx?$/.test(filePath) &&
+      existsSync(filePath),
   );
 }
 

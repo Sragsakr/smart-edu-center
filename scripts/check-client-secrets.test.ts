@@ -8,22 +8,22 @@ import {
 describe("client secret policy", () => {
   it("rejects sensitive names with the NEXT_PUBLIC prefix", () => {
     const sourceText = [
-      "process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY",
+      "process.env.NEXT_PUBLIC_PROVIDER_SERVICE_ROLE_KEY",
       "process.env.NEXT_PUBLIC_API_SECRET",
       "process.env.NEXT_PUBLIC_SESSION_TOKEN",
     ].join("\n");
 
     expect(findUnsafePublicEnvNames(sourceText)).toEqual([
-      "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY",
+      "NEXT_PUBLIC_PROVIDER_SERVICE_ROLE_KEY",
       "NEXT_PUBLIC_API_SECRET",
       "NEXT_PUBLIC_SESSION_TOKEN",
     ]);
   });
 
-  it("allows the public Supabase contract", () => {
+  it("allows explicitly public, non-sensitive configuration", () => {
     const sourceText = [
-      "process.env.NEXT_PUBLIC_SUPABASE_URL",
-      "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "process.env.NEXT_PUBLIC_SITE_URL",
+      "process.env.NEXT_PUBLIC_ANALYTICS_ID",
     ].join("\n");
 
     expect(findUnsafePublicEnvNames(sourceText)).toEqual([]);
@@ -31,14 +31,14 @@ describe("client secret policy", () => {
 
   it("reports sensitive environment values copied into a client bundle", () => {
     const environment = {
-      SUPABASE_SERVICE_ROLE_KEY: "server-only-value",
+      PROVIDER_SERVICE_ROLE_KEY: "server-only-value",
       DATABASE_PASSWORD: "another-private-value",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "public-value",
+      NEXT_PUBLIC_SITE_URL: "https://example.test",
     };
-    const clientBundleText = `window.config="${environment.SUPABASE_SERVICE_ROLE_KEY}"`;
+    const clientBundleText = `window.config="${environment.PROVIDER_SERVICE_ROLE_KEY}"`;
 
     expect(findLeakedSecretNames(clientBundleText, environment)).toEqual([
-      "SUPABASE_SERVICE_ROLE_KEY",
+      "PROVIDER_SERVICE_ROLE_KEY",
     ]);
   });
 });

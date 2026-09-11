@@ -1,0 +1,107 @@
+import "server-only";
+
+import type { SqlExecutor, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
+import type { WorkspaceRequest } from "@/lib/auth/account-access";
+
+type WorkspaceRequestRow = WorkspaceRequest & { user_id: string };
+
+type ApprovedWorkspace = { tenantId: string };
+
+export async function listPostgresWorkspaceRequests(
+  sql: SqlExecutor,
+): Promise<WorkspaceRequest[]> {
+  const result = await sql.query<WorkspaceRequest>(
+    `select id, email, account_type, workspace_name, slug, mobile_phone,
+            whatsapp_phone, status, rejection_reason, created_at, reviewed_at
+     from public.workspace_requests
+     where status = 'pending_approval'
+     order by created_at asc`,
+  );
+  return result.rows;
+}
+
+export async function approvePostgresWorkspaceRequest(
+  sql: TransactionalSqlExecutor,
+  requestId: string,
+  reviewerId: string,
+): Promise<ApprovedWorkspace> {
+  return sql.transaction(async (transaction) => {
+    const request = await lockPendingWorkspaceRequest(transaction, requestId);
+    const tenant = await createTenant(transaction, request, reviewerId);
+    await transaction.query(
+      `insert into public.memberships (tenant_id, user_id, role, active)
+       values ($1, $2, 'owner', true)`,
+      [tenant.tenantId, request.user_id],
+    );
+    await transaction.query(
+      `update public.workspace_requests
+       set status = 'approved', reviewed_by = $1, reviewed_at = now(), tenant_id = $2
+       where id = $3`,
+      [reviewerId, tenant.tenantId, request.id],
+    );
+    await transaction.query(
+      `insert into public.platform_audit_logs
+         (actor_user_id, action, entity_type, entity_id, details)
+       values ($1, 'workspace_request.approved', 'workspace_request', $2, $3::jsonb)`,
+      [reviewerId, request.id, JSON.stringify({ tenantId: tenant.tenantId, ownerId: request.user_id })],
+    );
+    return tenant;
+  });
+}
+
+async function lockPendingWorkspaceRequest(
+  sql: SqlExecutor,
+  requestId: string,
+): Promise<WorkspaceRequestRow> {
+  const result = await sql.query<WorkspaceRequestRow>(
+    `select id, user_id, email, account_type, workspace_name, slug,
+            mobile_phone, whatsapp_phone, status, rejection_reason,
+            created_at, reviewed_at
+     from public.workspace_requests
+     where id = $1
+     for update`,
+    [requestId],
+  );
+  const request = result.rows[0];
+  if (!request || request.status !== "pending_approval") {
+    throw new Error("workspace request is no longer pending");
+  }
+  return request;
+}
+
+async function createTenant(
+  sql: SqlExecutor,
+  request: WorkspaceRequestRow,
+  reviewerId: string,
+): Promise<ApprovedWorkspace> {
+  const result = await sql.query<ApprovedWorkspace>(
+    `insert into public.tenants (name, slug, account_type, status, created_by)
+     values ($1, $2, $3, 'active', $4)
+     returning id as "tenantId"`,
+    [request.workspace_name, request.slug, request.account_type, request.user_id],
+  );
+  const tenant = result.rows[0];
+  if (!tenant) throw new Error(`tenant creation failed for reviewer ${reviewerId}`);
+  return tenant;
+}
+
+export async function rejectPostgresWorkspaceRequest(
+  sql: SqlExecutor,
+  requestId: string,
+  reviewerId: string,
+  reason: string,
+): Promise<void> {
+  const result = await sql.query(
+    `update public.workspace_requests
+     set status = 'rejected', rejection_reason = $1, reviewed_by = $2, reviewed_at = now()
+     where id = $3 and status = 'pending_approval'`,
+    [reason, reviewerId, requestId],
+  );
+  if (result.rowCount !== 1) throw new Error("workspace request is no longer pending");
+  await sql.query(
+    `insert into public.platform_audit_logs
+       (actor_user_id, action, entity_type, entity_id, details)
+     values ($1, 'workspace_request.rejected', 'workspace_request', $2, $3::jsonb)`,
+    [reviewerId, requestId, JSON.stringify({ reason })],
+  );
+}
