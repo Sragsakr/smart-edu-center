@@ -21,7 +21,7 @@ import {
 import { createPostgresSession } from "@/lib/auth/postgres-auth";
 import {
   AuthorizationError,
-  getTenantAuthorizationContext,
+  withTenantContext,
   requireTenantCapability,
   requireTenantCapabilityWithScope,
 } from "@/lib/authorization/server";
@@ -105,8 +105,9 @@ describe("teacher resource scope (positive and negative)", () => {
     await loginAs(fixture.alpha.user.id);
     // السياق يُفتح بلا فحص قدرة بعينها: المطلوب هنا معرفة الهوية والمساحة،
     // ثم يقرر فاحص النطاق أي مورد يخص هذا المدرس.
-    const context = await getTenantAuthorizationContext(fixture.tenant.id);
-    const record = await teacherRecordIdForUser(context.sql, fixture.tenant.id, fixture.alpha.user.id);
+    const record = await withTenantContext(fixture.tenant.id, (context) =>
+      teacherRecordIdForUser(context.sql, fixture.tenant.id, fixture.alpha.user.id),
+    );
     expect(record).toBe(fixture.alpha.teacher.id);
     expect(record).not.toBe(fixture.beta.teacher.id);
   });
@@ -114,57 +115,75 @@ describe("teacher resource scope (positive and negative)", () => {
   it("scopes an offering to the teacher assigned to it", async () => {
     const fixture = await seedTwoTeachersWithSeparateScopes("Offering");
     await loginAs(fixture.alpha.user.id);
-    const context = await getTenantAuthorizationContext(fixture.tenant.id);
+    const scoped = await withTenantContext(fixture.tenant.id, async (context) => ({
+      own: await isOfferingInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.offering.id),
+      other: await isOfferingInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.beta.offering.id),
+    }));
 
-    expect(await isOfferingInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.offering.id)).toBe(true);
-    expect(await isOfferingInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.beta.offering.id)).toBe(false);
+    expect(scoped.own).toBe(true);
+    expect(scoped.other).toBe(false);
   });
 
   it("scopes a cohort through its offering, not through a column on the cohort", async () => {
     const fixture = await seedTwoTeachersWithSeparateScopes("Cohort");
     await loginAs(fixture.alpha.user.id);
-    const context = await getTenantAuthorizationContext(fixture.tenant.id);
+    const scoped = await withTenantContext(fixture.tenant.id, async (context) => ({
+      own: await isCohortInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.cohort.id),
+      other: await isCohortInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.beta.cohort.id),
+    }));
 
-    expect(await isCohortInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.cohort.id)).toBe(true);
-    expect(await isCohortInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.beta.cohort.id)).toBe(false);
+    expect(scoped.own).toBe(true);
+    expect(scoped.other).toBe(false);
   });
 
   it("scopes a student through an active enrolment on the teacher's offering", async () => {
     const fixture = await seedTwoTeachersWithSeparateScopes("Student");
     await loginAs(fixture.alpha.user.id);
-    const context = await getTenantAuthorizationContext(fixture.tenant.id);
+    const scoped = await withTenantContext(fixture.tenant.id, async (context) => ({
+      own: await isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.student.id),
+      other: await isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.beta.student.id),
+    }));
 
-    expect(await isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.student.id)).toBe(true);
-    expect(await isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.beta.student.id)).toBe(false);
+    expect(scoped.own).toBe(true);
+    expect(scoped.other).toBe(false);
   });
 
   it("drops the student from scope once the enrolment is deactivated", async () => {
     const fixture = await seedTwoTeachersWithSeparateScopes("Inactive");
     await loginAs(fixture.alpha.user.id);
-    const context = await getTenantAuthorizationContext(fixture.tenant.id);
-
-    await sql.query("update public.enrollments set active = false where student_id = $1", [fixture.alpha.student.id]);
-    expect(await isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.student.id)).toBe(false);
+    const stillScoped = await withTenantContext(fixture.tenant.id, async (context) => {
+      await context.sql.query("update public.enrollments set active = false where student_id = $1", [
+        fixture.alpha.student.id,
+      ]);
+      return isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.student.id);
+    });
+    expect(stillScoped).toBe(false);
   });
 
   it("lets the teacher mark attendance for their own session and blocks another teacher's session", async () => {
     const fixture = await seedTwoTeachersWithSeparateScopes("Attendance");
     await loginAs(fixture.alpha.user.id);
 
-    const own = await requireTenantCapabilityWithScope(fixture.tenant.id, "attendance.mark", async (context) =>
-      isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.student.id),
+    const own = await requireTenantCapabilityWithScope(
+      fixture.tenant.id,
+      "attendance.mark",
+      (context) => isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.student.id),
+      (context) => Promise.resolve(context.role),
     );
-    expect(own.role).toBe("teacher");
+    expect(own).toBe("teacher");
 
     // ونفس القدرة تُرفض على طالب مدرس آخر، فالفحص على المورد لا على الدور.
     await expect(
-      requireTenantCapabilityWithScope(fixture.tenant.id, "attendance.mark", async (context) =>
-        isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.beta.student.id),
+      requireTenantCapabilityWithScope(
+        fixture.tenant.id,
+        "attendance.mark",
+        (context) => isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.beta.student.id),
+        () => Promise.resolve(null),
       ),
     ).rejects.toThrow("خارج نطاق صلاحيتك");
 
     await expect(
-      requireTenantCapabilityWithScope(fixture.tenant.id, "attendance.mark", async () => false),
+      requireTenantCapabilityWithScope(fixture.tenant.id, "attendance.mark", async () => false, () => Promise.resolve(null)),
     ).rejects.toThrow("خارج نطاق صلاحيتك");
   });
 
@@ -175,14 +194,18 @@ describe("teacher resource scope (positive and negative)", () => {
     await addMembership(sql, tenant.id, user.id, "teacher");
     await loginAs(user.id);
 
-    const context = await getTenantAuthorizationContext(tenant.id);
-    expect(await teacherRecordIdForUser(context.sql, tenant.id, user.id)).toBeNull();
+    const record = await withTenantContext(tenant.id, (context) =>
+      teacherRecordIdForUser(context.sql, tenant.id, user.id),
+    );
+    expect(record).toBeNull();
 
     await expect(
-      requireTenantCapabilityWithScope(tenant.id, "attendance.mark", async () => {
-        const teacherId = await teacherRecordIdForUser(context.sql, tenant.id, user.id);
-        return teacherId !== null;
-      }),
+      requireTenantCapabilityWithScope(
+        tenant.id,
+        "attendance.mark",
+        async (context) => (await teacherRecordIdForUser(context.sql, tenant.id, user.id)) !== null,
+        async () => null,
+      ),
     ).rejects.toThrow("خارج نطاق صلاحيتك");
   });
 
@@ -190,9 +213,9 @@ describe("teacher resource scope (positive and negative)", () => {
     const fixture = await seedTwoTeachersWithSeparateScopes("Escalation");
     await loginAs(fixture.alpha.user.id);
 
-    await expect(requireTenantCapability(fixture.tenant.id, "team.manage")).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(requireTenantCapability(fixture.tenant.id, "payments.record")).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(requireTenantCapability(fixture.tenant.id, "students.create")).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(requireTenantCapability(fixture.tenant.id, "team.manage", async () => null)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(requireTenantCapability(fixture.tenant.id, "payments.record", async () => null)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(requireTenantCapability(fixture.tenant.id, "students.create", async () => null)).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   it("keeps the catalogue readable for a teacher without any resource scope", async () => {
@@ -200,11 +223,11 @@ describe("teacher resource scope (positive and negative)", () => {
     await loginAs(fixture.alpha.user.id);
 
     // الكتالوج التنظيمي غير مقيّد بالنطاق: المدرس يحتاج معرفة الصفوف والمواد للتنقل.
-    await expect(requireTenantCapability(fixture.tenant.id, "branches.read")).resolves.toBeTruthy();
-    await expect(requireTenantCapability(fixture.tenant.id, "catalog.read")).resolves.toBeTruthy();
+    await expect(requireTenantCapability(fixture.tenant.id, "branches.read", async () => true)).resolves.toBe(true);
+    await expect(requireTenantCapability(fixture.tenant.id, "catalog.read", async () => true)).resolves.toBe(true);
     // لكن إدارته ممنوعة.
-    await expect(requireTenantCapability(fixture.tenant.id, "catalog.manage")).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(requireTenantCapability(fixture.tenant.id, "offerings.manage")).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(requireTenantCapability(fixture.tenant.id, "catalog.manage", async () => null)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(requireTenantCapability(fixture.tenant.id, "offerings.manage", async () => null)).rejects.toBeInstanceOf(AuthorizationError);
   });
 });
 
@@ -216,14 +239,14 @@ describe("finance scope (positive and negative)", () => {
     await addMembership(sql, tenant.id, accountant.id, "accountant");
     await loginAs(accountant.id);
 
-    await expect(requireTenantCapability(tenant.id, "invoices.create")).resolves.toBeTruthy();
-    await expect(requireTenantCapability(tenant.id, "invoices.update")).resolves.toBeTruthy();
-    await expect(requireTenantCapability(tenant.id, "payments.correct")).resolves.toBeTruthy();
-    await expect(requireTenantCapability(tenant.id, "payments.record")).resolves.toBeTruthy();
+    await expect(requireTenantCapability(tenant.id, "invoices.create", async () => true)).resolves.toBe(true);
+    await expect(requireTenantCapability(tenant.id, "invoices.update", async () => true)).resolves.toBe(true);
+    await expect(requireTenantCapability(tenant.id, "payments.correct", async () => true)).resolves.toBe(true);
+    await expect(requireTenantCapability(tenant.id, "payments.record", async () => true)).resolves.toBe(true);
 
-    await expect(requireTenantCapability(tenant.id, "attendance.mark")).rejects.toThrow("صلاحية");
-    await expect(requireTenantCapability(tenant.id, "students.create")).rejects.toThrow("صلاحية");
-    await expect(requireTenantCapability(tenant.id, "catalog.manage")).rejects.toThrow("صلاحية");
+    await expect(requireTenantCapability(tenant.id, "attendance.mark", async () => null)).rejects.toThrow("صلاحية");
+    await expect(requireTenantCapability(tenant.id, "students.create", async () => null)).rejects.toThrow("صلاحية");
+    await expect(requireTenantCapability(tenant.id, "catalog.manage", async () => null)).rejects.toThrow("صلاحية");
   });
 
   it("lets the receptionist record a payment but never correct or void it", async () => {
@@ -233,9 +256,9 @@ describe("finance scope (positive and negative)", () => {
     await addMembership(sql, tenant.id, receptionist.id, "receptionist");
     await loginAs(receptionist.id);
 
-    await expect(requireTenantCapability(tenant.id, "payments.record")).resolves.toBeTruthy();
-    await expect(requireTenantCapability(tenant.id, "invoices.create")).resolves.toBeTruthy();
-    await expect(requireTenantCapability(tenant.id, "payments.correct")).rejects.toThrow("صلاحية");
+    await expect(requireTenantCapability(tenant.id, "payments.record", async () => true)).resolves.toBe(true);
+    await expect(requireTenantCapability(tenant.id, "invoices.create", async () => true)).resolves.toBe(true);
+    await expect(requireTenantCapability(tenant.id, "payments.correct", async () => null)).rejects.toThrow("صلاحية");
   });
 
   it("keeps the teacher away from recording payments but able to read billing", async () => {
@@ -243,14 +266,17 @@ describe("finance scope (positive and negative)", () => {
     await loginAs(fixture.alpha.user.id);
 
     // `invoices.read` مقيّدة بالنطاق للمدرس، فالفحص يمر عبر مسار النطاق لا مسار القدرة.
-    const billing = await requireTenantCapabilityWithScope(fixture.tenant.id, "invoices.read", async (context) =>
-      isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.student.id),
+    const billingRole = await requireTenantCapabilityWithScope(
+      fixture.tenant.id,
+      "invoices.read",
+      (context) => isStudentInTeacherScope(context.sql, fixture.tenant.id, fixture.alpha.teacher.id, fixture.alpha.student.id),
+      (context) => Promise.resolve(context.role),
     );
-    expect(billing.role).toBe("teacher");
+    expect(billingRole).toBe("teacher");
 
     // أما الكتابة المالية فممنوعة على الدور نفسه.
-    await expect(requireTenantCapability(fixture.tenant.id, "payments.record")).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(requireTenantCapability(fixture.tenant.id, "invoices.create")).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(requireTenantCapability(fixture.tenant.id, "payments.record", async () => null)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(requireTenantCapability(fixture.tenant.id, "invoices.create", async () => null)).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   it("refuses every finance write when the workspace has no entitlement, with an upgrade reason", async () => {
@@ -260,7 +286,7 @@ describe("finance scope (positive and negative)", () => {
     await addMembership(sql, tenant.id, accountant.id, "accountant");
     await loginAs(accountant.id);
 
-    const error = await requireTenantCapability(tenant.id, "payments.record").catch((thrown) => thrown);
+    const error = await requireTenantCapability(tenant.id, "payments.record", async () => null).catch((thrown) => thrown);
     expect((error as Error).name).toBe("EntitlementError");
     expect((error as Error).message).toContain("غير مفعّلة");
   });
@@ -273,7 +299,7 @@ describe("finance scope (positive and negative)", () => {
     await loginAs(admin.id);
 
     for (const capability of ["invoices.create", "payments.correct", "attendance.mark", "students.create", "catalog.manage", "team.manage", "audit.read"] as const) {
-      await expect(requireTenantCapability(tenant.id, capability)).resolves.toBeTruthy();
+      await expect(requireTenantCapability(tenant.id, capability, async () => true)).resolves.toBe(true);
     }
   });
 });

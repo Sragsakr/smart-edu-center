@@ -22,7 +22,7 @@ import { createPostgresSession } from "@/lib/auth/postgres-auth";
 import type { ProductLevel } from "@/lib/tenant/product-level";
 import { getPostgresTeamWorkspaceData } from "@/lib/auth/postgres-team";
 import { getParentPortalData, getStudentPortalData } from "@/lib/portal-data";
-import { AuthorizationError, getTenantAuthorizationContext } from "@/lib/authorization/server";
+import { AuthorizationError, withTenantContext } from "@/lib/authorization/server";
 
 const sql = testSqlExecutor();
 
@@ -324,21 +324,21 @@ describe("Cross-tenant application-path isolation (real repository code)", () =>
     const a = await seedTenantWithClassroom("App E");
     const b = await seedTenantWithClassroom("App F");
     await loginAs(a.owner.id);
-    await expect(getTenantAuthorizationContext(b.tenant.id)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(withTenantContext(b.tenant.id, async () => null)).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   it("a suspended tenant denies authorization context even to its own owner", async () => {
     const a = await seedTenantWithClassroom("App G");
     await sql.query("update public.tenants set status = 'suspended' where id = $1", [a.tenant.id]);
     await loginAs(a.owner.id);
-    await expect(getTenantAuthorizationContext(a.tenant.id)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(withTenantContext(a.tenant.id, async () => null)).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   it("an inactive membership denies authorization context for that tenant", async () => {
     const a = await seedTenantWithClassroom("App H");
     await sql.query("update public.memberships set active = false where tenant_id = $1 and user_id = $2", [a.tenant.id, a.teacherUser.id]);
     await loginAs(a.teacherUser.id);
-    await expect(getTenantAuthorizationContext(a.tenant.id)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(withTenantContext(a.tenant.id, async () => null)).rejects.toBeInstanceOf(AuthorizationError);
   });
 });
 

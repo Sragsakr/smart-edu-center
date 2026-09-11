@@ -12,10 +12,23 @@ import {
   type AccessVerdict,
 } from "@/lib/authorization/access-contract";
 import { activeEntitlementKeys } from "@/lib/entitlements/entitlement-service";
-import type { AccessScopedSqlExecutor, SqlExecutor } from "@/lib/database/sql-executor";
+import type { AccessScopedSqlExecutor } from "@/lib/database/sql-executor";
+
+/**
+ * فرض قرار الوصول على الخادم.
+ *
+ * **كل الدوال هنا تأخذ عملية (callback) لا تُرجع مُنفّذًا.** السبب تقني لا تنظيمي:
+ * سياق الوصول يُضبط بـ`set_config(..., true)` أي `LOCAL`، فتُصفَّر قيمه مع نهاية
+ * المعاملة. أي استعلام بعد رجوع الدالة يعمل بلا سياق — ومع دور التطبيق
+ * (`NOSUPERUSER NOBYPASSRLS`) يرجع **صفر صفوف**. تمرير العملية يجعل هذا الخطأ
+ * غير قابل للوقوع أصلًا.
+ *
+ * المرجع: docs/adr/0007 و docs/RBAC_MATRIX.md §0.
+ */
 
 export type AuthorizedTenantContext = {
-  sql: SqlExecutor;
+  /** مُنفّذ داخل معاملة تحمل سياق المساحة — صالح فقط داخل العملية المُمرَّرة. */
+  sql: AccessScopedSqlExecutor;
   user: { id: string; email: string };
   tenantId: string;
   role: MemberRole;
@@ -31,10 +44,9 @@ export class AuthorizationError extends Error {
 }
 
 /**
- * رفض بسبب غياب الاشتراك، لا بسبب الصلاحية.
+ * رفض بسبب غياب الاشتراك لا الصلاحية.
  *
- * مفصول عن `AuthorizationError` لأن الواجهة تعرضه كحالة منتج تشرح الترقية،
- * لا كخطأ صلاحية. المرجع: docs/PRODUCT_VISION.md §6.
+ * مفصول عن `AuthorizationError` لأن الواجهة تعرضه كحالة منتج تشرح الترقية، لا كخطأ.
  */
 export class EntitlementError extends AuthorizationError {
   constructor(
@@ -46,7 +58,7 @@ export class EntitlementError extends AuthorizationError {
   }
 }
 
-/** يقرأ حالة المساحة ودور العضو والاستحقاقات في قراءتين محدودتين. */
+/** يقرأ حالة المساحة ودور العضو والاستحقاقات داخل المعاملة الحالية. */
 async function loadAccessSubject(
   sql: AccessScopedSqlExecutor,
   tenantId: string,
@@ -75,36 +87,45 @@ async function loadAccessSubject(
 }
 
 /**
- * سياق مصرّح به لتشغيل عملية واحدة داخل مساحة عمل.
+ * ينفّذ عملية داخل سياق مساحة مصرّح به.
  *
- * يتحقق من المساحة والعضوية والاستحقاقات، ثم يترك قرار الفعل نفسه لكل capability
- * عبر `requireTenantCapability` حتى لا يُقرأ الاشتراك مرتين في العملية الواحدة.
+ * الشروط: المساحة موجودة ونشطة، والعضوية نشطة. أما الفعل نفسه فيقرره
+ * `requireTenantCapability` أدناه.
  */
-export async function getTenantAuthorizationContext(tenantId: string): Promise<AuthorizedTenantContext> {
+export async function withTenantContext<Result>(
+  tenantId: string,
+  operation: (context: AuthorizedTenantContext) => Promise<Result>,
+): Promise<Result> {
   if (!tenantId) throw new AuthorizationError("مساحة العمل غير محددة");
 
-  const resolved = await withSessionUser(async ({ sql, user }) => {
+  // العملية تُنفَّذ **داخل** callback الجلسة. تنفيذها بعد رجوعه كان يعني أن الـcommit
+  // قد وقع وأن سياق المساحة صُفِّر، فأي قراءة لاحقة ترجع صفر صفوف — وهذا بالضبط
+  // ما يرفضه المُنفّذ بخطأ صريح.
+  // الغلاف ضروري: العملية قد تُعيد `null` فعلًا، فلا يصلح ذلك كعلامة على غياب
+  // الجلسة. الفرق بين «لا جلسة» و«نتيجة فارغة» يجب أن يكون صريحًا.
+  const wrapped = await withSessionUser(async ({ sql, user }) => {
     const subject = await loadAccessSubject(sql, tenantId, user.id);
-    return { sql, user, subject };
+
+    if (subject.tenantStatus === "missing") throw new AuthorizationError("مساحة العمل غير موجودة");
+    if (subject.tenantStatus === "suspended") throw new AuthorizationError("مساحة العمل موقوفة حاليًا");
+    if (!subject.membership) throw new AuthorizationError("ليس لديك وصول إلى مساحة العمل المطلوبة");
+    if (!subject.membership.active) throw new AuthorizationError("عضويتك في مساحة العمل غير مفعّلة");
+
+    // الدخول إلى المساحة النشطة: به تصبح جداولها مرئية لبقية العملية.
+    await sql.enterTenantScope(tenantId);
+
+    return {
+      value: await operation({
+        sql,
+        user,
+        tenantId,
+        role: subject.membership.role,
+        entitlements: subject.entitlements as Set<string>,
+      }),
+    };
   });
-  if (!resolved) redirect("/login");
-  const { sql, user, subject } = resolved;
-
-  if (subject.tenantStatus === "missing") throw new AuthorizationError("مساحة العمل غير موجودة");
-  if (subject.tenantStatus === "suspended") throw new AuthorizationError("مساحة العمل موقوفة حاليًا");
-  if (!subject.membership) throw new AuthorizationError("ليس لديك وصول إلى مساحة العمل المطلوبة");
-  if (!subject.membership.active) throw new AuthorizationError("عضويتك في مساحة العمل غير مفعّلة");
-
-  // الدخول إلى المساحة النشطة: به تصبح جداولها مرئية لبقية العملية.
-  await sql.enterTenantScope(tenantId);
-
-  return {
-    sql,
-    user,
-    tenantId,
-    role: subject.membership.role,
-    entitlements: subject.entitlements as Set<string>,
-  };
+  if (!wrapped) redirect("/login");
+  return wrapped.value;
 }
 
 function enforce(verdict: AccessVerdict): void {
@@ -115,69 +136,70 @@ function enforce(verdict: AccessVerdict): void {
   throw new AuthorizationError(accessDenialMessage(verdict));
 }
 
+function decide(context: AuthorizedTenantContext, capability: TenantCapability): AccessVerdict {
+  return evaluateAccess({
+    subject: {
+      tenantStatus: "active",
+      membership: { role: context.role, active: true },
+      entitlements: context.entitlements,
+    },
+    capability,
+  });
+}
+
 /**
- * يفرض الطبقات الثلاث على قدرة دور.
+ * يفرض الطبقات الثلاث على قدرة دور، ثم ينفّذ العملية داخل نفس المعاملة.
  *
  * القرار يأتي من `evaluateAccess` وحده، فلا تتكرر شروط الصلاحية في مواضع مختلفة.
  */
-export async function requireTenantCapability(
+export async function requireTenantCapability<Result>(
   tenantId: string,
   capability: TenantCapability,
-): Promise<AuthorizedTenantContext> {
-  const context = await getTenantAuthorizationContext(tenantId);
-  const verdict = evaluateAccess({
-    subject: {
-      tenantStatus: "active",
-      membership: { role: context.role, active: true },
-      entitlements: context.entitlements,
-    },
-    capability,
+  operation: (context: AuthorizedTenantContext) => Promise<Result>,
+): Promise<Result> {
+  return withTenantContext(tenantId, async (context) => {
+    const verdict = decide(context, capability);
+    if (verdict.reason === "scope_required") {
+      throw new AuthorizationError("هذه الصلاحية تحتاج تحققًا إضافيًا من نطاق المورد");
+    }
+    enforce(verdict);
+    return operation(context);
   });
-  if (verdict.reason === "scope_required") {
-    throw new AuthorizationError("هذه الصلاحية تحتاج تحققًا إضافيًا من نطاق المورد");
-  }
-  enforce(verdict);
-  return context;
 }
 
 /**
- * كالسابق، لكن يسمح بقدرة ذات نطاق إذا نجح فحص المورد نفسه.
+ * كالسابق، لكن يسمح بقدرة ذات نطاق بعد نجاح فحص المورد.
+ *
+ * فحص النطاق يعمل **داخل المعاملة نفسها**: لولا ذلك لقرأ جداول المساحة بلا سياق
+ * فأرجع صفر صفوف دائمًا، أي رفض كل شيء بصمت.
  */
-export async function requireTenantCapabilityWithScope(
+export async function requireTenantCapabilityWithScope<Result>(
   tenantId: string,
   capability: TenantCapability,
   scopeCheck: (context: AuthorizedTenantContext) => Promise<boolean>,
-): Promise<AuthorizedTenantContext> {
-  const context = await getTenantAuthorizationContext(tenantId);
-  const verdict = evaluateAccess({
-    subject: {
-      tenantStatus: "active",
-      membership: { role: context.role, active: true },
-      entitlements: context.entitlements,
-    },
-    capability,
+  operation: (context: AuthorizedTenantContext) => Promise<Result>,
+): Promise<Result> {
+  return withTenantContext(tenantId, async (context) => {
+    const verdict = decide(context, capability);
+    enforce(verdict);
+    if (verdict.decision === "scoped" && !(await scopeCheck(context))) {
+      throw new AuthorizationError("المورد المطلوب خارج نطاق صلاحيتك");
+    }
+    return operation(context);
   });
-  enforce(verdict);
-  if (verdict.decision === "allow") return context;
-  if (!(await scopeCheck(context))) throw new AuthorizationError("المورد المطلوب خارج نطاق صلاحيتك");
-  return context;
 }
 
-/** تقرير كامل للقدرات محسوب بـ`evaluateAccess` — يُستخدم في الواجهة للعرض والتعطيل فقط. */
+/** تقرير كامل للقدرات محسوب بـ`evaluateAccess` — للعرض والتعطيل في الواجهة فقط. */
 export async function tenantCapabilityReport(
   tenantId: string,
   capabilities: readonly TenantCapability[],
 ): Promise<Record<string, { allowed: boolean; reason: string }>> {
-  const context = await getTenantAuthorizationContext(tenantId);
-  const subject: AccessSubject = {
-    tenantStatus: "active",
-    membership: { role: context.role, active: true },
-    entitlements: context.entitlements,
-  };
-  const report: Record<string, { allowed: boolean; reason: string }> = {};
-  for (const capability of capabilities) {
-    const verdict = evaluateAccess({ subject, capability });
-    report[capability] = { allowed: isAllowed(verdict), reason: verdict.reason };
-  }
-  return report;
+  return withTenantContext(tenantId, (context) => {
+    const report: Record<string, { allowed: boolean; reason: string }> = {};
+    for (const capability of capabilities) {
+      const verdict = decide(context, capability);
+      report[capability] = { allowed: isAllowed(verdict), reason: verdict.reason };
+    }
+    return Promise.resolve(report);
+  });
 }

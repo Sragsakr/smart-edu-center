@@ -35,10 +35,11 @@ export function assertAssignableRole(role: string): asserts role is MemberRole {
  * يفتح سياقه بنفسه: يحل الهوية من الجلسة ثم يدخل المساحة النشطة داخل نفس المعاملة،
  * لأنه لا يجوز قراءة `memberships` خارج سياق خاضع لسياسات RLS.
  */
-export async function requirePostgresTenantCapability(
+export async function requirePostgresTenantCapability<Result>(
   tenantId: string,
   capability: TenantCapability,
-): Promise<{ sql: AccessScopedSqlExecutor; userId: string; role: MemberRole }> {
+  operation: (context: { sql: AccessScopedSqlExecutor; userId: string; role: MemberRole }) => Promise<Result>,
+): Promise<Result> {
   if (!tenantId) throw new Error("مساحة العمل غير محددة");
   const resolved = await withSessionUser(async ({ sql, user }) => {
     await sql.enterTenantScope(tenantId);
@@ -56,7 +57,7 @@ export async function requirePostgresTenantCapability(
   if (capabilityDecision(resolved.role, capability) !== "allow") {
     throw new Error("ليس لديك صلاحية لتنفيذ هذه العملية");
   }
-  return { sql: resolved.sql, userId: resolved.userId, role: resolved.role };
+  return operation({ sql: resolved.sql, userId: resolved.userId, role: resolved.role });
 }
 
 export async function getPostgresTeamWorkspaceData(
@@ -338,14 +339,27 @@ export async function setPostgresMembershipActive(
 ): Promise<void> {
   if (targetUserId === actorUserId && !active) throw new Error("لا يمكنك تعطيل عضويتك الحالية من هنا");
   return (async (transaction: SqlExecutor) => {
-    const result = await transaction.query<{ role: MemberRole; active: boolean }>(
-      `select role::text as role, active from public.memberships
-       where tenant_id = $1 and user_id = $2 for update`,
+    const result = await transaction.query<{ role: MemberRole; active: boolean; owner_count: number }>(
+      `select m.role::text as role, m.active,
+              (select count(*)::int from public.memberships o
+                where o.tenant_id = m.tenant_id and o.role = 'owner' and o.active = true) as owner_count
+       from public.memberships m
+       where m.tenant_id = $1 and m.user_id = $2 for update`,
       [tenantId, targetUserId],
     );
     const target = result.rows[0];
     if (!target) throw new Error("العضوية غير موجودة");
-    if (target.role === "owner") throw new Error("لا يمكن تعطيل المالك من إدارة الفريق");
+    // حماية المالك على ثلاث درجات، مرتّبة من الأعم إلى الأدق:
+    // 1) غير المالك لا يمسّ المالك إطلاقًا — مطابقة للمصفوفة (إدارة المالك للمالك فقط).
+    // 2) تعطيل مالك مسموح إن بقي مالك نشط آخر.
+    // 3) تعطيل الأخير ممنوع: المساحة تصبح بلا مالك ولا سبيل لإدارتها، فالبديل نقل الملكية.
+    // وإعادة تنشيط مالك معطّل مسموحة لأنها لا تُفقد المساحة مالكًا.
+    if (target.role === "owner") {
+      if (actorRole !== "owner") throw new Error("لا يمكن تعديل مالك المساحة إلا من مالك آخر");
+      if (!active && target.owner_count <= 1) {
+        throw new Error("لا يمكن تعطيل آخر مالك للمساحة. انقل الملكية إلى عضو آخر أولًا");
+      }
+    }
     if (actorRole === "admin" && target.role === "admin") throw new Error("المشرف لا يستطيع تعديل مشرف آخر");
     if (target.active === active) throw new Error(active ? "العضوية نشطة بالفعل" : "العضوية معطلة بالفعل");
     await transaction.query("update public.memberships set active = $1, updated_at = now() where tenant_id = $2 and user_id = $3", [active, tenantId, targetUserId]);

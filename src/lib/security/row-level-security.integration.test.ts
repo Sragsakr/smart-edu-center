@@ -199,12 +199,17 @@ describe("RLS is enforced for the runtime role", () => {
 
   it("stops exposing a workspace name once the membership is deactivated", async () => {
     const a = await createTenantWithOwner(ownerSql, { tenantName: "Revoked Member" });
+    // عضو غير مالك: تعطيل آخر مالك ممنوع بحماية الملكية، والفحص هنا يخص ظهور
+    // اسم المساحة لا دور المالك.
+    const member = await createUser(ownerSql);
+    await addMembership(ownerSql, a.tenant.id, member.id, "teacher");
     await ownerSql.query("update public.memberships set active = false where tenant_id = $1 and user_id = $2", [
       a.tenant.id,
-      a.owner.id,
+      member.id,
     ]);
 
-    expect(await countAs("tenants", { userId: a.owner.id })).toBe(0);
+    expect(await countAs("tenants", { userId: member.id })).toBe(0);
+    expect(await countAs("tenants", { userId: a.owner.id })).toBe(1);
   });
 
   it("grants every tenant to platform scope", async () => {

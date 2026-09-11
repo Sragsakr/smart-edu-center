@@ -742,6 +742,49 @@ create index portal_invitations_lookup_idx on public.portal_invitations(invitee_
 create index portal_invitations_tenant_idx on public.portal_invitations(tenant_id, created_at desc);
 
 -- ---------------------------------------------------------------------------
+-- ضمان بقاء مالك نشط لكل مساحة.
+--
+-- هذا الضمان invariant عابر للصفوف: «عدد المالكين النشطين ≥ 1». لا يعبّر عنه قيد
+-- عادي (CHECK يرى الصف وحده، والقيد الفريد يمنع التكرار لا الغياب)، فالحل trigger
+-- مؤجّل يُفحص عند commit: حتى لو أخطأ استعلام مستقبلي، لا يمكن ترك مساحة بلا مالك.
+--
+-- التأجيل مقصود: نقل الملكية يمرّ بلحظة وسيطة بلا مالك (تخفيض القائم ورفع الجديد)،
+-- والفحص عند commit يرى الحالة النهائية فقط.
+-- ---------------------------------------------------------------------------
+
+create or replace function private.assert_tenant_has_active_owner() returns trigger
+language plpgsql security definer set search_path = public, private, pg_temp as $$
+declare
+  v_tenant_id uuid;
+  v_owner_count integer;
+begin
+  v_tenant_id := coalesce(new.tenant_id, old.tenant_id);
+
+  -- مساحة محذوفة: لا معنى للفحص، وصفوف العضوية تُحذف بالـcascade معها.
+  if not exists (select 1 from public.tenants where id = v_tenant_id) then
+    return null;
+  end if;
+
+  select count(*) into v_owner_count
+  from public.memberships
+  where tenant_id = v_tenant_id and role = 'owner' and active = true;
+
+  if v_owner_count = 0 then
+    raise exception 'tenant % must keep at least one active owner', v_tenant_id
+      using errcode = 'check_violation',
+            hint = 'transfer ownership to another active member first';
+  end if;
+
+  return null;
+end $$;
+
+create constraint trigger memberships_require_active_owner
+  after insert or update or delete on public.memberships
+  deferrable initially deferred
+  for each row
+  execute function private.assert_tenant_has_active_owner();
+
+-- ---------------------------------------------------------------------------
 -- تحديد معدّل المحاولات لمسارات المصادقة.
 --
 -- الجدول في مخطط `private` عمدًا: لا يُمنح للتطبيق أي وصول مباشر له، والوحيد

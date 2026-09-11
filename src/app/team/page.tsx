@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Copy, MailPlus, ShieldCheck, UsersRound } from "lucide-react";
+import { Copy, Crown, MailPlus, ShieldCheck, UsersRound } from "lucide-react";
 
 import { ManagementRouteShell } from "@/components/management-route-shell";
 import { getTeamWorkspaceData } from "@/lib/team-access";
 import { isEntitlementBlocked, isRoleBlocked } from "@/lib/authorization/access-contract";
 import { createInvitation, deactivateMembership, reactivateMembership, resendInvitation, revokeInvitation } from "./actions";
+import { transferOwnership } from "./ownership-actions";
 import { ActionSubmitButton, InvitationShare } from "./team-client";
 import { DismissibleAlert } from "./dismissible-alert";
 
@@ -73,6 +74,12 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
 
   const inviteBlocked = data.capabilities["invitations.create"];
   const showInviteBlocked = !canInvite && (isEntitlementBlocked(inviteBlocked) || isRoleBlocked(inviteBlocked));
+
+  // نقل الملكية للمالك وحده، وإلى عضو نشط آخر — لا إلى النفس ولا إلى معطّل.
+  const isOwner = data.role === "owner";
+  const transferCandidates = data.members.filter(
+    (member) => member.active && member.role !== "owner" && member.user_id !== data.currentUserId,
+  );
 
   return (
     <ManagementRouteShell activeLabel="الفريق والدعوات">
@@ -221,6 +228,56 @@ export default async function TeamPage({ searchParams }: { searchParams: SearchP
             </table>
           </div>
         </section>
+        ) : null}
+
+        {isOwner ? (
+          <section className="card p-5 md:p-6">
+            <div className="flex items-center gap-2">
+              <Crown className="size-5 text-[#6547d9]" aria-hidden="true" />
+              <h2 className="font-extrabold">نقل ملكية المساحة</h2>
+            </div>
+            <p className="mt-2 text-sm leading-7 text-[#6f6a80]">
+              الملكية تحدد من يملك السلطة النهائية على المساحة. بعد النقل يتحول دورك إلى مشرف، ولا يمكن التراجع من هنا.
+            </p>
+
+            {transferCandidates.length === 0 ? (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-800">
+                لا يوجد عضو نشط آخر يمكن نقل الملكية إليه. أضف عضوًا وفعّله أولًا.
+              </div>
+            ) : (
+              <form action={transferOwnership} className="mt-5 grid gap-3 md:grid-cols-[1fr_260px_auto]">
+                <input type="hidden" name="tenant_id" value={data.tenant.id} />
+                <select
+                  name="target_user_id"
+                  required
+                  defaultValue=""
+                  className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-3 text-sm"
+                >
+                  <option value="" disabled>
+                    اختر العضو الجديد
+                  </option>
+                  {transferCandidates.map((member) => (
+                    <option key={member.user_id} value={member.user_id}>
+                      {member.email} · {roleLabel[member.role]}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="email"
+                  name="confirm_email"
+                  required
+                  dir="ltr"
+                  placeholder="اكتب بريد العضو للتأكيد"
+                  className="rounded-xl border border-[#ddd8e9] bg-white px-4 py-3 text-sm"
+                />
+                <ActionSubmitButton
+                  idleLabel="نقل الملكية"
+                  pendingLabel="جارٍ النقل..."
+                  className="rounded-xl border border-[#6547d9] px-5 py-3 text-sm font-bold text-[#6547d9]"
+                />
+              </form>
+            )}
+          </section>
         ) : null}
 
         {canReadInvitations ? (

@@ -33,38 +33,65 @@ async function executeQuery<Row extends SqlRow>(
   };
 }
 
-function queryAdapter(client: PoolClient): SqlExecutor {
-  return {
-    query: <Row extends SqlRow = SqlRow>(
-      text: string,
-      values: readonly unknown[] = [],
-    ) => executeQuery<Row>(
-      (queryText, queryValues) => client.query(queryText, queryValues),
-      text,
-      values,
-    ),
-  };
-}
-
-/**
- * يضبط سياق وصول داخل المعاملة الحالية.
- *
- * `set_config(..., true)` أي `LOCAL`: القيمة تُصفَّر مع نهاية المعاملة، فلا تتسرّب
- * أبدًا إلى طلب لاحق يستخدم نفس الاتصال من الـpool. واستخدام `set_config` بدل
- * `SET LOCAL` يسمح بتمرير القيمة كوسيط مُعامَل بدل تركيب نص SQL.
- */
+/** يضبط إعدادًا محليًا للمعاملة. القيمة `true` تعني `LOCAL`: تُصفَّر مع نهاية المعاملة. */
 async function setLocalSetting(client: PoolClient, name: string, value: string): Promise<void> {
   await client.query("select set_config($1, $2, true)", [name, value]);
 }
 
-function accessScopedExecutor(client: PoolClient): AccessScopedSqlExecutor {
-  const base = queryAdapter(client);
+function expiredContextError(): Error {
+  return new Error(
+    "access context expired: the transaction already ended, so LOCAL settings are cleared. " +
+      "Run the read inside the same callback that opened the context instead of reusing the returned executor.",
+  );
+}
+
+/**
+ * مُنفّذ مربوط بمعاملة واحدة.
+ *
+ * **يفشل بصوت عالٍ بعد انتهاء المعاملة.** السبب: الإعدادات `LOCAL` تُصفَّر مع نهاية
+ * المعاملة، فأي استعلام لاحق يعمل بلا سياق ويرجع **صفر صفوف بدل خطأ** — وهو أسوأ
+ * أنواع العلل لأنه صامت. القيمة `isConsumed` تُغلق المُنفّذ عند الـcommit أو الـrollback.
+ *
+ * المرجع: docs/adr/0007.
+ */
+function queryAdapter(
+  client: PoolClient,
+  isConsumed: () => boolean = () => false,
+): SqlExecutor & {
+  query: <Row extends SqlRow = SqlRow>(text: string, values?: readonly unknown[]) => Promise<SqlQueryResult<Row>>;
+} {
+  return {
+    query: async <Row extends SqlRow = SqlRow>(text: string, values: readonly unknown[] = []) => {
+      if (isConsumed()) throw expiredContextError();
+      return executeQuery<Row>((queryText, queryValues) => client.query(queryText, queryValues), text, values);
+    },
+  };
+}
+
+/** مُنفّذ مقيد بالسياق: يسمح بتعديل نطاق المساحة إضافة إلى الاستعلام. */
+function accessScopedExecutor(client: PoolClient, isConsumed: () => boolean): AccessScopedSqlExecutor {
+  const base = queryAdapter(client, isConsumed);
+  const assertLive = () => {
+    if (isConsumed()) throw expiredContextError();
+  };
   return {
     query: base.query,
-    enterTenantScope: (tenantId: string) => setLocalSetting(client, "app.current_tenant_id", tenantId),
-    leaveTenantScope: () => setLocalSetting(client, "app.current_tenant_id", ""),
-    enterPlatformScope: () => setLocalSetting(client, "app.platform_scope", "on"),
-    leavePlatformScope: () => setLocalSetting(client, "app.platform_scope", ""),
+    enterTenantScope: async (tenantId: string) => {
+      assertLive();
+      await setLocalSetting(client, "app.current_tenant_id", tenantId);
+    },
+    leaveTenantScope: async () => {
+      assertLive();
+      await setLocalSetting(client, "app.current_tenant_id", "");
+    },
+    enterPlatformScope: async () => {
+      assertLive();
+      await setLocalSetting(client, "app.platform_scope", "on");
+    },
+    leavePlatformScope: async () => {
+      assertLive();
+      await setLocalSetting(client, "app.platform_scope", "");
+    },
   };
 }
 
@@ -101,13 +128,18 @@ export class PostgresSqlExecutor implements TransactionalSqlExecutor {
     operation: (sql: SqlExecutor) => Promise<Result>,
   ): Promise<Result> {
     const client = await this.pool.connect();
+    let consumed = false;
 
     try {
       await client.query("BEGIN");
-      const result = await operation(queryAdapter(client));
+      // نفس حارس `runScoped`: إعدادات المعاملة تُصفَّر مع نهايتها، فاستخدام
+      // المُنفّذ بعدها يجب أن يفشل صراحةً لا أن يرجع صفر صفوف.
+      const result = await operation(queryAdapter(client, () => consumed));
       await client.query("COMMIT");
+      consumed = true;
       return result;
     } catch (operationError) {
+      consumed = true;
       return rollbackAndThrow(client, operationError);
     } finally {
       client.release();
@@ -141,12 +173,17 @@ export class PostgresSqlExecutor implements TransactionalSqlExecutor {
     operation: (client: PoolClient, scoped: AccessScopedSqlExecutor) => Promise<Result>,
   ): Promise<Result> {
     const client = await this.pool.connect();
+    let consumed = false;
     try {
       await client.query("BEGIN");
-      const result = await operation(client, accessScopedExecutor(client));
+      const result = await operation(client, accessScopedExecutor(client, () => consumed));
       await client.query("COMMIT");
+      // الإغلاق بعد الـcommit تحديدًا: من يستخدم المُنفّذ لاحقًا يرى خطأ صريحًا
+      // بدل صفر صفوف صامتة.
+      consumed = true;
       return result;
     } catch (operationError) {
+      consumed = true;
       return rollbackAndThrow(client, operationError);
     } finally {
       // كل ما ضُبط كان `LOCAL`، فتصرّف القيم مع نهاية المعاملة ولا تُعاد أي حالة

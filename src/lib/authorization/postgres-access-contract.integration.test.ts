@@ -33,9 +33,12 @@ describe("server capability enforcement combines entitlement, role and scope", (
     await grantEntitlements(sql, tenant.id, "management_platform");
     await loginAs(owner.id);
 
-    const context = await requireTenantCapability(tenant.id, "students.read");
-    expect(context.role).toBe("owner");
-    expect(context.entitlements.has("ops.core")).toBe(true);
+    const info = await requireTenantCapability(tenant.id, "students.read", async (context) => ({
+      role: context.role,
+      hasCore: context.entitlements.has("ops.core"),
+    }));
+    expect(info.role).toBe("owner");
+    expect(info.hasCore).toBe(true);
   });
 
   it("blocks a role that would otherwise be allowed when the workspace has no entitlement", async () => {
@@ -43,15 +46,15 @@ describe("server capability enforcement combines entitlement, role and scope", (
     // لا منح استحقاقات: محاكاة مساحة لم تُفعّل لها أي قدرة بعد.
     await loginAs(owner.id);
 
-    await expect(requireTenantCapability(tenant.id, "students.read")).rejects.toBeInstanceOf(EntitlementError);
-    await expect(requireTenantCapability(tenant.id, "students.read")).rejects.toThrow("غير مفعّلة");
+    await expect(requireTenantCapability(tenant.id, "students.read", async () => null)).rejects.toBeInstanceOf(EntitlementError);
+    await expect(requireTenantCapability(tenant.id, "students.read", async () => null)).rejects.toThrow("غير مفعّلة");
   });
 
   it("reports the missing entitlement key so the UI can explain the upgrade", async () => {
     const { tenant, owner } = await createTenantWithOwner(sql, { productLevel: "operations" });
     await loginAs(owner.id);
 
-    const error = await requireTenantCapability(tenant.id, "payments.record").catch((thrown) => thrown);
+    const error = await requireTenantCapability(tenant.id, "payments.record", async () => null).catch((thrown) => thrown);
     expect(error).toBeInstanceOf(EntitlementError);
     expect((error as EntitlementError).missingEntitlement).toBe("ops.core");
   });
@@ -65,14 +68,14 @@ describe("server capability enforcement combines entitlement, role and scope", (
     await loginAs(accountant.id);
 
     // المحاسب لا يملك تعليم الحضور، لكن الفشل هنا سببه الدور لا الاشتراك.
-    const error = await requireTenantCapability(tenant.id, "attendance.mark").catch((thrown) => thrown);
+    const error = await requireTenantCapability(tenant.id, "attendance.mark", async () => null).catch((thrown) => thrown);
     expect(error).toBeInstanceOf(AuthorizationError);
     expect(error).not.toBeInstanceOf(EntitlementError);
     expect((error as Error).message).toContain("صلاحية");
 
     // والعكس: المالك يملك الصلاحية ولا يمنعه الاشتراك.
     await loginAs(owner.id);
-    await expect(requireTenantCapability(tenant.id, "attendance.mark")).resolves.toBeTruthy();
+    await expect(requireTenantCapability(tenant.id, "attendance.mark", async () => true)).resolves.toBe(true);
   });
 
   it("refuses a scoped capability through the unscoped entry point", async () => {
@@ -83,8 +86,8 @@ describe("server capability enforcement combines entitlement, role and scope", (
     await addMembership(sql, tenant.id, teacher.id, "teacher");
     await loginAs(teacher.id);
 
-    await expect(requireTenantCapability(tenant.id, "students.read")).rejects.toThrow("نطاق المورد");
-    await expect(requireTenantCapability(tenant.id, "attendance.mark")).rejects.toThrow("نطاق المورد");
+    await expect(requireTenantCapability(tenant.id, "students.read", async () => null)).rejects.toThrow("نطاق المورد");
+    await expect(requireTenantCapability(tenant.id, "attendance.mark", async () => null)).rejects.toThrow("نطاق المورد");
   });
 
   it("allows a scoped capability only when the resource scope check passes", async () => {
@@ -96,11 +99,16 @@ describe("server capability enforcement combines entitlement, role and scope", (
     await loginAs(teacher.id);
 
     await expect(
-      requireTenantCapabilityWithScope(tenant.id, "attendance.mark", async () => false),
+      requireTenantCapabilityWithScope(tenant.id, "attendance.mark", async () => false, async () => null),
     ).rejects.toThrow("خارج نطاق صلاحيتك");
 
-    const context = await requireTenantCapabilityWithScope(tenant.id, "attendance.mark", async () => true);
-    expect(context.role).toBe("teacher");
+    const role = await requireTenantCapabilityWithScope(
+      tenant.id,
+      "attendance.mark",
+      async () => true,
+      async (context) => context.role,
+    );
+    expect(role).toBe("teacher");
   });
 
   it("still checks the entitlement before running a scope check", async () => {
@@ -111,10 +119,15 @@ describe("server capability enforcement combines entitlement, role and scope", (
 
     let scopeCheckRan = false;
     await expect(
-      requireTenantCapabilityWithScope(tenant.id, "attendance.mark", async () => {
-        scopeCheckRan = true;
-        return true;
-      }),
+      requireTenantCapabilityWithScope(
+        tenant.id,
+        "attendance.mark",
+        async () => {
+          scopeCheckRan = true;
+          return true;
+        },
+        async () => null,
+      ),
     ).rejects.toBeInstanceOf(EntitlementError);
     expect(scopeCheckRan).toBe(false);
   });
@@ -125,19 +138,25 @@ describe("server capability enforcement combines entitlement, role and scope", (
     await sql.query("update public.tenants set status = 'suspended' where id = $1", [tenant.id]);
     await loginAs(owner.id);
 
-    await expect(requireTenantCapability(tenant.id, "students.read")).rejects.toThrow("موقوفة");
+    await expect(requireTenantCapability(tenant.id, "students.read", async () => null)).rejects.toThrow("موقوفة");
   });
 
   it("denies an inactive membership without touching the entitlement layer", async () => {
     const { tenant, owner } = await createTenantWithOwner(sql, { productLevel: "management_platform" });
     await grantEntitlements(sql, tenant.id, "management_platform");
+
+    // عضو غير مالك: تعطيل آخر مالك ممنوع أصلًا بحماية الملكية، والفحص هنا يخص
+    // العضوية المعطّلة لا المالك.
+    const member = await createUser(sql);
+    await addMembership(sql, tenant.id, member.id, "teacher");
     await sql.query("update public.memberships set active = false where tenant_id = $1 and user_id = $2", [
       tenant.id,
-      owner.id,
+      member.id,
     ]);
-    await loginAs(owner.id);
+    await loginAs(member.id);
 
-    await expect(requireTenantCapability(tenant.id, "students.read")).rejects.toThrow("غير مفعّلة");
+    await expect(requireTenantCapability(tenant.id, "students.read", async () => null)).rejects.toThrow("غير مفعّلة");
+    expect(owner.id).toBeTruthy();
   });
 
   it("never lets a member of another workspace inherit this workspace entitlement", async () => {
@@ -146,8 +165,8 @@ describe("server capability enforcement combines entitlement, role and scope", (
     const closed = await createTenantWithOwner(sql, { productLevel: "operations" });
     await loginAs(closed.owner.id);
 
-    await expect(requireTenantCapability(closed.tenant.id, "students.read")).rejects.toBeInstanceOf(EntitlementError);
-    await expect(requireTenantCapability(entitled.tenant.id, "students.read")).rejects.toThrow(
+    await expect(requireTenantCapability(closed.tenant.id, "students.read", async () => null)).rejects.toBeInstanceOf(EntitlementError);
+    await expect(requireTenantCapability(entitled.tenant.id, "students.read", async () => null)).rejects.toThrow(
       "ليس لديك وصول",
     );
   });
