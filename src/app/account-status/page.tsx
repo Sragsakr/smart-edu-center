@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { signOut } from "@/app/auth/actions";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { getCurrentAccountAccess } from "@/lib/auth/account-access";
+import { productLevelLabelsAr } from "@/lib/tenant/product-level";
+import { tenantTypeLabelsAr } from "@/lib/tenant/tenant-type";
 
 export default async function AccountStatusPage() {
   const access = await getCurrentAccountAccess();
@@ -39,8 +41,12 @@ export default async function AccountStatusPage() {
             <b>{access.request.workspace_name}</b>
           </div>
           <div className="mt-3 flex items-center justify-between gap-4">
-            <span className="text-[#777386]">نوع الحساب</span>
-            <b>{access.request.account_type === "center" ? "سنتر تعليمي" : "مدرس مستقل"}</b>
+            <span className="text-[#777386]">نوع النشاط</span>
+            <b>{tenantTypeLabelsAr[access.request.tenant_type]}</b>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-4">
+            <span className="text-[#777386]">مستوى المنتج المطلوب</span>
+            <b>{productLevelLabelsAr[access.request.requested_product_level]}</b>
           </div>
           {!rejected ? (
             <div className="mt-3 flex items-center gap-2 text-xs text-emerald-700">

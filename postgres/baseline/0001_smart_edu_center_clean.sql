@@ -11,6 +11,15 @@ create type public.workspace_request_status as enum ('pending_approval','approve
 create type public.password_reset_status as enum ('pending','code_ready','rejected','consumed','expired');
 create type public.tenant_status as enum ('active','suspended');
 create type public.invitation_status as enum ('pending','accepted','revoked','expired');
+create type public.tenant_type as enum ('teacher','center');
+create type public.product_level as enum ('operations','management_platform','learning_platform');
+create type public.capability_kind as enum ('feature','addon','limit');
+create type public.entitlement_state as enum ('active','pending','expired','revoked');
+create type public.entitlement_source as enum ('plan','addon','trial','manual','promotion');
+create type public.domain_kind as enum ('subdomain','custom');
+create type public.domain_status as enum ('pending','verified','active','failed');
+create type public.theme_mode as enum ('light','dark','system');
+create type public.offering_mode as enum ('onsite','online','hybrid');
 
 create table public.app_users (
   id uuid primary key,
@@ -26,13 +35,85 @@ create table public.tenants (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(btrim(name)) between 2 and 120),
   slug citext not null unique check (slug::text ~ '^[a-z0-9-]{3,60}$'),
-  account_type text not null default 'center' check (account_type in ('center','independent_teacher')),
+  tenant_type public.tenant_type not null,
+  product_level public.product_level not null default 'operations',
+  currency char(3) not null default 'EGP' check (currency::text ~ '^[A-Z]{3}$'),
+  timezone text not null default 'Africa/Cairo' check (char_length(btrim(timezone)) between 3 and 64),
+  locale text not null default 'ar' check (locale ~ '^[a-z]{2}(-[A-Za-z]{2,4})?$'),
   status public.tenant_status not null default 'active',
   created_by uuid not null references public.app_users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (id)
 );
+
+-- كتالوج القدرات: نطاق المنصة (بلا tenant_id)، ويُشتق من src/lib/entitlements/capability-catalog.json
+create table public.capability_catalog (
+  key text primary key check (key ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$'),
+  kind public.capability_kind not null,
+  included_from_level public.product_level,
+  title_ar text not null check (char_length(btrim(title_ar)) between 2 and 160),
+  description_ar text not null check (char_length(btrim(description_ar)) between 2 and 500),
+  sort_order integer not null default 0,
+  check ((kind = 'feature') = (included_from_level is not null))
+);
+
+-- حالة كل قدرة لكل مساحة: مصدر الحقيقة التجاري الفعلي
+create table public.tenant_entitlements (
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  capability_key text not null references public.capability_catalog(key) on delete restrict,
+  state public.entitlement_state not null default 'active',
+  source public.entitlement_source not null default 'plan',
+  source_ref text,
+  limits jsonb not null default '{}'::jsonb check (jsonb_typeof(limits) = 'object'),
+  effective_from timestamptz not null default now(),
+  effective_to timestamptz,
+  granted_by uuid references public.app_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, capability_key),
+  check (effective_to is null or effective_to > effective_from),
+  check (source = 'plan' or source_ref is not null)
+);
+
+-- هوية المساحة: إعدادات بيانات لا fork ولا بناء منفصل
+create table public.tenant_branding (
+  tenant_id uuid primary key references public.tenants(id) on delete cascade,
+  public_name text check (public_name is null or char_length(btrim(public_name)) between 2 and 120),
+  tagline text check (tagline is null or char_length(btrim(tagline)) between 2 and 200),
+  logo_ref text,
+  favicon_ref text,
+  primary_color text not null default '#6547d9' check (primary_color ~* '^#[0-9a-f]{6}$'),
+  secondary_color text check (secondary_color is null or secondary_color ~* '^#[0-9a-f]{6}$'),
+  theme_mode public.theme_mode not null default 'light',
+  support_email citext,
+  support_phone text check (support_phone is null or support_phone ~ '^\+[1-9][0-9]{7,14}$'),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- الدومينات: الـHost مدخل غير موثوق، ولا يُخمَّن منه الـTenant
+create table public.tenant_domains (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  hostname citext not null unique check (
+    hostname::text ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'
+  ),
+  kind public.domain_kind not null,
+  status public.domain_status not null default 'pending',
+  is_primary boolean not null default false,
+  ssl_status text,
+  verified_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (tenant_id, id),
+  check ((status in ('verified','active')) = (verified_at is not null)),
+  check (is_primary = false or status = 'active')
+);
+
+create unique index tenant_domains_one_primary_per_tenant_idx
+  on public.tenant_domains(tenant_id)
+  where is_primary;
 
 create table public.memberships (
   tenant_id uuid not null references public.tenants(id) on delete cascade,
@@ -100,35 +181,177 @@ create table public.branches (
   unique (tenant_id, id)
 );
 
+-- ============================================================================
+-- الكتالوج الأكاديمي: Subject وTeacher وCourse وCourse Offering مفاهيم منفصلة.
+-- لا يوجد hard-link واحد بين Subject وTeacher؛ الربط عبر course_teachers.
+-- المرجع: docs/adr/0003
+-- ============================================================================
+
+create table public.rooms (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  branch_id uuid,
+  name text not null check (char_length(btrim(name)) between 1 and 80),
+  capacity integer check (capacity is null or capacity > 0),
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (tenant_id, id),
+  foreign key (tenant_id, branch_id)
+    references public.branches(tenant_id, id) on delete set null
+);
+
+create table public.stages (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 80),
+  order_index integer not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (tenant_id, id),
+  unique (tenant_id, name)
+);
+
+create table public.grades (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  stage_id uuid not null,
+  name text not null check (char_length(btrim(name)) between 1 and 80),
+  order_index integer not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (tenant_id, id),
+  unique (tenant_id, stage_id, name),
+  foreign key (tenant_id, stage_id)
+    references public.stages(tenant_id, id) on delete cascade
+);
+
+create table public.subjects (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 80),
+  code text,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (tenant_id, id),
+  unique (tenant_id, name)
+);
+
+-- سجل مدرس مستقل عن memberships: يمكن وجوده بلا حساب دخول، ويُربط لاحقًا عند منحه عضوية.
+create table public.teachers (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  membership_user_id uuid,
+  display_name text not null check (char_length(btrim(display_name)) between 2 and 160),
+  phone text,
+  bio text,
+  archived_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (tenant_id, id),
+  unique (tenant_id, display_name),
+  foreign key (tenant_id, membership_user_id)
+    references public.memberships(tenant_id, user_id) on delete set null
+);
+
+create table public.courses (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  subject_id uuid not null,
+  grade_id uuid not null,
+  title text not null check (char_length(btrim(title)) between 1 and 160),
+  description text,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (tenant_id, id),
+  unique (tenant_id, grade_id, subject_id, title),
+  foreign key (tenant_id, subject_id)
+    references public.subjects(tenant_id, id) on delete restrict,
+  foreign key (tenant_id, grade_id)
+    references public.grades(tenant_id, id) on delete restrict
+);
+
+-- علاقة N:N بين المقرر والمدرس — لا ربط مباشر بين المادة والمدرس.
+create table public.course_teachers (
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  course_id uuid not null,
+  teacher_id uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (course_id, teacher_id),
+  -- مفتاح مركّب يسمح للعرض بالإشارة إلى الإسناد نفسه، فلا يقبل عرضًا بمدرس غير مسند للمقرر.
+  unique (tenant_id, course_id, teacher_id),
+  foreign key (tenant_id, course_id)
+    references public.courses(tenant_id, id) on delete cascade,
+  foreign key (tenant_id, teacher_id)
+    references public.teachers(tenant_id, id) on delete cascade
+);
+
+-- الوحدة القابلة للبيع والتسجيل: مقرر + مدرس + فرع + قاعة + نمط + سعة + سعر.
+create table public.course_offerings (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  course_id uuid not null,
+  teacher_id uuid not null,
+  branch_id uuid,
+  room_id uuid,
+  mode public.offering_mode not null default 'onsite',
+  capacity integer check (capacity is null or capacity > 0),
+  price_amount numeric(12,2) not null default 0 check (price_amount >= 0),
+  currency char(3) check (currency is null or currency::text ~ '^[A-Z]{3}$'),
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (tenant_id, id),
+  -- الإسناد نفسه: لا يمكن بيع عرض بمدرس غير مسند للمقرر.
+  foreign key (tenant_id, course_id, teacher_id)
+    references public.course_teachers(tenant_id, course_id, teacher_id) on delete restrict,
+  foreign key (tenant_id, branch_id)
+    references public.branches(tenant_id, id) on delete set null,
+  foreign key (tenant_id, room_id)
+    references public.rooms(tenant_id, id) on delete set null
+);
+
+-- منع تكرار نفس العرض داخل نفس الفرع، مع السماح بعروض بلا فرع.
+create unique index course_offerings_branch_identity_idx
+  on public.course_offerings(tenant_id, course_id, teacher_id, branch_id)
+  where branch_id is not null;
+create unique index course_offerings_unassigned_branch_identity_idx
+  on public.course_offerings(tenant_id, course_id, teacher_id)
+  where branch_id is null;
+
 create table public.students (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
-  user_id uuid unique references public.app_users(id) on delete set null,
+  user_id uuid references public.app_users(id) on delete set null,
   branch_id uuid,
+  grade_id uuid,
   code text not null,
   full_name text not null,
   phone text,
-  grade text,
   active boolean not null default true,
   joined_on date not null default current_date,
   created_at timestamptz not null default now(),
   unique (tenant_id, id),
   unique (tenant_id, code),
+  unique (tenant_id, user_id),
   foreign key (tenant_id, branch_id)
-    references public.branches(tenant_id, id) on delete set null
+    references public.branches(tenant_id, id) on delete set null,
+  foreign key (tenant_id, grade_id)
+    references public.grades(tenant_id, id) on delete set null
 );
 
 create table public.guardians (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
-  user_id uuid unique references public.app_users(id) on delete set null,
+  user_id uuid references public.app_users(id) on delete set null,
   full_name text not null,
   phone text not null,
   email citext,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (tenant_id, id)
+  unique (tenant_id, id),
+  unique (tenant_id, user_id)
 );
 
 create table public.student_guardians (
@@ -143,28 +366,47 @@ create table public.student_guardians (
     references public.guardians(tenant_id, id) on delete cascade
 );
 
+-- وحدة التسليم/الجدولة: تشير إلى العرض القابل للبيع، ولا تحمل مادة أو مدرسًا مباشرة.
 create table public.cohorts (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
+  course_offering_id uuid not null,
   branch_id uuid,
-  name text not null,
-  subject text,
-  teacher_user_id uuid,
+  room_id uuid,
+  name text not null check (char_length(btrim(name)) between 1 and 120),
   capacity integer check (capacity is null or capacity > 0),
   active boolean not null default true,
   created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   unique (tenant_id, id),
+  foreign key (tenant_id, course_offering_id)
+    references public.course_offerings(tenant_id, id) on delete restrict,
   foreign key (tenant_id, branch_id)
     references public.branches(tenant_id, id) on delete set null,
-  foreign key (tenant_id, teacher_user_id)
-    references public.memberships(tenant_id, user_id) on delete restrict
+  foreign key (tenant_id, room_id)
+    references public.rooms(tenant_id, id) on delete set null
 );
 
+-- التسجيل التجاري على العرض القابل للبيع.
 create table public.enrollments (
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  course_offering_id uuid not null,
+  student_id uuid not null,
+  enrolled_on date not null default current_date,
+  active boolean not null default true,
+  primary key (course_offering_id, student_id),
+  foreign key (tenant_id, course_offering_id)
+    references public.course_offerings(tenant_id, id) on delete cascade,
+  foreign key (tenant_id, student_id)
+    references public.students(tenant_id, id) on delete cascade
+);
+
+-- عضوية التسليم/الحضور داخل مجموعة، منفصلة عن التسجيل التجاري على العرض.
+create table public.cohort_members (
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   cohort_id uuid not null,
   student_id uuid not null,
-  enrolled_on date not null default current_date,
+  joined_on date not null default current_date,
   active boolean not null default true,
   primary key (cohort_id, student_id),
   foreign key (tenant_id, cohort_id)
@@ -258,7 +500,8 @@ create table public.workspace_requests (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references public.app_users(id) on delete cascade,
   email citext not null,
-  account_type text not null check (account_type in ('center', 'independent_teacher')),
+  tenant_type public.tenant_type not null,
+  requested_product_level public.product_level not null default 'operations',
   workspace_name text not null check (char_length(btrim(workspace_name)) between 2 and 120),
   slug citext not null check (slug::text ~ '^[a-z0-9-]{3,60}$'),
   mobile_phone text check (mobile_phone is null or mobile_phone ~ '^\+[1-9][0-9]{7,14}$'),
@@ -339,19 +582,36 @@ create table public.auth_sessions (
 );
 
 create index memberships_user_idx on public.memberships(user_id) where active;
-create index tenants_account_type_idx on public.tenants(account_type);
+create index tenants_tenant_type_idx on public.tenants(tenant_type);
+create index tenants_product_level_idx on public.tenants(product_level);
+create index tenant_entitlements_tenant_state_idx on public.tenant_entitlements(tenant_id, state);
+create index tenant_domains_tenant_idx on public.tenant_domains(tenant_id);
 create index tenants_status_idx on public.tenants(status);
 create index tenants_created_by_idx on public.tenants(created_by);
 create index staff_profiles_tenant_idx on public.staff_profiles(tenant_id);
 create index branches_tenant_idx on public.branches(tenant_id);
 create index students_tenant_name_idx on public.students(tenant_id, full_name);
 create index students_user_idx on public.students(user_id) where user_id is not null;
+create index students_grade_idx on public.students(tenant_id, grade_id) where grade_id is not null;
 create index guardians_tenant_idx on public.guardians(tenant_id);
 create index guardians_user_idx on public.guardians(user_id) where user_id is not null;
 create index student_guardians_tenant_idx on public.student_guardians(tenant_id);
+create index rooms_tenant_branch_idx on public.rooms(tenant_id, branch_id);
+create index stages_tenant_order_idx on public.stages(tenant_id, order_index);
+create index grades_tenant_stage_idx on public.grades(tenant_id, stage_id, order_index);
+create index subjects_tenant_idx on public.subjects(tenant_id);
+create index teachers_tenant_idx on public.teachers(tenant_id, display_name);
+create index teachers_membership_idx on public.teachers(tenant_id, membership_user_id) where membership_user_id is not null;
+create index courses_tenant_grade_idx on public.courses(tenant_id, grade_id, subject_id);
+create index course_teachers_teacher_idx on public.course_teachers(tenant_id, teacher_id);
+create index course_offerings_tenant_course_idx on public.course_offerings(tenant_id, course_id);
+create index course_offerings_teacher_idx on public.course_offerings(tenant_id, teacher_id);
 create index cohorts_tenant_idx on public.cohorts(tenant_id);
-create index cohorts_teacher_idx on public.cohorts(tenant_id, teacher_user_id);
+create index cohorts_offering_idx on public.cohorts(tenant_id, course_offering_id);
 create index enrollments_tenant_idx on public.enrollments(tenant_id);
+create index enrollments_student_idx on public.enrollments(tenant_id, student_id) where active;
+create index cohort_members_tenant_idx on public.cohort_members(tenant_id);
+create index cohort_members_student_idx on public.cohort_members(tenant_id, student_id) where active;
 create index sessions_cohort_starts_idx on public.class_sessions(tenant_id, cohort_id, starts_at desc);
 create index attendance_tenant_idx on public.attendance(tenant_id);
 create index invoices_student_status_idx on public.invoices(tenant_id, student_id, status);
@@ -374,6 +634,14 @@ comment on table public.auth_password_credentials is
   'Application-owned password credentials; password_digest contains a versioned salted KDF output.';
 comment on table public.auth_sessions is
   'Application-owned opaque sessions; only token digests are persisted.';
+comment on table public.capability_catalog is
+  'Platform-scope capability definitions. Source of truth is src/lib/entitlements/capability-catalog.json; this table is the reference copy used for reporting and entitlement integrity.';
+comment on table public.tenant_entitlements is
+  'Commercial capability state per tenant. Effective access requires an active row here in addition to RBAC and resource scope.';
+comment on table public.tenant_branding is
+  'Tenant branding configuration. Branding is tenant data, never a separate deployment or codebase.';
+comment on table public.tenant_domains is
+  'Verified hostnames per tenant. The Host header is untrusted: resolve the tenant from this table, never by guessing.';
 
 -- Authorization is enforced by the application layer for this self-managed PostgreSQL target.
 

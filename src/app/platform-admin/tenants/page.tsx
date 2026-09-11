@@ -1,5 +1,7 @@
 import { Building2, FileText, GraduationCap, Users } from "lucide-react";
 import { listTenants } from "@/lib/platform-admin-data";
+import { productLevelLabelsAr } from "@/lib/tenant/product-level";
+import { tenantTypeLabelsAr, type TenantType } from "@/lib/tenant/tenant-type";
 import { setTenantStatus } from "./actions";
 import { PlatformPageHeader } from "@/components/platform-page-header";
 
@@ -40,7 +42,7 @@ export default async function PlatformTenantsPage({
                 </thead>
                 <tbody>
                   {tenants.map((t) => {
-                    const Icon = t.account_type === "center" ? Building2 : GraduationCap;
+                    const Icon = t.tenant_type === "center" ? Building2 : GraduationCap;
                     return (
                       <tr key={t.id} className="border-t border-[#efedf3]">
                         <td className="px-6 py-4">
@@ -56,7 +58,10 @@ export default async function PlatformTenantsPage({
                         </td>
                         <td className="px-4 py-4">
                           <span className="rounded-full bg-[#f2effb] px-3 py-1 text-xs font-bold text-[#6547d9]">
-                            {t.account_type === "center" ? "سنتر" : "مدرس مستقل"}
+                            {tenantTypeLabelsAr[t.tenant_type as TenantType] ?? t.tenant_type}
+                          </span>
+                          <span className="mt-2 block text-[11px] font-semibold text-[#6f6a80]">
+                            {productLevelLabelsAr[t.product_level as keyof typeof productLevelLabelsAr] ?? t.product_level}
                           </span>
                         </td>
                         <td className="px-4 py-4 text-[#6f6a80]">{t.studentCount}</td>

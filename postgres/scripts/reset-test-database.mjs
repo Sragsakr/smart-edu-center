@@ -3,6 +3,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import pg from "pg";
 
+import { seedCapabilityCatalog } from "./seed-capability-catalog.mjs";
+
 const { Client } = pg;
 
 const FORBIDDEN_DATABASE_NAMES = new Set(["saboraty", "postgres", "template0", "template1"]);
@@ -125,6 +127,9 @@ export async function resetTestDatabase({
   const { databaseName } = assertSafeTestDatabase({ testDatabaseUrl, databaseUrl });
   await dropAndCreateDatabase(testDatabaseUrl, databaseName);
   await applySql(testDatabaseUrl, BASELINE_FILE);
+  // كتالوج القدرات بيانات مرجعية للمنصة وليست بيانات عملاء، فتُبذر مع الـbaseline
+  // حتى تكون قاعدة الاختبار مطابقة للحالة الهدف قبل أي بيانات تجريبية.
+  await seedCapabilityCatalog(testDatabaseUrl);
   await runSmokeCheck(testDatabaseUrl);
   return { databaseName };
 }

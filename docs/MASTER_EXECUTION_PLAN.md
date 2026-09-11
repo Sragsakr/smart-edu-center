@@ -6,12 +6,14 @@
 
 ```text
 CURRENT_PHASE: PHASE-01 — البنية البديلة وجاهزية Staging
-CURRENT_TASK: P01-04 — بناء canonical seed/import لنموذجي center وindependent teacher
-NEXT_TASK: P01-05 — تحديد استراتيجية Private Storage عند أول Feature ملفات
+CURRENT_TASK: P02-03 — سياسات database isolation/constraints لكل Resource
+NEXT_TASK: P02-04 — ربط UI بـserver-derived capabilities للعرض/التعطيل فقط
 CURRENT_PRIORITY: P0 — Release blocker
 PRODUCT_FEATURE_FREEZE: ACTIVE حتى اكتمال PHASE-02
-SCHEMA_MODE: BUILD MODE — reset/reseed مصرح به؛ لا توجد production data contract
-LAST_VERIFIED_AUTOMATED_GATE: 45 unit tests + 58 PostgreSQL integration tests + lint + typecheck + migration/secrets checks + build
+SCHEMA_MODE: BUILD MODE — reset/reseed مصرح به؛ البيانات الحالية تجريبية بالكامل
+DATABASE_VERSION: PostgreSQL 18 — الإصدار المعتمد لكل البيئات (ترقية المحلي من 16.13 في `P01-08`)
+WORKFLOW_MODE: العمل اليومي على قاعدة التطوير؛ Staging ثم فلو التسليم قبل Production
+LAST_VERIFIED_AUTOMATED_GATE: `npm run check` كامل ناجح (lint + typecheck + 123 unit + 93 integration + migrations + secrets + build + client-secrets + retired-runtime-dependency) بعد `P01-10..P01-15` و`P02-00..P02-02`، مع تطبيق الـbaseline على PostgreSQL 18.6 و51/51 smoke checks وClean Reset + canonical demo seed وRestore drill (46/46 بعد الاستعادة، RTO 0.3s) وتحقق بصري فعلي لفرض الاستحقاق
 ```
 
 لا يجوز بدء `NEXT_TASK` أو أي Task أخرى قبل تحويل `CURRENT_TASK` إلى `DONE`، إلا إذا أصبحت `BLOCKED` وسُجل السبب واختيرت Task مستقلة عنها صراحة داخل هذا الملف.
@@ -56,6 +58,9 @@ LAST_VERIFIED_AUTOMATED_GATE: 45 unit tests + 58 PostgreSQL integration tests + 
 - Acceptance Criteria الوظيفية والسلبية ناجحة.
 - Validation على الخادم لكل مدخل غير موثوق.
 - Tenant/relationship scope مفروض في DAL وقاعدة البيانات حسب التصميم المستهدف.
+- طبقات القرار الثلاث محترمة عند لمس الوصول: Entitlement ثم RBAC ثم Scope — ولا يُفتح مورد بميزة غير مشتراة أو بصلاحية دور بلا نطاق.
+- لا قرار تجاري مبني على `tenant_type`، ولا خلط بين Customer Type وProduct Level.
+- عند لمس الواجهة التسويقية: كل ميزة مميزة بصراحة بـAvailable/Coming Soon/Planned.
 - العمليات متعددة الخطوات الحساسة Transactional وIdempotent حيث يلزم.
 - Audit للماليات والحضور والصلاحيات والعمليات الحساسة.
 - Loading/Empty/Error/Unauthorized states عند لمس الواجهة.
@@ -68,30 +73,45 @@ LAST_VERIFIED_AUTOMATED_GATE: 45 unit tests + 58 PostgreSQL integration tests + 
 
 ## 4. قواعد المنتج والمعمارية غير القابلة للكسر
 
-- المنتج Web PWA عربي RTL لنموذجي `center` و`independent_teacher`.
+عقد المنتج المرجعي: [`PRODUCT_VISION.md`](PRODUCT_VISION.md). قرارات المعمارية: [`adr/`](adr/README.md).
+
+- المنتج Web PWA عربي RTL لنموذجي `teacher` و`center` (Customer Type)، ومستويات المنتج `operations` و`management_platform` و`learning_platform`.
+- **البُعدان مستقلان تمامًا**: `tenant_type` يحدد شكل الكتالوج والتنقل فقط، و`product_level` يحدد ما هو مشتراة فقط. لا يُخلطان، ويُمنع أي قرار تجاري مبني على `tenant_type` في الكود.
+- **ثلاث طبقات قرار إلزامية**: `Entitlement(tenant, capability)` AND `RBAC(role, action)` AND `Scope(resource)`. الميزة غير المشتراة لا تُفتح بحجة وجود صلاحية دور.
+- **Subject وTeacher وCourse وCourse Offering مفاهيم منفصلة**: لا hard-link واحد بين Subject وTeacher، والوحدة القابلة للبيع والتنظيم هي `course_offering`، والمجموعة وحدة تسليم/جدولة فقط.
+- **الترقية بدون فقدان**: الترقية بين المستويات أو إلى White-label لا تُنشئ Tenant جديدًا ولا تنقل بيانات ولا تغيّر codebase؛ التخفيض لا يحذف بيانات العميل.
+- **Baseline كانوني واحد**: `postgres/baseline/0001_smart_edu_center_clean.sql` فقط، و`postgres/migrations/` تبقى فارغة حتى Schema Freeze.
 - PostgreSQL self-managed هو application database الوحيد، وFresh Auth مملوك للتطبيق.
-- Management وLMS منتجان/Entitlements منفصلان على نفس المنصة.
 - Center Student وOnline Student علاقتان منفصلتان لهوية واحدة؛ لا `student_type` وحيد يخلطهما.
 - Platform Admin له `/platform-control/login` و`/platform-admin` منفصلان.
 - Management/Student/Parent يستخدمون `/login`، وتحدد العلاقات المحمية الـcontext بعد المصادقة.
 - Student وGuardian ليسا Tenant memberships.
 - Server Components افتراضيًا؛ `use client` عند أصغر interactive boundary.
 - القراءات في Server-only DAL، والـUI mutations في Server Actions، والـwebhooks في Route Handlers.
-- لا Marketplace ولا ERP كامل ولا بث فيديو مملوك ولا microservices/Redis/queues دون حاجة مثبتة.
+- لا codebase ولا deployment منفصل لأي عميل؛ Branding وCustom Domain بيانات، لا fork.
+- لا Marketplace بين Tenants ولا ERP كامل ولا بث فيديو مملوك ولا microservices/Redis/queues دون حاجة مثبتة.
 - Platform Admin لا يملك قراءة دائمة مفتوحة لبيانات الطلاب؛ دعم Tenant مستقبلًا مؤقت ومدقق.
+- أي عرض للمنتج (Landing/تسعير) يميّز بصراحة Available / Coming Soon / Planned، ولا يقدّم ميزة مخطط لها كمتاحة.
 
 ## 5. Build Mode وقاعدة البيانات
 
 الحالة الحالية `BUILD MODE`. حتى إعلان المالك صراحة `SCHEMA FREEZE / PRODUCTION DATA MODE`:
 
-1. الـcanonical schema هو `postgres/baseline/0001_smart_edu_center_clean.sql`.
-2. نفضل الـtarget model الصحيح على توافق بيانات Demo قديمة.
-3. يسمح Reset/Reseed لبيانات العمل التجريبية بعد موافقة المالك، مع حماية حسابات المالك/Platform Admin الحقيقية.
-4. قاعدة `saboraty` لا تستخدم كقاعدة اختبارات ولا تُمس من test reset scripts.
-5. Integration tests تستخدم `TEST_DATABASE_URL` منفصلًا على loopback، ولا يساوي `DATABASE_URL`.
-6. لا تُنقل password hashes أو raw session/invitation/recovery tokens.
-7. Seed/import يكون deterministic وبترتيب Foreign Keys مع reconciliation.
-8. بعد Schema Freeze تصبح كل التغييرات forward-only reviewed migrations مع Restore/Rollback planning.
+1. الـcanonical schema هو `postgres/baseline/0001_smart_edu_center_clean.sql`، وهو المخطط الوحيد القابل للتطبيق.
+2. **لا يوجد عملاء حقيقيون ولا Production customer data تُحفظ.** البيانات الحالية (مستخدمون وTenants وطلاب وجلسات وبيانات اختبار) **تجريبية بالكامل وقابلة للحذف**.
+3. **Clean Reset / Rebuild / Reseed مُعتمد** عند تغيّر الـcanonical target schema. لا تُبنى migrations توافقية للحفاظ على بيانات تطوير قابلة للحذف، ولا تُحفظ بنى مخطط قديمة لأن بيانات demo تستخدمها.
+4. نموذج المجال النظيف والمعمارية الصحيحة لهما الأولوية على البيانات التجريبية. أي بيانات demo مفيدة تُؤخذ لها snapshot قبل الـReset ثم يُعاد Seed للقيم المفيدة فقط، أو يُعاد بناء الـcanonical demo من الصفر.
+5. **بوابة إلزامية قبل Reset للقاعدة الحقيقية**: تطبيق الـbaseline على قاعدة **PostgreSQL قابلة للحذف** أولًا، ونجاح فحص المخطط + قيود عزل الـTenants + `lint`/`typecheck`/`tests`/`build`/`check`. بدون هذه الشروط لا Reset.
+6. **Auth**: لا تُنقل password hashes ولا sessions من أي نظام Auth متقاعد، وتُعاد Fresh Auth demo credentials بأمان بعد الـReset.
+7. التسلسل المعتمد بعد الـReset: تطبيق الـbaseline فقط → canonical demo seed → إعادة إنشاء Platform Admin → seed نموذج المدرس → seed نموذج السنتر → reconciliation counts → application smoke tests.
+8. قاعدة `saboraty` لا تُستخدم كقاعدة اختبارات ولا تُمس من test reset scripts.
+9. Integration tests تستخدم `TEST_DATABASE_URL` منفصلًا على loopback، ولا يساوي `DATABASE_URL`.
+10. Seed/import يكون deterministic وبترتيب Foreign Keys مع reconciliation.
+11. Production/Coolify يمكن إعادة بنائه نظيفًا لاحقًا قبل الإطلاق لعدم وجود عملاء، لكن **لا يُعدّل Production ضمن خطوات التصميم/الـschema** إلا بتنفيذ خطوة بنية تحتية معتمدة صريحة.
+12. بعد Schema Freeze ينتهي هذا الأسلوب فورًا: كل تغيير يصبح forward-only reviewed migration مع Restore/Rollback planning، وبيانات الإنتاج لا تُعامل بهذه الطريقة أبدًا.
+13. **سير العمل اليومي على قاعدة التطوير.** لا يُعدّل Production أثناء البناء. وقبل الإطلاق يُنقل العمل إلى Staging ويُنفَّذ فلو التسليم المعتاد (`feature/* → staging → main` مع rehearsal وrollback).
+
+القرار الكامل: [`adr/0005`](adr/0005-canonical-baseline-and-disposable-reset.md).
 
 ## 6. خريطة المراحل والاعتماديات
 
@@ -132,6 +152,27 @@ PHASE-16 Production hardening & general availability
 ```
 
 Security، accessibility، audit، observability، documentation والاختبارات متطلبات Cross-cutting داخل كل مرحلة وليست أعمالًا مؤجلة إلى النهاية.
+
+```text
+PHASE-01 (تفصيل): 
+  إغلاق البنية (P01-01..P01-03) 
+    ↓
+  عقد المنتج: PRODUCT_VISION + ADRs           (P01-04)
+    ↓
+  Landing Page بالرؤية الكاملة                (P01-05)
+    ↓
+  Commercial Foundation في الـschema          (P01-06)
+    ↓
+  Academic Catalog Foundation                 (P01-07)
+    ↓
+  تحقق Baseline + Clean Reset + Seed          (P01-08..P01-09)
+    ↓
+  Backup/Restore/Monitoring/Staging           (P01-10..P01-15)
+    ↓
+  Exit Gate G01 → PHASE-02
+```
+
+هذا الترتيب مقصود: الـschema والأدبيات تُثبَّت **قبل** أي Seed، حتى لا تُبنى بيانات demo على نموذج سيُلغى.
 
 ---
 
@@ -174,15 +215,26 @@ Security، accessibility، audit، observability، documentation والاختب�
 - [x] `P01-01` جرى جرد الحالة الفعلية: مشروع Coolify قائم ببيئتي production وstaging، مورد التطبيق مرتبط بـGitHub، PostgreSQL داخل شبكة Coolify الداخلية، المتغير التشغيلي المطلوب هو `DATABASE_URL` فقط، أُزيلت أسرار Supabase والمتغيرات المتقاعدة ودُوّرت القيم التي ظهرت في لقطة الإعداد، وفُصل GitHub عن Vercel. أكد المالك إعداد domains/TLS؛ يعاد Smoke الفعلي بعد نشر `P01-02`.
 - [x] `P01-02` فُصل مسار التسليم إلى `feature/* → staging → main` ونشر Coolify Staging عبر HTTPS. أُنشئت PostgreSQL Production مستقلة، وأثبت اختلاف `system_identifier` فصل الـclusters، ثم حُفظت Internal `DATABASE_URL` الخاصة بها في تطبيق Production دون Deploy؛ بقي Staging متصلًا بقاعدته وعمل Health، وبقي Production على نسخته المنشورة السابقة.
 - [x] `P01-03` طُبقت الـcanonical baseline ذريًا على قاعدتي Staging وProduction المستقلتين بعد إثبات خلوهما؛ نجحت 21/21 smoke checks و58 integration tests، وأضيف `/api/readiness` لتمييز الاتصال عن اكتمال الـSchema. نُشر نفس Runtime على البيئتين وأعاد Health وReadiness `200`.
-- [-] `P01-04` **CURRENT:** بناء canonical seed/import صغير لنموذجي center وindependent teacher بهويات/علاقات Synthetic فقط، مع reconciliation counts.
-- [ ] `P01-05` تحديد استراتيجية Private Storage عند أول Feature ملفات؛ إن لم توجد ملفات مطلوبة حاليًا تسجل `N/A until P03/P13` بدل إضافة مزود بلا حاجة.
-- [ ] `P01-06` Backup آلي مشفر Off-server لPostgreSQL وملفات التطبيق، مع retention وchecksums وفشل observable.
-- [ ] `P01-07` Restore drill داخل بيئة معزولة، وقياس RPO/RTO والتحقق من Auth وtenant isolation بعد الاستعادة.
-- [ ] `P01-08` Monitoring: uptime، health، logs، CPU/RAM/disk/database connections وتنبيهات أساسية؛ error tracking مع PII scrubbing.
-- [ ] `P01-09` Staging validation لكل الرحلات الحرجة، وفحص عدم وجود Supabase/Vercel runtime dependency.
-- [ ] `P01-10` توثيق Rollback/Cutover ومنع حذف البنية القديمة قبل إثبات النسخة والاستعادة؛ decommission عند الأمان فقط.
+- [x] `P01-04` أُثبت عقد المنتج في الوثائق: `docs/PRODUCT_VISION.md` (البُعدان المستقلان، المستويات الثلاثة، كتالوج القدرات، طبقات Entitlement/RBAC/Scope، النموذج التجاري، الاستضافة وWhite-label، سياسة Available/Coming Soon/Planned)، وADRs `0001..0005`، وتحديث `MASTER_EXECUTION_PLAN` (القسم 4، 5، 6، 3، 8، 9، 12 وإعادة ترقيم PHASE-01) و`RBAC_MATRIX` (فصل طبقة Entitlement ونقل Teacher scope إلى `course_offerings.teacher_id`) و`AGENTS.md` و`README.md`. لا كود ولا database. (**STEP 0**)
+- [x] `P01-05` أُعيد بناء Landing Page حول الرؤية الكاملة: نظام وسم موحّد `ProductStatusChip` + `feature-status` كمصدر واحد للحالات، و`product-vision-content` كمصدر واحد لمحتوى الرؤية، وأقسام جديدة للبُعدين والمستويات الثلاثة والكتالوج ومسارات التنقل والاستضافة/White-label وقاعدة الترقية ومفتاح الحالات، وشريط «إحنا دلوقتي فين بالظبط» بالحالة الحقيقية. رُوجعت `quickFeatures`/`useCases`/`workflow`/`roleCards`/`capabilityGroups` وأُضيف لكل بند حالته؛ وأُزيل وعد «ابدأ مجانًا» واستُبدل بطلب مساحة يوضح مراجعة إدارة المنصة، ووُسم العرض البصري بأنه توضيحي، وأُزيل رابط `/platform-control/login` من الصفحة العامة. تحقق: 143 وسم حالة (18 متاح / 51 قريبًا / 74 مخطط)، 14 قسمًا، صفر Overflow عند 390/768/1280، وصفر أخطاء Console، و`npm run check` كامل ناجح. (**STEP 1**)
+- [x] `P01-06` نُفّذت الطبقة التجارية في الـcanonical schema: enum `tenant_type`/`product_level`/`capability_kind`/`entitlement_state`/`entitlement_source`/`domain_kind`/`domain_status`/`theme_mode`؛ `tenants.tenant_type` بدل `account_type` مع `product_level` و`currency` و`timezone` و`locale`؛ جداول `capability_catalog` (نطاق المنصة) و`tenant_entitlements` (state/source/limits/effective window/granted_by) و`tenant_branding` و`tenant_domains`؛ `workspace_requests.tenant_type` + `requested_product_level`؛ ومصادر حقيقة في الكود (`capability-catalog.json` + `capability-catalog-rules.mjs` + `capability-catalog.ts` + `default-entitlements.ts`) مع `defaultEntitlementsForLevel()` كاشتقاق وحيد، وسكربت Seed idempotent محمي. تحقق: baseline مطبّق على PostgreSQL 18.6 نظيفًا، 32/32 smoke checks، 57 unit + 64 integration، و`npm run check` كامل ناجح. (**STEP 2**)
+- [x] `P01-07` نُفّذ الكتالوج الأكاديمي في الـcanonical schema: `rooms`، `stages`، `grades`، `subjects`، `teachers` (سجل مستقل عن `memberships` مع ربط اختياري)، `courses`، `course_teachers` (N:N مؤكَّد بـ`unique(tenant_id, course_id, teacher_id)`)، `course_offerings` (مقرر + مدرس + فرع + قاعة + نمط + سعة + سعر + عملة) مع قيد يمنع عرضًا بمدرس غير مسند للمقرر، و`cohorts` أُعيد بناؤها على `course_offering_id` بلا `subject` أو مدرس مباشر، و`cohort_members` لوحدة التسليم، و`enrollments` على العرض، و`students.grade` نصًا → `students.grade_id`، و`students.user_id`/`guardians.user_id` → `unique(tenant_id, user_id)`، مع كل الفهارس وقيود العزل. تحقق: 51/51 smoke checks على PostgreSQL 18.6، و74 integration (منها 12 اختبار عزل جديد للكتالوج)، و`npm run check` كامل ناجح. (**STEP 3**)
+- [x] `P01-08` الـbaseline الكانوني موحّد في ملف واحد `postgres/baseline/0001_smart_edu_center_clean.sql` (26 → 33 جدولًا) وطُبّق نظيفًا على **قاعدة PostgreSQL 18.6 قابلة للحذف** قبل لمس قاعدة التطوير: 51/51 smoke checks + فحص المخطط + قيود عزل الـTenants + `lint`/`typecheck`/57 unit/74 integration/`build`/`check`. أُضيف `vitest.config.mts` لحل مسار `@`، وأُزيلت `on delete` المخالفة. إصدار PostgreSQL محسوم: **18**. (**STEP 4**)
+- [x] `P01-09` نُفّذ Clean Reset بعد نجاح `P01-08` فقط: قاعدة `saboraty` أُعيد إنشاؤها على PostgreSQL 18 (المنفذ `5433`) من الـbaseline وحده → `seed:capability-catalog` (25 قدرة) → `seed:canonical-demo` الذي يعيد إنشاء Fresh Auth credentials لكل الحسابات ثم يبذر نموذج `teacher` (`demo-teacher`, `learning_platform`, 15 قدرة) ونموذج `center` (`demo-center`, `management_platform`, 10 قدرات) بفرعين و3 قاعات و3 مراحل و4 صفوف و4 مواد و4 مدرسين و8 مقررات و9 عروض و6 مجموعات و8 طلاب و5 أولياء أمور و12 تسجيلًا و6 حصص و8 فواتير و4 مدفوعات → reconciliation counts → application smoke tests. الـSeed idempotent (تشغيل مكرر بنفس الأعداد). (**STEP 4**)
+- [x] `P01-10` حُسم عقد التخزين الخاص في [`adr/0006`](adr/0006-private-storage-contract.md): ملفات خاصة افتراضيًا، مفاتيح tenant-scoped، روابط موقعة قصيرة العمر من الخادم فقط، تحقق MIME/حجم على الخادم، وتدقيق للرفع/الحذف. **مزوّد الفئة الصغيرة** (شعار المساحة، `P03-02`) هو تخزين داخل PostgreSQL خلف منفذ `PrivateStorage` لأنه مشمول بالـbackup والاستعادة أصلًا ولا يضيف مزوّدًا لحاجة غير مثبتة، و**مزوّد الفئة الكبيرة** (فيديو `P13-03`) يُحسم بـADR مقارنة في وقته. (كانت `P01-05`)
+- [x] `P01-11` `postgres/scripts/backup-database.mjs`: dump بصيغة custom → تشفير AES-256-PBKDF2 بمفتاح من ملف لا من سطر الأوامر → checksum sha256 → manifest سطرية → **تحقق عكسي إلزامي** قبل اعتبار النسخة صالحة → retention قابل للضبط لا يحذف ملفًا لا يطابق الصيغة. يرفض التشغيل بلا `BACKUP_DIR` أو بلا مفتاح، ويفشل برمز غير صفري ورسالة `BACKUP FAILED`. 12 اختبار وحدة. تشغيل فعلي: نسخة 133,616 بايت ببصمة مسجّلة. (كانت `P01-06`)
+- [x] `P01-12` `postgres/scripts/restore-drill.mjs`: يفكّ التشفير ويتحقق من البصمة، ثم يستعيد في قاعدة **قابلة للحذف** محمية بحراسة ترفض `saboraty`/`postgres`/`template*`/مطابقة `DATABASE_URL`/غير loopback. التحقق بعد الاستعادة: 46/46 smoke + كلمة مرور Platform Admin تُتحقق بمُتحقّق التطبيق + تخزين بصمات فقط + رفض إدخال عابر للمساحات + استحقاقات محفوظة. 6 اختبارات حراسة. النتيجة: RTO 0.3s وRPO 121s. (كانت `P01-07`)
+- [x] `P01-13` الجزء البرمجي: سجل منظم JSON سطر واحد (`src/lib/observability/server-logger.ts`) يمر كل سياقه على تنقيح PII (`redact-pii.ts`) يحجب البريد والهاتف والرموز وبصمات الجلسات وسلاسل الاتصال، **ويحتفظ بـUUID والطوابع الزمنية** لتبقى السجلات قابلة للربط، مع سقف عمق وعدد عناصر وكشف الدوران. موصّل بمسار فشل حقيقي في `platform-admin/requests/actions.ts`. 19 اختبار وحدة. (كانت `P01-08`)
+- [x] `P01-14` الجزء البرمجي: `scripts/check-runtime-dependencies.mjs` يمنع آليًا رجوع Supabase/Vercel إلى الـruntime (متغيّرات، SDK، مسار `/auth/callback`، مُحدِّد `DATA_BACKEND`)، ومدمج في `npm run check`، مع 5 اختبارات. (كانت `P01-09`)
+- [x] `P01-15` [`docs/OPERATIONS_RUNBOOK.md`](OPERATIONS_RUNBOOK.md): إجراء النسخ الاحتياطي، حراسة تجربة الاستعادة وقراءة RPO/RTO، المراقبة، ومسار Rollback/Cutover مع **شروط إزالة البنية القديمة** (لا تُحذف قبل إثبات النسخة والاستعادة ونجاح فحص الاعتماد المتقاعد). (كانت `P01-10`)
+- [M] `P01-13-M` **إجراء مالك:** مراقبة توفّر خارجية على `/api/health` و`/api/readiness` من خارج الشبكة، ولوحة CPU/RAM/disk/اتصالات، والتأكد أن Coolify يجمع stdout/stderr. اختيار مزوّد تتبّع أخطاء مؤجل حتى حاجة مثبتة، وعند إضافته يمر عبر نفس التنقيح وبـDSN خادمي فقط.
+- [!] `P01-14-M` **BLOCKED (بنية تحتية):** تطبيق الـbaseline الجديد على Staging واختبار الرحلات الحرجة هناك. يتطلب وصولًا لـCoolify و`DATABASE_URL` الخاصة بـStaging غير المتاحين محليًا. المالك: مالك المشروع.
 
-**Exit Gate G01:** Staging PostgreSQL-only مستقرة، deployment قابل للتكرار، backup وrestore مختبران، monitoring نشط، ولا database public exposure.
+> **خريطة إعادة الترقيم:** `P01-04` القديمة (seed) استُبدلت بـ`P01-09` لأنها كانت ستبني بيانات demo على schema سيُلغى؛ `P01-05..P01-10` القديمة أُزيحت إلى `P01-10..P01-15`. السبب: STEP 0–4 تُنفَّذ قبل أي Seed لضمان بناء البيانات على الـtarget schema الصحيح.
+
+**Exit Gate G01:** Staging PostgreSQL-only مستقرة على الـcanonical baseline الجديد، deployment قابل للتكرار، backup وrestore مختبران، monitoring نشط، ولا database public exposure، والـcanonical demo seed يمثل نموذجي `teacher` و`center` على النموذج الجديد.
+
+> **حالة G01:** مكتمل هندسيًا ومحليًا (الـbaseline، الـseed، الـbackup، الـrestore drill، السجل المنقّح، فحص الاعتماد المتقاعد). **الباقي إجراء مالك:** `P01-13-M` (مراقبة خارجية ولوحة موارد) و`P01-14-M` (تطبيق الـbaseline على Staging واختبار الرحلات الحرجة هناك). يُثبت `P01-14-M` على Staging عند توفر الوصول.
 
 ---
 
@@ -194,8 +246,9 @@ Security، accessibility، audit، observability، documentation والاختب�
 
 مرجع الصلاحيات الملزم: [`RBAC_MATRIX.md`](RBAC_MATRIX.md).
 
-- [ ] `P02-01` مراجعة وتثبيت capability contract للأدوار Owner/Admin/Teacher/Receptionist/Accountant.
-- [ ] `P02-02` DAL مركزي يفرض authenticated user + active tenant + capability + resource scope، دون ثقة في UI أو tenant ID مرسل.
+- [x] `P02-00` **فرض الاستحقاق على البوابات** — أُغلقت ثغرة كانت تسمح لأي مساحة بمستوى `operations` بفتح `/student` و`/parent` بمجرد وجود العلاقة. الفرض الآن على الخادم قبل أي قراءة بيانات، وغياب الاشتراك حالة واجهة مقصودة. (**مهمة مستقلة اختيرت صراحةً لتعطّل `P01-14-M`**)
+- [x] `P02-01` عقد القرار المركزي في `src/lib/authorization/access-contract.ts`: دالة `evaluateAccess` واحدة تجمع الطبقات الثلاث بترتيب مقصود (المساحة → العضوية → **الاستحقاق** → الدور → النطاق)، وتُرجع `decision` مع `reason` ([`tenant_missing`, `tenant_inactive`, `membership_missing`, `membership_inactive`, `no_entitlement`, `role_denied`, `scope_required`]) و`missingEntitlement` للترقية، و`entitlementForTenantCapability` يعلن المتطلب التجاري لكل قدرة دور، ورسائل رفض عربية مميزة لكل سبب. 16 اختبار وحدة. الاستحقاق يُفحص **قبل** الدور عمدًا ليظهر `no_entitlement` بدل `role_denied` عندما تكون الميزة غير مشتراة. (**STEP PHASE-02**)
+- [x] `P02-02` DAL مركزي في `src/lib/authorization/server.ts`: `getTenantAuthorizationContext` يقرأ المساحة والعضوية والاستحقاقات النشطة (داخل نافذة فعاليتها) في قراءات محدودة، و`requireTenantCapability` و`requireTenantCapabilityWithScope` يقرران عبر `evaluateAccess` وحده، و`tenantCapabilityReport` يعرض القدرات للواجهة، و`EntitlementError` منفصل عن `AuthorizationError` لأن الواجهة تعرض الأول كحالة ترقية لا كخطأ صلاحية. فحص النطاق **لا يعمل** إذا فشل الاستحقاق. 11 اختبار تكامل.
 - [ ] `P02-03` سياسات database isolation/constraints المناسبة لكل Resource؛ عدم الاعتماد على application filtering وحده للحدود الحرجة.
 - [ ] `P02-04` ربط UI بـserver-derived capabilities للعرض/التعطيل فقط، مع بقاء الخادم هو authority.
 - [ ] `P02-05` Role × Resource × Action suite موجبة وسالبة، تشمل teacher cohort scope وfinance scope.
@@ -216,19 +269,24 @@ Security، accessibility، audit، observability، documentation والاختب�
 
 **Priority:** `P1`
 **Dependencies:** `G02`.
-**الهدف:** مساحة عمل قابلة للإعداد الفعلي لنموذجي السنتر والمدرس المستقل.
+**الهدف:** مساحة عمل قابلة للإعداد الفعلي لنموذجي `teacher` و`center`، مع كتالوج أكاديمي حقيقي.
 
-- [ ] `P03-01` إعدادات Tenant: الاسم، بيانات التواصل، المنطقة الزمنية، العملة، اللغة والحالة.
-- [ ] `P03-02` شعار وهوية عبر Private Storage approved design مع MIME/size validation وروابط آمنة.
+- [ ] `P03-01` إعدادات Tenant: الاسم، `tenant_type`، `product_level` المعروض، بيانات التواصل، المنطقة الزمنية، العملة، اللغة والحالة.
+- [ ] `P03-02` الشعار والهوية عبر Private Storage approved design مع MIME/size validation وروابط آمنة، وتعبئة `tenant_branding`.
 - [ ] `P03-03` CRUD الفروع للسنتر مع archive بدل الحذف عند وجود تبعيات.
 - [ ] `P03-04` CRUD القاعات والطاقة الاستيعابية وtenant-composite constraints.
-- [ ] `P03-05` المراحل/الصفوف والمواد، uniqueness وترتيب وأرشفة داخل Tenant.
-- [ ] `P03-06` ملفات الموظفين والمدرسين مرتبطة بالmembership وحالة active/inactive.
-- [ ] `P03-07` إعداد Navigation/labels حسب `center` أو `independent_teacher`، وإخفاء تعقيد الفرع/الموظفين غير اللازم للمدرس المستقل.
-- [ ] `P03-08` Empty/loading/error/unauthorized states وresponsive RTL.
-- [ ] `P03-09` E2E لإعداد Center وIndependent Teacher من مساحة مقبولة وفارغة.
+- [ ] `P03-05` CRUD المراحل والصفوف والمواد: uniqueness وترتيب وأرشفة داخل Tenant.
+- [ ] `P03-06` CRUD المدرسين كـtenant records (يمكن إنشاؤه بلا حساب مستخدم) مع ربط اختياري بـ`membership` عند وجودها.
+- [ ] `P03-07` CRUD المقررات: `courses` + `course_teachers` (علاقة N:N) دون hard-link بين Subject وTeacher.
+- [ ] `P03-08` CRUD الـCourse Offerings: مقرر + مدرس + فرع + قاعة + نمط + سعة + سعر، والتحقق من كل علاقة tenant-scoped.
+- [ ] `P03-09` الكتالوج العام والتنقل: مسار Stage→Grade→Subject→Teacher→Course ومسار Stage→Grade→Teacher→Courses، مع فلاتر Stage/Grade/Subject/Teacher/Price.
+- [ ] `P03-10` ملفات الموظفين والمدرسين مرتبطة بالmembership وحالة active/inactive.
+- [ ] `P03-11` إعداد Navigation/labels حسب `tenant_type` فقط، وإخفاء تعقيد الفرع/الموظفين غير اللازم للمدرس المستقل، دون استخدام `tenant_type` كقرار تجاري.
+- [ ] `P03-12` عرض الـEntitlements للمالك (قراءة فقط): المستوى الحالي، القدرات المضمّنة، والـAdd-ons المتاحة، مع حدود الاستخدام.
+- [ ] `P03-13` Empty/loading/error/unauthorized/no-entitlement states وresponsive RTL.
+- [ ] `P03-14` E2E لإعداد مساحة `center` ومساحة `teacher` من مساحة مقبولة وفارغة حتى offering قابل للبيع.
 
-**Exit Gate G03:** يمكن للنموذجين إعداد مساحة تشغيل صحيحة دون بيانات ثابتة أو علاقات cross-tenant.
+**Exit Gate G03:** يمكن للنموذجين إعداد مساحة تشغيل صحيحة وكتالوج وofferings دون بيانات ثابتة أو علاقات cross-tenant، ودون أي قرار تجاري مبني على `tenant_type`.
 
 ---
 
@@ -238,8 +296,8 @@ Security، accessibility، audit، observability، documentation والاختب�
 **Dependencies:** `G03`.
 **الهدف:** إنشاء المجموعات والجداول والحصص دون تعارض.
 
-- [ ] `P04-01` Group/cohort model: grade، subject، teacher، branch، room، capacity والحالة.
-- [ ] `P04-02` CRUD المجموعات مع validation لكل tenant-scoped relation.
+- [ ] `P04-01` Cohort model: cohort تشير إلى `course_offering` (لا subject/teacher مباشرة عليها)، مع قاعة واسم وسعة وحالة.
+- [ ] `P04-02` CRUD المجموعات مع validation لكل tenant-scoped relation، وربط إلزامي بـ`course_offering` ضمن نفس الـTenant.
 - [ ] `P04-03` Recurring weekly schedules مع timezone واضح.
 - [ ] `P04-04` Holidays وschedule exceptions.
 - [ ] `P04-05` كاشف تعارض المدرس/القاعة/الوقت والطاقة الاستيعابية.
@@ -263,8 +321,8 @@ Security، accessibility، audit، observability، documentation والاختب�
 - [ ] `P05-03` صفحة ملف الطالب وحالات Empty/Error/Archived.
 - [ ] `P05-04` Guardian CRUD مع normalized phone وقواعد منع التكرار المناسبة.
 - [ ] `P05-05` علاقة N:N بين الطلاب والأولياء، relationship وprimary contact.
-- [ ] `P05-06` Enrollment في مجموعة مع capacity validation ومنع التكرار.
-- [ ] `P05-07` نقل/إيقاف enrollment مع تاريخ وسبب وaudit.
+- [ ] `P05-06` Enrollment على `course_offering` مع capacity validation ومنع التكرار، و`cohort_members` لوحدة التسليم، ودون أي كتابة في `memberships`.
+- [ ] `P05-07` نقل/إيقاف enrollment وcohort membership مع تاريخ وسبب وaudit، والتحقق من اتساق العلاقتين (لا cohort member بلا enrollment نشط لنفس الـoffering).
 - [ ] `P05-08` Excel template وparser بحدود حجم/صفوف وPreview للأخطاء والتكرار.
 - [ ] `P05-09` Import transaction ونتيجة قابلة للتنزيل دون partial hidden writes.
 - [ ] `P05-10` تصدير CSV/Excel من الخادم بصلاحيات وحدود وaudit.
@@ -281,7 +339,7 @@ Security، accessibility، audit، observability، documentation والاختب�
 **Dependencies:** `G05`.
 **الهدف:** رصيد الطالب والفاتورة والمدفوع والإيصال متطابقون.
 
-- [ ] `P06-01` Plans/prices/session packages مع currency وdecimal constraints.
+- [ ] `P06-01` Tuition plans/prices/session packages (`tuition_plans` — رسوم دراسية للعميل، وليست باقات اشتراك المنصة) مرتبطة بـ`course_offering`، مع currency وdecimal constraints، وحسم تصادم مصطلح `Plan` مع باقات SaaS في `P15-01`.
 - [ ] `P06-02` Subscriptions/installments state machine وتسعير حسب المجموعة والنموذج.
 - [ ] `P06-03` توليد invoices idempotently ومنع ازدواج دورة الفوترة.
 - [ ] `P06-04` Payment transaction تدعم cash/transfer/card/reference و`received_by` مشتقًا من الجلسة.
@@ -400,7 +458,7 @@ Security، accessibility، audit، observability، documentation والاختب�
 **Dependencies:** `G11` + `G02`.
 **الهدف:** LMS منتج منفصل، لا امتداد ضمني لطالب السنتر.
 
-- [ ] `P12-01` Product catalog وentitlements versioned لـManagement/LMS/both.
+- [ ] `P12-01` Product catalog وentitlements versioned لـManagement/LMS/both: `capability_catalog` و`tenant_entitlements` كمصدر الحقيقة، مع `defaultEntitlementsForLevel()` ودعم add-ons (`learning.live`، `storage.extra`…).
 - [ ] `P12-02` Online learner identity وonline enrollments منفصلة عن center enrollments.
 - [ ] `P12-03` LMS access service يجمع tenant entitlement + online enrollment + payment + release policy.
 - [ ] `P12-04` Shared Academy tenant routing على نفس runtime.
@@ -457,13 +515,13 @@ Security، accessibility، audit، observability، documentation والاختب�
 **Dependencies:** `G11`; LMS limits تعتمد `G12`.
 **الهدف:** تحويل المنصة إلى SaaS قابل للبيع والتشغيل دون فقد بيانات العميل عند تغير الخطة.
 
-- [ ] `P15-01` Plans/features/limits/versioning للمدرس والسنتر والمؤسسة وLMS.
+- [ ] `P15-01` SaaS plans/features/limits/versioning للمدرس والسنتر والمؤسسة وLMS، بحسم التسعير على ثلاثة أبعاد: Product Level × Customer Scale × Add-ons.
 - [ ] `P15-02` Usage counters وgrace behavior دون حذف بيانات العميل عند التخفيض.
 - [ ] `P15-03` Trial/active/past_due/suspended/canceled state machine وترقية/تخفيض.
 - [ ] `P15-04` Platform billing provider وsigned webhooks وفواتير اشتراك المنصة.
 - [ ] `P15-05` استكمال Platform Admin subscription/usage/growth/collection reports.
 - [ ] `P15-06` Support tickets وtemporary impersonation بسبب/مدة/banner/audit؛ لا وصول دائم مفتوح.
-- [ ] `P15-07` White-label branding وcustom domain verification/SSL/isolation.
+- [ ] `P15-07` White-label branding وcustom domain verification/SSL/isolation عبر `tenant_branding` و`tenant_domains`، مع Host→Tenant resolution، وEntitlement `branding.white_label`/`branding.custom_domain`، وبلا deployment أو codebase منفصل.
 - [ ] `P15-08` MRR/churn/ARPA ثم LTV/CAC بعد توفر بيانات كافية، من billing events غير قابلة للتلاعب.
 
 **Exit Gate G15:** العميل يجرب ويشترك ويترقى/يتوقف بأمان، والمنصة تقيس الإيراد والاستخدام بدقة.
@@ -511,18 +569,21 @@ Security، accessibility، audit، observability، documentation والاختب�
 
 | القرار | لا يُحسم قبل | معيار القرار |
 |---|---|---|
+| إصدار PostgreSQL | **محسوم** | **PostgreSQL 18** لكل البيئات بقرار المالك؛ تُرقّى بيئة التطوير من 16.13 إلى 18 قبل `P01-08`. |
 | Private storage provider | `P03-02` أو `P13-03` | الخصوصية، signed URLs، backup، التكلفة والتشغيل الذاتي. |
 | Paymob أم بديل | `P06-12` | الرسوم، settlement، webhook reliability والسوق المستهدف. |
 | WhatsApp provider | `P10-04` | اعتماد القوالب، التكلفة، الدعم، delivery webhooks. |
 | Mux أم Cloudflare Stream | `P13-04` | التكلفة، signed playback، analytics وحدود الحماية. |
-| أسعار وحدود الباقات | `P15-01` بعد Pilot | استعداد الدفع والاستخدام الفعلي، لا التخمين. |
+| إطلاق White-label/custom domain تجاريًا | `P15-07` | جاهزية التحقق وSSL وسياسة الدعم، وإثبات أن السوق يدفع مقابل الـadd-on. |
+| أسعار وحدود الباقات على الأبعاد الثلاثة | `P15-01` بعد Pilot | استعداد الدفع والاستخدام الفعلي، لا التخمين. |
+| بنية تحتية/قاعدة بيانات مخصصة للمؤسسات | بعد `G15` | طلب مؤسسي مثبت + تكلفة تشغيل، وتبقى غير افتراضية. |
 | Flutter | `P16-11` | حاجة مثبتة لـOffline/Push/Stores لا يكفيها PWA. |
 
 ## 9. عوائق وقرارات بشرية مفتوحة
 
 | ID | الحالة | المطلوب | المالك |
 |---|---|---|---|
-| `P01-07` | `TODO` | مورد استعادة معزول وتكلفته إن كانت هناك تكلفة. | مالك المشروع |
+| `P01-12` | `TODO` | مورد استعادة معزول وتكلفته إن كانت هناك تكلفة. | مالك المشروع |
 | GitHub main protection | `DEFERRED` | تفعيل required PR/checks ومنع force push عند اعتماد ذلك. | مالك المشروع |
 | CODEOWNERS | `DEFERRED` | يفعّل عند انضمام فريق. | مالك المشروع |
 | Automated WhatsApp recovery | `DEFERRED` | يبقى الإرسال اليدوي حتى `P10-04`. | مالك المشروع |
@@ -552,11 +613,23 @@ Security، accessibility، audit، observability، documentation والاختب�
 | 2026-09-09 | `P00-06` | Node.js `22.23.2`: `npm run check` نجح مع 45 unit tests وbuild؛ 56/56 integration على `saboraty_test`؛ Browser smoke أكد login/recovery وFresh Auth error وlocal bootstrap وأن `/auth/callback` أصبح 404؛ المسح أكد عدم وجود Supabase runtime/config/callback نشط، وفُصل GitHub repository عن مشروع Vercel القديم. شُغّلت Advisors قراءةً فقط على مشروع Supabase المتقاعد وأظهرت تحذيرات legacy SECURITY DEFINER/Auth وسياسات RLS وفهارس غير مستخدمة؛ لم تُجرَ تغييرات remote لأنها خارج Runtime الحالي. | `P01-01` جرد البنية الفعلية وجاهزية Staging |
 | 2026-09-09 | `P01-01` | صور Coolify وتأكيد المالك أثبتا بيئتي production/staging وموارد التطبيق/PostgreSQL الداخلية؛ نُظفت المتغيرات إلى `DATABASE_URL`، دُوّرت الأسرار المكشوفة، فُصل Vercel Git، وأُنشئ فرع `staging` الدائم. | `P01-02` نشر Staging عبر CI ثم Smoke فعلي |
 | 2026-09-09 | `P01-02` | PRs `#5/#6` اجتازا CI ونُشر Staging فقط؛ نجح HTTPS/health/browser smoke. بعد اكتشاف اشتراك البيئتين في `DATABASE_URL`، أُنشئت Production PostgreSQL مستقلة؛ أثبت `system_identifier` اختلاف الـclusters (`…5510` مقابل `…4726`) وحُفظت URL الداخلية الجديدة في تطبيق Production دون Deploy. إعادة الفحص: Staging PostgreSQL health `200` وProduction القديمة ما زالت `200` دون تغيير. | `P01-03` baseline/readiness على Staging |
-| 2026-09-11 | `P01-03` | ثبت أن 26 جدول Staging القديمة بلا صفوف؛ طُبقت baseline من ملفين متحققي SHA-256 على قاعدة مؤقتة ثم ذريًا على Staging وProduction المستقلتين. نجحت 21/21 smoke checks، و45 unit + 58 integration، وCI على PRs `#10/#11`. أعاد `/api/health` و`/api/readiness` في البيئتين `200`، ونُشر Runtime نفسه على Production. | `P01-04` canonical Synthetic seed/import |
+| 2026-09-11 | `P01-03` | ثبت أن 26 جدول Staging القديمة بلا صفوف؛ طُبقت baseline من ملفين متحققي SHA-256 على قاعدة مؤقتة ثم ذريًا على Staging وProduction المستقلتين. نجحت 21/21 smoke checks، و45 unit + 58 integration، وCI على PRs `#10/#11`. أعاد `/api/health` و`/api/readiness` في البيئتين `200`، ونُشر Runtime نفسه على Production. | `P01-04` عقد المنتج |
+| 2026-09-11 | `P01-04` | `docs/PRODUCT_VISION.md` جديد (البُعدان، المستويات الثلاثة، كتالوج القدرات `ops.core`..`payments.online`، طبقات Entitlement/RBAC/Scope، التسعير الثلاثي، الاستضافة وWhite-label، Available/Coming Soon/Planned)؛ ADR `0001` (البُعدان) و`0002` (Entitlements فوق RBAC) و`0003` (فصل Subject/Teacher/Course/Offering) و`0004` (Branding/Domains) و`0005` (Baseline واحد وReset)؛ تحديث `MASTER_EXECUTION_PLAN` (القسم 3/4/5/6/8/9/12 + إعادة ترقيم PHASE-01 إلى `P01-04..P01-15`)؛ `RBAC_MATRIX` بقسم طبقات القرار ونقل Teacher scope إلى `course_offerings.teacher_id`/`course_teachers` وإضافة موارد الكتالوج؛ `AGENTS.md` و`README.md`. صفر تغيير في الكود أو قاعدة البيانات. | `P01-05` Landing Page |
+| 2026-09-11 | قرار المالك | **PostgreSQL 18** هو الإصدار المعتمد لكل البيئات؛ بيئة التطوير المحلية 16.13 تُرقّى قبل `P01-08`. **العمل اليومي على قاعدة التطوير**، وStaging ثم فلو التسليم قبل Production. | مسجّل في القسم 5 والحالة أعلاه و`adr/0005` |
+| 2026-09-11 | `P01-05` | Landing Page جديدة: `src/lib/product/feature-status.ts` + `src/components/product-status-chip.tsx` + `src/lib/product/product-vision-content.ts` كمصادر حقيقة واحدة، وإعادة بناء `src/components/landing-page.tsx` بأقسام البُعدين/المستويات/الكتالوج/الاستضافة/الترقية/مفتاح الحالات وشريط الحالة الحقيقية. إزالة وعد «ابدأ مجانًا» ورابط لوحة المنصة من الصفحة العامة. تحقق آلي: 143 وسم (18/51/74)، 14 قسمًا، صفر Overflow على 390/768/1280، صفر Console errors، `npm run check` كامل ناجح. | `P01-06` Commercial Foundation |
+| 2026-09-11 | `P01-07` | الكتالوج الأكاديمي في الـbaseline: `rooms`/`stages`/`grades`/`subjects`/`teachers`/`courses`/`course_teachers`/`course_offerings`/`cohort_members`، وإعادة بناء `cohorts` على `course_offering_id`، و`enrollments` على العرض، و`students.grade_id`، و`user_id` إلى `unique(tenant_id, user_id)`. قيد يمنع عروضًا بمدرس غير مسند للمقرر. تحديث `portal-data` (بوابتا الطالب وولي الأمر) و`fixtures` واختبارات العزل (+12). 51/51 smoke على PG 18.6، 74 integration، `check` ناجح. | `P01-08` تحقق Baseline |
+| 2026-09-11 | `P01-08` | تحقق إلزامي على قاعدة PG 18.6 قابلة للحذف قبل أي Reset: schema + isolation + 51/51 smoke + `lint`/`typecheck`/57 unit/74 integration/`build`/`check`. منع `on delete` غير صحيح في `course_offerings`. | `P01-09` Clean Reset |
+| 2026-09-11 | `P01-10`..`P01-15` | عقد التخزين (`adr/0006`: PostgreSQL خلف منفذ `PrivateStorage` للفئة الصغيرة، ومزوّد الفيديو مؤجل بـADR)؛ نسخ احتياطي مشفّر بتحقق عكسي وmanifest وretention (12 اختبار) وتشغيل فعلي 133,616 بايت؛ تجربة استعادة كاملة على قاعدة محمية (46/46 smoke، RTO 0.3s، RPO 121s، كلمة مرور تُتحقق، عزل مرفوض عبر المساحات، استحقاقات محفوظة) و6 اختبارات حراسة؛ سجل منظم منقّح لـPII (19 اختبار) موصّل بمسار فشل حقيقي؛ فحص آلي يمنع رجوع Supabase/Vercel مدمج في `check` (5 اختبارات)؛ و`OPERATIONS_RUNBOOK.md` بالنسخ والاستعادة والمراقبة وRollback وشروط الإزالة. | `P02-00` فرض الاستحقاق على البوابات |
+| 2026-09-11 | `P02-01`+`P02-02` | عقد قرار مركزي واحد (`evaluateAccess`) بترتيب الطبقات الثلاث و7 أسباب رفض ورسائل عربية مميزة (16 اختبار وحدة)، وموصّل في DAL الخادمي: قراءة الاستحقاقات النشطة داخل نافذة فعاليتها، و`EntitlementError` منفصل عن `AuthorizationError`، وفحص النطاق لا يعمل عند فشل الاستحقاق. 11 اختبار تكامل جديد (93 إجمالًا). | `P02-03` سياسات العزل |
+| 2026-09-11 | `P02-00` | **مهمة مستقلة اختيرت صراحةً** لأن `P01-14-M` متوقفة على وصول بنية تحتية. أُغلقت ثغرة البوابات: `entitlement-service` يقرأ القدرات النشطة داخل نافذة فعاليتها، و`portal-access` يربط كل بوابة بقدرتها، وطبقة `portal-data` تُرجع `entitled:false` **قبل أي قراءة بيانات**. حالة «لا اشتراك» أصبحت واجهة مقصودة تشرح الفجوة والترقية (`PortalNotEntitled`). تحقق آلي: 8 اختبارات تكامل (عمليات/إدارة/تعلم/مسحوبة/منتهية/معلّقة/عابرة للمساحات)، و82 integration. تحقق بصري فعلي: مع الاشتراك تظهر بيانات الطالب، وبعد سحبه تظهر حالة «غير مفعّلة» **بلا أي بيانات طالب**، وبعد إعادته رجعت البيانات دون فقد. صفر Overflow على 390/768/1280 وصفر أخطاء Console. | `P02-01` capability contract |
+| 2026-09-11 | `P01-09` | Clean Reset لقاعدة التطوير: `saboraty` أُعيدت على PG 18 (5433) من الـbaseline + catalog seed + canonical demo seed (حساب واحد Platform Admin و4 حسابات Tenant/بوابة بنفس Fresh Auth credentials)، وreconciliation لـ24 عدّاد، واتساق التسليم/التسجيل. Smoke tests فعلية: Platform Admin → `/platform-admin` (النموذجان والمستويان ظاهران)، مركز/مدرس → لوحة الإدارة، ولي أمر → `/parent` بشريط الأبناء، طالب → `/student` ببيانات حقيقية (4 حصص، 4 حضور، فاتورة 500 ومدفوع 250). `/api/health` و`/api/readiness` = 200. | `P01-10` Private Storage |
+| 2026-09-11 | `P01-06` | ثُبّت **PostgreSQL 18.6** محليًا ومعه قاعدة اختبار على المنفذ `5433`. الـbaseline طُبّق نظيفًا عليه: 26 جدولًا، 32/32 smoke checks. الطبقة التجارية: 8 enums جديدة، `tenants.tenant_type`/`product_level`/`currency`/`timezone`/`locale`، جداول `capability_catalog`/`tenant_entitlements`/`tenant_branding`/`tenant_domains`، وتحديث `workspace_requests`. مصادر الحقيقة: `capability-catalog.json` (25 قدرة) + `capability-catalog-rules.mjs` مشترك + `default-entitlements.ts`. موافقة طلب المساحة تمنح قدرات المستوى داخل نفس Transaction وتُدقّق القرار في `platform_audit_logs`. `reset-test-database.mjs` يبذر الكتالوج. `vitest.config.mts` أُضيف لحل مسار `@`. النتيجة: 57 unit + 64 integration (8 ملفات) و`npm run check` كامل ناجح. | `P01-07` Academic Catalog |
 
 ## 12. قواعد صيانة الخطة
 
 - هذا الملف وحده يملك `CURRENT_PHASE` و`CURRENT_TASK` و`NEXT_TASK`.
+- `PRODUCT_VISION.md` هو العقد المرجعي لنموذج المنتج؛ أي تغيير فيه يجب أن ينعكس على هذا الملف و`RBAC_MATRIX.md` و`AGENTS.md` و`README.md` في نفس التاسك.
+- كل قرار معماري بعيد المدى يُسجَّل كـADR في `docs/adr/` بدل تركه في نص متفرق؛ القرار المعتمد لا يُعدَّل بل يُضاف قرار جديد يشير إليه.
 - لا يُنشأ Backlog أو migration plan موازٍ. أي خطة جديدة تُضاف كمرحلة/Task هنا.
 - المراجع التخصصية تصف عقدًا فقط ولا تحتوي مؤشر تنفيذ مستقلًا.
 - لا تُترك Task بحالة `DONE` مع Acceptance ناقصة أو نتيجة اختبار غير مسجلة.

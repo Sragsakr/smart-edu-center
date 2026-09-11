@@ -40,13 +40,13 @@ const dateFormatter = new Intl.DateTimeFormat("ar-EG", {
 
 function accountTypeLabel(accountType: string | null) {
   if (accountType === "center") return "سنتر تعليمي";
-  if (accountType === "independent_teacher") return "مدرس مستقل";
+  if (accountType === "teacher") return "مدرس مستقل";
   return "المنصة";
 }
 
 function TenantIcon({ tenant }: { tenant: AuditTenant }) {
   if (tenant.accountType === "center") return <Building2 aria-hidden="true" />;
-  if (tenant.accountType === "independent_teacher") return <GraduationCap aria-hidden="true" />;
+  if (tenant.accountType === "teacher") return <GraduationCap aria-hidden="true" />;
   return <ShieldCheck aria-hidden="true" />;
 }
 
@@ -207,7 +207,7 @@ export function PlatformAuditLog({ entries }: { entries: AuditRow[] }) {
         <Summary label="إجمالي الأحداث" value={entries.length} Icon={CalendarDays} />
         <Summary label="المساحات المسجلة" value={tenants.filter((tenant) => tenant.source === "tenant").length} Icon={Building2} />
         <Summary label="السناتر" value={tenants.filter((tenant) => tenant.accountType === "center").length} Icon={Building2} />
-        <Summary label="المدرسون المستقلون" value={tenants.filter((tenant) => tenant.accountType === "independent_teacher").length} Icon={GraduationCap} />
+        <Summary label="المدرسون المستقلون" value={tenants.filter((tenant) => tenant.accountType === "teacher").length} Icon={GraduationCap} />
       </section>
 
       <section className="card mb-5 p-4 md:p-5" aria-label="فلاتر سجل التدقيق">
@@ -221,7 +221,7 @@ export function PlatformAuditLog({ entries }: { entries: AuditRow[] }) {
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="اسم المساحة أو الحدث" className="min-w-0 flex-1 bg-transparent outline-none" />
           </label>
           <FilterSelect label="مساحة العمل" value={tenantId} onChange={setTenantId} options={tenants.map((tenant) => ({ value: tenant.id, label: tenant.name }))} />
-          <FilterSelect label="نوع المساحة" value={accountType} onChange={setAccountType} options={[{ value: "center", label: "سنتر تعليمي" }, { value: "independent_teacher", label: "مدرس مستقل" }]} />
+          <FilterSelect label="نوع المساحة" value={accountType} onChange={setAccountType} options={[{ value: "center", label: "سنتر تعليمي" }, { value: "teacher", label: "مدرس مستقل" }]} />
           <FilterSelect label="نوع الحدث" value={action} onChange={setAction} options={actions.map((eventAction) => ({ value: eventAction, label: actionLabels[eventAction] ?? eventAction }))} />
           <FilterSelect label="الفترة" value={dateRange} onChange={setDateRange} options={[{ value: "1", label: "آخر 24 ساعة" }, { value: "7", label: "آخر 7 أيام" }, { value: "30", label: "آخر 30 يومًا" }]} />
         </div>

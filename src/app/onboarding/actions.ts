@@ -31,11 +31,12 @@ async function submitPostgresWorkspaceRequest(request: ParsedWorkspaceRequest) {
   try {
     await sql.query(
       `insert into public.workspace_requests
-         (user_id, email, account_type, workspace_name, slug, mobile_phone, whatsapp_phone)
-       values ($1, $2, $3, $4, $5, $6, $7)
+         (user_id, email, tenant_type, requested_product_level, workspace_name, slug, mobile_phone, whatsapp_phone)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
        on conflict (user_id) do update set
          email = excluded.email,
-         account_type = excluded.account_type,
+         tenant_type = excluded.tenant_type,
+         requested_product_level = excluded.requested_product_level,
          workspace_name = excluded.workspace_name,
          slug = excluded.slug,
          mobile_phone = excluded.mobile_phone,
@@ -46,7 +47,16 @@ async function submitPostgresWorkspaceRequest(request: ParsedWorkspaceRequest) {
          reviewed_at = null,
          tenant_id = null,
          updated_at = now()`,
-      [applicant.id, applicant.email.toLowerCase(), request.accountType, request.name, request.slug, request.mobilePhone, request.whatsappPhone],
+      [
+        applicant.id,
+        applicant.email.toLowerCase(),
+        request.tenantType,
+        request.requestedProductLevel,
+        request.name,
+        request.slug,
+        request.mobilePhone,
+        request.whatsappPhone,
+      ],
     );
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "23505") {
@@ -61,7 +71,8 @@ async function submitPostgresWorkspaceRequest(request: ParsedWorkspaceRequest) {
 
 export async function submitWorkspaceRequest(formData: FormData) {
   const parsedRequest = workspaceRequestSchema.safeParse({
-    accountType: formData.get("account_type"),
+    tenantType: formData.get("tenant_type"),
+    requestedProductLevel: formData.get("requested_product_level"),
     name: formData.get("name"),
     slug: formData.get("slug"),
     mobilePhone: formData.get("mobile_phone"),

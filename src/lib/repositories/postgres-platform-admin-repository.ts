@@ -16,7 +16,8 @@ type TenantRow = {
   id: string;
   name: string;
   slug: string;
-  account_type: string;
+  tenant_type: string;
+  product_level: string;
   created_by: string;
   created_at: string;
   status: "active" | "suspended";
@@ -43,7 +44,7 @@ type AuditRow = {
   tenant_id: string;
   tenant_name: string;
   tenant_slug: string | null;
-  tenant_account_type: string | null;
+  tenant_type: string | null;
   tenant_source: "tenant" | "workspace_request" | "platform";
 };
 
@@ -78,8 +79,8 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
       audit_log_entries: number;
     }>(`
       select
-        count(*) filter (where account_type = 'center')::int as centers,
-        count(*) filter (where account_type = 'independent_teacher')::int as independent_teachers,
+        count(*) filter (where tenant_type = 'center')::int as centers,
+        count(*) filter (where tenant_type = 'teacher')::int as independent_teachers,
         count(*)::int as total_tenants,
         (select count(*)::int from public.students) as students,
         (select count(*)::int from public.memberships) as memberships,
@@ -108,7 +109,8 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
         t.id,
         t.name,
         t.slug::text as slug,
-        t.account_type::text as account_type,
+        t.tenant_type::text as tenant_type,
+        t.product_level::text as product_level,
         t.created_by,
         t.created_at::text as created_at,
         t.status::text as status,
@@ -125,7 +127,8 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
       id: row.id,
       name: row.name,
       slug: row.slug,
-      account_type: row.account_type,
+      tenant_type: row.tenant_type,
+      product_level: row.product_level,
       created_by: row.created_by,
       created_at: row.created_at,
       status: row.status,
@@ -168,9 +171,9 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
   async getPlatformReport(): Promise<RepositoryPlatformReport> {
     const [tenantTypes, requestStatuses, membershipRoles, studentStatus] = await Promise.all([
       this.sql.query<{ label: string; value: number }>(`
-        select account_type::text as label, count(*)::int as value
+        select tenant_type::text as label, count(*)::int as value
         from public.tenants
-        group by account_type
+        group by tenant_type
       `),
       this.sql.query<{ label: string; value: number }>(`
         select status::text as label, count(*)::int as value
@@ -197,7 +200,7 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
     return {
       tenantByType: [
         { label: "سناتر", value: tenantMap.get("center") ?? 0 },
-        { label: "مدرسون مستقلون", value: tenantMap.get("independent_teacher") ?? 0 },
+        { label: "مدرسون مستقلون", value: tenantMap.get("teacher") ?? 0 },
       ],
       requestsByStatus: [
         { label: "معلقة", value: requestMap.get("pending_approval") ?? 0 },
@@ -225,7 +228,7 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
           coalesce(t.id::text, 'platform') as tenant_id,
           coalesce(t.name, wr.workspace_name, 'أحداث عامة للمنصة') as tenant_name,
           t.slug::text as tenant_slug,
-          coalesce(t.account_type::text, wr.account_type::text) as tenant_account_type,
+          coalesce(t.tenant_type::text, wr.tenant_type::text) as tenant_type,
           case
             when t.id is not null then 'tenant'
             when wr.id is not null then 'workspace_request'
@@ -258,7 +261,7 @@ export class PostgresPlatformAdminRepository implements PlatformAdminRepository 
         id: row.tenant_id,
         name: row.tenant_name,
         slug: row.tenant_slug,
-        accountType: row.tenant_account_type,
+        accountType: row.tenant_type,
         source: row.tenant_source,
       },
     }));

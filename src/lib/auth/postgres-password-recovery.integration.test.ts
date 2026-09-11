@@ -21,8 +21,8 @@ afterEach(async () => {
 async function eligibleOwnerWithWorkspaceRequest() {
   const { owner, tenant } = await createTenantWithOwner(sql);
   await sql.query(
-    `insert into public.workspace_requests (user_id, email, account_type, workspace_name, slug, mobile_phone, whatsapp_phone, status, reviewed_by, reviewed_at, tenant_id)
-     values ($1, $2, 'center', 'Owner Workspace', $3, '+201000000002', '+201000000002', 'approved', $1, now(), $4)`,
+    `insert into public.workspace_requests (user_id, email, tenant_type, requested_product_level, workspace_name, slug, mobile_phone, whatsapp_phone, status, reviewed_by, reviewed_at, tenant_id)
+     values ($1, $2, 'center', 'operations', 'Owner Workspace', $3, '+201000000002', '+201000000002', 'approved', $1, now(), $4)`,
     [owner.id, owner.email, `slug-${owner.id.slice(0, 8)}`, tenant.id],
   );
   return owner;

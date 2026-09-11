@@ -3,12 +3,15 @@ import "server-only";
 import { getPostgresAccountAccess, getPostgresCurrentUser } from "@/lib/auth/postgres-auth";
 import { listPostgresWorkspaceRequests } from "@/lib/auth/postgres-workspace-requests";
 import { applicationSql } from "@/lib/database/application-sql";
+import type { ProductLevel } from "@/lib/tenant/product-level";
+import type { TenantType } from "@/lib/tenant/tenant-type";
 
 export type WorkspaceRequestStatus = "pending_approval" | "approved" | "rejected";
 export type WorkspaceRequest = {
   id: string;
   email: string;
-  account_type: "center" | "independent_teacher";
+  tenant_type: TenantType;
+  requested_product_level: ProductLevel;
   workspace_name: string;
   slug: string;
   mobile_phone: string | null;
@@ -19,7 +22,7 @@ export type WorkspaceRequest = {
   reviewed_at: string | null;
 };
 
-const workspaceRequestFields = "id,email::text as email,account_type,workspace_name,slug::text as slug,mobile_phone,whatsapp_phone,status::text as status,rejection_reason,created_at::text as created_at,reviewed_at::text as reviewed_at";
+const workspaceRequestFields = "id,email::text as email,tenant_type::text as tenant_type,requested_product_level::text as requested_product_level,workspace_name,slug::text as slug,mobile_phone,whatsapp_phone,status::text as status,rejection_reason,created_at::text as created_at,reviewed_at::text as reviewed_at";
 
 type PortalAccess = {
   user: { id: string; email: string } | null;
