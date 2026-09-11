@@ -4,6 +4,24 @@
 
 > القاعدة الأساسية: إخفاء الزر في الواجهة ليس حماية. كل صلاحية هنا يجب أن تُفرض في RLS/DAL/Server Actions، مع `tenant_id` كحد عزل إلزامي.
 
+## 0. موقع هذه الوثيقة من طبقات القرار
+
+هذه الوثيقة تملك **طبقة RBAC** فقط. القرار الكامل ثلاث طبقات، وكل طبقة مصدر حقيقتها مختلف ([`PRODUCT_VISION.md`](PRODUCT_VISION.md) §3 و[`adr/0002`](adr/0002-entitlements-over-rbac.md)):
+
+```text
+Effective Access = Entitlement(tenant, capability)   ← PRODUCT_VISION + tenant_entitlements
+                 AND RBAC(role, action)               ← هذه الوثيقة + src/lib/authorization/policy.ts
+                 AND Scope(resource)                  ← علاقات قاعدة البيانات
+```
+
+ممنوع أن تحل إحدى الطبقات محل الأخرى:
+
+- امتلاك الدور للصلاحية **لا** يمنح ميزة غير مشتراة (Entitlement مرفوض → مرفوض).
+- وجود الاشتراك **لا** يمنح كل الأدوار كل الأفعال (RBAC مرفوض → مرفوض).
+- امتلاك الصلاحية والاشتراك **لا** يمنح موردًا خارج النطاق (Scope مرفوض → مرفوض).
+
+المصفوفة أدناه تصف RBAC وScope فقط، ولا تصف باقات المنتج ولا الـAdd-ons.
+
 ## 1. الأدوار المشمولة
 
 | الدور | الغرض |
@@ -37,13 +55,19 @@
 |---|---|---|---|---|---|
 | Tenant profile/settings | `R,U` | `R,U*` | `R` | `R` | `R` |
 | Branches | `C,R,U,D` | `C,R,U,D` | `R` | `R` | `R` |
+| Rooms | `C,R,U,D` | `C,R,U,D` | `R` | `R` | `R` |
+| Stages / Grades / Subjects | `C,R,U,D` | `C,R,U,D` | `R` | `R` | `R` |
+| Teacher records | `C,R,U,D` | `C,R,U,D` | `R*` | `C,R,U` | `R` |
+| Courses | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `R` |
+| Course offerings | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `R` |
 | Memberships / team | `C,R,U,D*` | `C,R,U*` | `R*` | `R*` | `R*` |
 | Invitations | `C,R,U,D` | `C,R,U,D*` | `—` | `—` | `—` |
 | Students | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `R` |
 | Guardians | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `R` |
 | Student ↔ Guardian links | `C,R,U,D` | `C,R,U,D` | `R*` | `C,R,U,D` | `R` |
-| Cohorts / groups | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `R` |
-| Enrollments | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `R` |
+| Cohorts / groups (delivery) | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `R` |
+| Enrollments (offering) | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `R` |
+| Cohort membership | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `R` |
 | Class sessions | `C,R,U,D*` | `C,R,U,D*` | `C*,R*,U*,D*` | `R` | `R` |
 | Attendance | `C,R,U,D*` | `C,R,U,D*` | `C*,R*,U*` | `C,R,U*` | `R` |
 | Invoices | `C,R,U,D*` | `C,R,U,D*` | `R*` | `C,R,U*` | `C,R,U,D*` |
@@ -69,7 +93,7 @@
 - الدعوة مربوطة بـTenant + Email + Role + Token Hash + Expiry، ولا تمنح Membership إلا بعد القبول الصحيح.
 
 ### Students
-- `teacher R*`: فقط الطلاب الملتحقون بمجموعات يكون `teacher_user_id` فيها مطابقًا لهوية `app_users.id` في الجلسة الموثقة.
+- `teacher R*`: فقط الطلاب الملتحقون بعروض/مجموعات يكون المدرس فيها مسندًا إليه عبر `course_offerings.teacher_id` / `course_teachers`.
 - `receptionist`: إنشاء وتحديث البيانات التشغيلية للطالب؛ لا يغير روابط هوية Auth أو حقول أمنية مستقبلية.
 - `accountant`: قراءة بيانات التعريف اللازمة للفواتير والتحصيل فقط.
 - الحذف يفضل أن يكون `active=false`; Hard Delete محجوز Owner/Admin عندما لا توجد تبعيات تمنعه.
@@ -80,15 +104,33 @@
 - `accountant`: قراءة بيانات التعريف/الاتصال اللازمة للتحصيل فقط.
 - ربط Guardian بحساب Auth فعلي لا يتم يدويًا من CRUD عام؛ له Claim/Invite flow موثوق في `IAM-005-06`.
 
-### Cohorts / groups
-- `teacher R*`: مجموعاته المسندة إليه فقط.
-- `receptionist`: إنشاء/تحديث البيانات التشغيلية للمجموعة، لكن تغيير `teacher_user_id` أو القرارات الحساسة يخضع Owner/Admin في DAL عند التنفيذ.
+### Catalog: Stages / Grades / Subjects / Rooms
+- تعديل هذه المراجع التنظيمية متاح لـOwner/Admin بحرية، ولـ`receptionist` تشغيليًا.
+- `teacher`: قراءة فقط للتنقل، ولا يعدّل شجرة المراحل/الصفوف/المواد.
+- الأرشفة تُفضّل على الحذف عند وجود تبعيات (courses/offerings/cohorts).
+
+### Teacher records
+- **`teachers` كيان مستقل عن `memberships`**: يمكن وجود مدرس بلا حساب مستخدم (مثل طالب بلا حساب في Operations)، ويمكن ربطه لاحقًا بـ`membership` عند منحه دخولًا.
+- `owner`/`admin`: إنشاء وتعديل وأرشفة سجلات المدرسين، وربط/فصل الحساب.
+- `receptionist`: إدارة البيانات التشغيلية للمدرس.
+- `teacher R*`: قراءة سجله وباقي المدرسين بالحد الأدنى اللازم للتشغيل (اسم/مادة).
+- ربط سجل المدرس بحساب Auth فعلية لا يتم من CRUD عام بشكل يعطي صلاحيات؛ الدخول يحتاج `membership` نشطة.
+
+### Courses وCourse offerings
+- `owner`/`admin`: إدارة كاملة للمقررات والـofferings بما يشمل التسعير والسعة.
+- `receptionist`: إنشاء/تحديث تشغيلي، وتغيير المدرس أو السعر يخضع Owner/Admin في DAL عند التنفيذ.
+- `teacher R*`: يرى فقط المقررات والـofferings المرتبط بها عبر `course_teachers` أو `course_offerings.teacher_id`.
+- `accountant`: قراءة الـoffering وسعره وربطه بالطالب لأغراض الفواتير فقط.
+
+### Cohorts / groups (delivery)
+- `teacher R*`: المجموعات التي يكون مدرس الـoffering المرتبط بها مسندًا إليه عبر `course_offerings.teacher_id` / `course_teachers` — **وليس** عبر عمود مدرس مباشر على المجموعة.
+- `receptionist`: إنشاء/تحديث البيانات التشغيلية للمجموعة، لكن تغيير ربطها بـ`course_offering` أو القرارات الحساسة يخضع Owner/Admin في DAL عند التنفيذ.
 - `accountant`: قراءة اسم المجموعة وربطها بالطالب لأغراض التقارير/الفواتير فقط.
 
-### Enrollments
-- `teacher R*`: Enrollments داخل مجموعاته فقط.
-- `receptionist`: إضافة/نقل/تعطيل Enrollment تشغيليًا ضمن نفس Tenant.
-- `accountant`: قراءة فقط لفهم خدمة/مجموعة الطالب ماليًا.
+### Enrollments (على العرض) وCohort membership (على التسليم)
+- `teacher R*`: Enrollments وcohort memberships داخل مجموعاته/عروضه فقط.
+- `receptionist`: إضافة/نقل/تعطيل Enrollment وعضوية المجموعة تشغيليًا ضمن نفس Tenant، مع منع عدم الاتساق (لا cohort member بلا enrollment نشط لنفس الـoffering).
+- `accountant`: قراءة فقط لفهم خدمة الطالب ماليًا.
 
 ### Class sessions
 - `teacher C*/R*/U*/D*`: فقط Sessions لمجموعة مسندة إليه. لا يستطيع إنشاء Session لمجموعة مدرس آخر.
@@ -141,7 +183,7 @@
 ## 7. Scope rules الإلزامية
 
 1. **Tenant isolation first:** كل Query/Mutation يجب أن يثبت `tenant_id` قبل فحص الدور.
-2. **Teacher scope:** الوصول الأكاديمي للمدرس يعتمد على مطابقة `cohorts.teacher_user_id` لهوية `app_users.id` في الجلسة الموثقة، ثم يتفرع منه الطلاب/Enrollments/Sessions/Attendance.
+2. **Teacher scope:** الوصول الأكاديمي للمدرس يعتمد على `course_offerings.teacher_id` (أو `course_teachers`) مقابل هوية المدرس في الجلسة الموثقة، ثم يتفرع منه الطلاب/Enrollments/Cohorts/Sessions/Attendance. **لا** يُستخدم عمود مدرس مباشر على `cohorts`. وفوق ذلك يلزم **Entitlement** الميزة قبل أي فحص دور.
 3. **No cross-role escalation:** `admin` لا يستطيع تعديل نفسه إلى Owner أو إدارة Owner، ولا إدارة Admin آخر في العمليات الحساسة.
 4. **Self relationships:** Student/Guardian لا يحصلان على صلاحيات Member بمجرد وجود Auth user.
 5. **Inactive membership = no member capability:** أي Membership بـ`active=false` تفقد كل صلاحيات Tenant فورًا.
@@ -171,6 +213,10 @@
 
 الـCapability لا تستبدل Scope. مثال: امتلاك `attendance.mark` للمدرس لا يعني أنه يستطيع تعليم حضور Session خارج مجموعاته.
 
+**تمييز إلزامي في التسمية:** مفاتيح RBAC هنا (`students.read`, `attendance.mark`…) تخص **الأدوار**، ومفاتيح الـEntitlement في [`PRODUCT_VISION.md`](PRODUCT_VISION.md) §3.1 (`ops.core`, `platform.exams`, `learning.video`…) تخص **المساحة**. لا تُدمج في فضاء تسمية واحد، ولا يُستخدم مفتاح RBAC كقرار تجاري.
+
+**ولا يجوز تقاسم البادئة بين الفضاءين.** قائمة بادئات RBAC محجوزة على مفاتيح الاستحقاق، ويفشل تحميل الكتالوج تلقائيًا عند أي تقاطع (`assertNoRbacNamespaceCollision`). السبب أن `payments.read` (صلاحية) بجوار `payments.online` (استحقاق) يسهّل الخطأ عند إضافة قدرة جديدة. ولذلك سُمّي الـadd-on `ops.online_payments` لا `payments.online`، و`ops.extra_branches` لا `branches.extra`.
+
 ## 9. قرارات تنفيذ IAM-005-02
 
 عند تحويل هذه الوثيقة إلى RLS Policies:
@@ -178,7 +224,8 @@
 - يمنع استخدام Policy عامة من نوع `any active member can update` على Resources متعددة.
 - لكل جدول Policies منفصلة على `SELECT / INSERT / UPDATE / DELETE` حسب هذه المصفوفة.
 - Helpers داخل `private` يمكن استخدامها لتقليل التكرار، بشرط أن تكون Tenant-scoped ولا تسبب RLS recursion.
-- Teacher-scoped helpers يجب أن تتحقق من Assignment الفعلي للمجموعة.
+- Teacher-scoped helpers يجب أن تتحقق من Assignment الفعلي عبر `course_offerings.teacher_id` / `course_teachers`، لا من عمود على المجموعة. التنفيذ في `src/lib/authorization/resource-scope.ts`.
+- **مساران لا مسار واحد للفحص:** القدرة غير المقيّدة تُفرض بـ`requireTenantCapability`، والقدرة المقيّدة (`scoped`) تُفرض بـ`requireTenantCapabilityWithScope` مع فاحص المورد. استخدام المسار الأول على قدرة مقيّدة يُرفض دائمًا برسالة نطاق — وهو السلوك الصحيح، لأنه يمنع تمرير قدرة بلا تحقق مورد. ومن يحتاج السياق قبل تحديد المورد يستخدم `getTenantAuthorizationContext`.
 - Finance writes يجب أن تقيد `accountant`/`owner`/`admin`، مع الاستثناء التشغيلي المحدد للـReceptionist.
 - اختبارات `IAM-005-05` يجب أن تغطي كل Role × Resource × Action، بما فيها Negative tests وCross-tenant tests.
 

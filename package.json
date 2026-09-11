@@ -8,12 +8,18 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude \"**/*.integration.test.ts\"",
+    "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "check:migrations": "node scripts/check-migrations.mjs",
     "check:secrets": "node scripts/check-repository-secrets.mjs",
     "check:client-secrets": "node scripts/check-client-secrets.mjs",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run check:migrations && npm run check:secrets && npm run build && npm run check:client-secrets"
+    "check:runtime-dependencies": "node scripts/check-runtime-dependencies.mjs",
+    "seed:capability-catalog": "node postgres/scripts/seed-capability-catalog.mjs",
+    "seed:canonical-demo": "node postgres/scripts/seed-canonical-demo.mjs",
+    "provision:app-role": "node postgres/scripts/provision-app-role.mjs",
+    "backup:database": "node postgres/scripts/backup-database.mjs",
+    "restore:drill": "node postgres/scripts/restore-drill.mjs",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run test:integration && npm run check:migrations && npm run check:secrets && npm run build && npm run check:client-secrets && npm run check:runtime-dependencies"
   },
   "dependencies": {
     "lucide-react": "^1.41.0",

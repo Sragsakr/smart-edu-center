@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
@@ -9,29 +10,73 @@ import {
   getPostgresAccountAccess,
   registerPostgresUser,
 } from "@/lib/auth/postgres-auth";
+import { withSessionUser } from "@/lib/auth/session-context";
 import { authSubmissionSchema, firstValidationMessage } from "@/lib/auth/validation";
 import { applicationSql } from "@/lib/database/application-sql";
+import {
+  buildRateLimitRules,
+  clearRateLimit,
+  clientAddress,
+  consumeRateLimit,
+  describeRetryAfter,
+  type RateLimitScope,
+} from "@/lib/security/rate-limit";
 
 function loginError(message: string): never { redirect(`/login?error=${encodeURIComponent(message)}`); }
+
+/**
+ * يفرض حدّ المحاولات على مسار مصادقة ويُرجع رسالة الحجب إن وُجدت.
+ *
+ * يُنادى **قبل** أي فحص لكلمة المرور، فلا يستهلك تخمينَ الأسرار دورة تحقق كامل.
+ * ويجمع حدّ الحساب مع حدّ المصدر: تزوير ترويسة العنوان يتجاوز الثاني فقط.
+ */
+async function rateLimitBlock(scope: RateLimitScope, email: string): Promise<string | null> {
+  const requestHeaders = await headers();
+  const decision = await consumeRateLimit(applicationSql(), {
+    scope,
+    rules: buildRateLimitRules({ scope, account: email, address: clientAddress(requestHeaders) }),
+  });
+  if (decision.allowed) return null;
+  return `${decision.message} (${describeRetryAfter(decision.retryAfterSeconds)})`;
+}
 function signupError(message: string): never { redirect(`/signup?error=${encodeURIComponent(message)}`); }
 function platformLoginError(message: string): never { redirect(`/platform-control/login?error=${encodeURIComponent(message)}`); }
 
 async function signInPostgresAccount(email: string, password: string) {
+  const blocked = await rateLimitBlock("login", email);
+  if (blocked) loginError(blocked);
+
   const sql = applicationSql();
   const user = await authenticatePostgresUser(sql, email, password);
   if (!user) loginError("بيانات الدخول غير صحيحة");
-  const [access, portalRelations] = await Promise.all([
-    getPostgresAccountAccess(sql, user.id),
-    sql.query<{ has_student: boolean; has_guardian: boolean }>(
-      `select
-         exists(select 1 from public.students where user_id = $1 and active = true) as has_student,
-         exists(select 1 from public.guardians where user_id = $1 and active = true) as has_guardian`,
-      [user.id],
-    ),
-  ]);
-  const relations = portalRelations.rows[0];
-  const hasStudent = Boolean(relations?.has_student);
-  const hasGuardian = Boolean(relations?.has_guardian);
+
+  // النجاح يمحو المحاولات، فلا يُعاقَب من دخل بنجاح بسبب محاولات سابقة.
+  await clearRateLimit(sql, {
+    scope: "login",
+    rules: buildRateLimitRules({ scope: "login", account: email, address: clientAddress(await headers()) }),
+  });
+
+  // بعد التحقق من كلمة المرور تُفتح جلسة ثم تُقرأ العلاقات داخل سياق الهوية،
+  // لأن جداول العلاقات خاضعة لسياسات RLS ولا تُقرأ بلا سياق.
+  await createPostgresSession(sql, user.id);
+
+  const resolved = await withSessionUser(async ({ sql: scoped }) => {
+    const [access, portalRelations] = [
+      await getPostgresAccountAccess(scoped, user.id),
+      await scoped.query<{ has_student: boolean; has_guardian: boolean }>(
+        `select
+           exists(select 1 from public.students where user_id = $1 and active = true) as has_student,
+           exists(select 1 from public.guardians where user_id = $1 and active = true) as has_guardian`,
+        [user.id],
+      ),
+    ];
+    return { access, relations: portalRelations.rows[0] };
+  });
+
+  const access = resolved?.access;
+  if (!access) loginError("تعذر إكمال الدخول. حاول مرة أخرى");
+  const hasStudent = Boolean(resolved?.relations?.has_student);
+  const hasGuardian = Boolean(resolved?.relations?.has_guardian);
   const portalCount = Number(access.hasMembership) + Number(hasStudent) + Number(hasGuardian);
 
   if (access.isPlatformAdmin && portalCount === 0) {
@@ -40,8 +85,6 @@ async function signInPostgresAccount(email: string, password: string) {
   if (access.requestStatus === "pending_approval") {
     loginError("طلب اشتراكك قيد المراجعة. ستتواصل معك إدارة المنصة، ويمكنك الدخول بعد التفعيل");
   }
-
-  await createPostgresSession(sql, user.id);
   if (portalCount > 1) redirect("/choose-context");
   if (access.hasMembership) redirect("/");
   if (hasStudent) redirect("/student");
@@ -62,6 +105,10 @@ export async function createAccount(formData: FormData) {
   const parsed = authSubmissionSchema.safeParse({ email: formData.get("email"), password, intent: "sign-up" });
   if (!parsed.success) signupError(firstValidationMessage(parsed.error));
 
+  // إنشاء الحسابات بلا حدّ يسمح بإغراق المستودع بحسابات وهمية.
+  const blocked = await rateLimitBlock("signup", parsed.data.email);
+  if (blocked) signupError(blocked);
+
   const sql = applicationSql();
   try {
     const user = await registerPostgresUser(sql, parsed.data.email, parsed.data.password);
@@ -78,12 +125,17 @@ export async function authenticatePlatformAdmin(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   if (!email || password.length < 8) platformLoginError("أدخل بيانات الدخول الصحيحة");
 
+  // مسار المنصة أضيق: حسابه أعلى قيمة، وعدد المشرفين محدود فالتخمين أقل ضجيجًا.
+  const blocked = await rateLimitBlock("platform_login", email);
+  if (blocked) platformLoginError(blocked);
+
   const sql = applicationSql();
   const user = await authenticatePostgresUser(sql, email, password);
   if (!user) platformLoginError("بيانات الدخول غير صحيحة");
-  const access = await getPostgresAccountAccess(sql, user.id);
-  if (!access.isPlatformAdmin) platformLoginError("هذا الحساب غير مصرح له بإدارة المنصة");
   await createPostgresSession(sql, user.id);
+
+  const resolved = await withSessionUser(({ sql: scoped }) => getPostgresAccountAccess(scoped, user.id));
+  if (!resolved?.isPlatformAdmin) platformLoginError("هذا الحساب غير مصرح له بإدارة المنصة");
   redirect("/platform-admin");
 }
 

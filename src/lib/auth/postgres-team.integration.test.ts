@@ -40,7 +40,7 @@ describe("Team & invitation flows (real database)", () => {
     const { tenant: tenantB } = await createTenantWithOwner(sql, { tenantName: "Tenant B" });
 
     await loginAs(ownerA.id);
-    const data = await getPostgresTeamWorkspaceData(sql, tenantB.id);
+    const data = await getPostgresTeamWorkspaceData(tenantB.id);
     expect(data?.tenant.id).toBe(tenantA.id);
     expect(data?.workspaces.map((w) => w.tenant_id)).not.toContain(tenantB.id);
   });
@@ -132,7 +132,7 @@ describe("Team & invitation flows (real database)", () => {
     const existing = await createUser(sql);
     const { rawToken } = await createPostgresInvitation(sql, tenant.id, owner.id, existing.email, "accountant", futureDate());
 
-    await acceptPostgresInvitation(sql, rawToken, existing.id, existing.email);
+    await sql.withoutSession((scoped) => acceptPostgresInvitation(scoped, rawToken, existing.id, existing.email));
 
     const users = await sql.query("select 1 from public.app_users where email = $1", [existing.email]);
     expect(users.rowCount).toBe(1);
@@ -140,14 +140,19 @@ describe("Team & invitation flows (real database)", () => {
     expect(membership.rows[0]?.role).toBe("accountant");
   });
 
-  it("admin cannot disable the owner or another admin, and users cannot disable themselves", async () => {
+  it("admin cannot disable the last owner or another admin, and users cannot disable themselves", async () => {
     const { tenant, owner } = await createTenantWithOwner(sql);
     const adminA = await createUser(sql);
     const adminB = await createUser(sql);
     await sql.query("insert into public.memberships (tenant_id, user_id, role, active) values ($1, $2, 'admin', true)", [tenant.id, adminA.id]);
     await sql.query("insert into public.memberships (tenant_id, user_id, role, active) values ($1, $2, 'admin', true)", [tenant.id, adminB.id]);
 
-    await expect(setPostgresMembershipActive(sql, tenant.id, adminA.id, "admin", owner.id, false)).rejects.toThrow("لا يمكن تعطيل المالك");
+    // الرسالة تسمّي السبب الدقيق: آخر مالك، لا مالك عمومًا. مساحة بمالكين يمكن
+    // لأحدهما أن يُعطَّل، أما الأخير فتعطيله يجعل المساحة بلا مالك.
+    // غير المالك لا يمسّ المالك إطلاقًا — أعمّ من حماية «آخر مالك» وأسبق منها.
+    await expect(setPostgresMembershipActive(sql, tenant.id, adminA.id, "admin", owner.id, false)).rejects.toThrow(
+      "إلا من مالك آخر",
+    );
     await expect(setPostgresMembershipActive(sql, tenant.id, adminA.id, "admin", adminB.id, false)).rejects.toThrow("لا يستطيع تعديل مشرف آخر");
     await expect(setPostgresMembershipActive(sql, tenant.id, adminA.id, "admin", adminA.id, false)).rejects.toThrow("لا يمكنك تعطيل عضويتك");
   });
@@ -173,6 +178,6 @@ describe("Team & invitation flows (real database)", () => {
     const { tenant } = await createTenantWithOwner(sql);
     const outsider = await createUser(sql);
     await loginAs(outsider.id);
-    await expect(requirePostgresTenantCapability(sql, tenant.id, "team.manage")).rejects.toThrow("ليس لديك وصول");
+    await expect(requirePostgresTenantCapability(tenant.id, "team.manage", async () => null)).rejects.toThrow("ليس لديك وصول");
   });
 });

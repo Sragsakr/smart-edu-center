@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import type { MemberRole, TenantCapability } from "@/lib/authorization/policy";
-import { applicationSql } from "@/lib/database/application-sql";
+import type { AccessScopedSqlExecutor } from "@/lib/database/sql-executor";
 import {
   assertAssignableRole,
   createPostgresInvitation,
@@ -30,10 +30,18 @@ async function requestOrigin(): Promise<string> {
   return host ? `${proto}://${host}` : "http://localhost:3000";
 }
 
-async function postgresTeamContext(tenantId: string, capability: TenantCapability) {
-  const sql = applicationSql();
-  const access = await requirePostgresTenantCapability(sql, tenantId, capability);
-  return { sql, ...access };
+/**
+ * ينفّذ عملية داخل سياق مساحة مصرّح به.
+ *
+ * الواجهة callback لأن السياق يُصفَّر مع نهاية المعاملة: تمرير العملية يضمن أنها
+ * تنفَّذ داخل النطاق، وأن المُنفّذ لا يُستخدم بعده.
+ */
+function withTeamContext<Result>(
+  tenantId: string,
+  capability: TenantCapability,
+  operation: (context: { sql: AccessScopedSqlExecutor; userId: string; role: MemberRole }) => Promise<Result>,
+): Promise<Result> {
+  return requirePostgresTenantCapability(tenantId, capability, operation);
 }
 
 function errorMessage(error: unknown): string {
@@ -50,9 +58,11 @@ export async function createInvitation(formData: FormData) {
   let rawToken: string;
   try {
     assertAssignableRole(role);
-    const { sql, userId } = await postgresTeamContext(tenantId, "invitations.create");
-    await ensurePostgresInvitableEmail(sql, email);
-    ({ rawToken } = await createPostgresInvitation(sql, tenantId, userId, email, role, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)));
+    rawToken = await withTeamContext(tenantId, "invitations.create", async ({ sql, userId }) => {
+      await ensurePostgresInvitableEmail(sql, email);
+      const created = await createPostgresInvitation(sql, tenantId, userId, email, role, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+      return created.rawToken;
+    });
   } catch (error) {
     fail(tenantId, errorMessage(error));
   }
@@ -67,8 +77,9 @@ export async function resendInvitation(formData: FormData) {
   const invitationId = String(formData.get("invitation_id") ?? "");
   let rawToken: string | undefined;
   try {
-    const { sql, userId } = await postgresTeamContext(tenantId, "invitations.resend");
-    ({ rawToken } = await updatePostgresInvitation(sql, tenantId, userId, invitationId, "resend"));
+    rawToken = await withTeamContext(tenantId, "invitations.resend", async ({ sql, userId }) =>
+      (await updatePostgresInvitation(sql, tenantId, userId, invitationId, "resend")).rawToken,
+    );
   } catch (error) {
     fail(tenantId, errorMessage(error));
   }
@@ -82,8 +93,9 @@ export async function revokeInvitation(formData: FormData) {
   const tenantId = String(formData.get("tenant_id") ?? "");
   const invitationId = String(formData.get("invitation_id") ?? "");
   try {
-    const { sql, userId } = await postgresTeamContext(tenantId, "invitations.revoke");
-    await updatePostgresInvitation(sql, tenantId, userId, invitationId, "revoke");
+    await withTeamContext(tenantId, "invitations.revoke", ({ sql, userId }) =>
+      updatePostgresInvitation(sql, tenantId, userId, invitationId, "revoke"),
+    );
   } catch (error) {
     fail(tenantId, errorMessage(error));
   }
@@ -95,8 +107,9 @@ export async function deactivateMembership(formData: FormData) {
   const tenantId = String(formData.get("tenant_id") ?? "");
   const targetUserId = String(formData.get("user_id") ?? "");
   try {
-    const { sql, userId, role } = await postgresTeamContext(tenantId, "team.manage");
-    await setPostgresMembershipActive(sql, tenantId, userId, role, targetUserId, false);
+    await withTeamContext(tenantId, "team.manage", ({ sql, userId, role }) =>
+      setPostgresMembershipActive(sql, tenantId, userId, role, targetUserId, false),
+    );
   } catch (error) {
     fail(tenantId, errorMessage(error));
   }
@@ -108,8 +121,9 @@ export async function reactivateMembership(formData: FormData) {
   const tenantId = String(formData.get("tenant_id") ?? "");
   const targetUserId = String(formData.get("user_id") ?? "");
   try {
-    const { sql, userId, role } = await postgresTeamContext(tenantId, "team.manage");
-    await setPostgresMembershipActive(sql, tenantId, userId, role, targetUserId, true);
+    await withTeamContext(tenantId, "team.manage", ({ sql, userId, role }) =>
+      setPostgresMembershipActive(sql, tenantId, userId, role, targetUserId, true),
+    );
   } catch (error) {
     fail(tenantId, errorMessage(error));
   }

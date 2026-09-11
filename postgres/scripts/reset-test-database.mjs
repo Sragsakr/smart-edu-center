@@ -3,6 +3,9 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import pg from "pg";
 
+import { seedCapabilityCatalog } from "./seed-capability-catalog.mjs";
+import { APP_ROLE, provisionAppRole } from "./provision-app-role.mjs";
+
 const { Client } = pg;
 
 const FORBIDDEN_DATABASE_NAMES = new Set(["saboraty", "postgres", "template0", "template1"]);
@@ -118,6 +121,24 @@ async function runSmokeCheck(testDatabaseUrl) {
   }
 }
 
+/**
+ * كلمة مرور دور التطبيق في قاعدة الاختبار القابلة للحذف.
+ *
+ * قيمة اختبارية محلية فقط: قاعدة الاختبار تُحذف وتُعاد في كل تشغيل، والدور لا
+ * يملك أي وصول لبيانات حقيقية.
+ */
+export const TEST_APP_ROLE_PASSWORD =
+  process.env.TEST_APP_DB_PASSWORD ?? "saboraty-test-app-role-password";
+
+/** رابط اتصال بدور التطبيق — يُستخدم لاختبار إلزام RLS فعليًا. */
+export function appRoleUrl(testDatabaseUrl, password = TEST_APP_ROLE_PASSWORD) {
+  const parsed = new URL(testDatabaseUrl);
+  return {
+    url: `postgresql://${APP_ROLE}:${encodeURIComponent(password)}@${parsed.host}${parsed.pathname}`,
+    password,
+  };
+}
+
 export async function resetTestDatabase({
   testDatabaseUrl = process.env.TEST_DATABASE_URL,
   databaseUrl = process.env.DATABASE_URL,
@@ -125,6 +146,16 @@ export async function resetTestDatabase({
   const { databaseName } = assertSafeTestDatabase({ testDatabaseUrl, databaseUrl });
   await dropAndCreateDatabase(testDatabaseUrl, databaseName);
   await applySql(testDatabaseUrl, BASELINE_FILE);
+  // كتالوج القدرات بيانات مرجعية للمنصة وليست بيانات عملاء، فتُبذر مع الـbaseline
+  // حتى تكون قاعدة الاختبار مطابقة للحالة الهدف قبل أي بيانات تجريبية.
+  await seedCapabilityCatalog(testDatabaseUrl);
+  // المنح تُفقد مع إعادة إنشاء القاعدة، فتُعاد في كل تشغيل حتى يستطيع اختبار
+  // إلزام RLS العمل بنفس الدور الذي يعمل به التطبيق.
+  await provisionAppRole({
+    ownerConnectionString: testDatabaseUrl,
+    databaseName,
+    password: TEST_APP_ROLE_PASSWORD,
+  });
   await runSmokeCheck(testDatabaseUrl);
   return { databaseName };
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BookOpen, CalendarDays, CheckCircle2, Clock3, GraduationCap, LogOut, ReceiptText, Wallet } from "lucide-react";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/auth/actions";
+import { PortalNotEntitled } from "@/components/portal-not-entitled";
 import { getCurrentAccountAccess, getPortalCount } from "@/lib/auth/account-access";
 import { getStudentPortalData } from "@/lib/portal-data";
 
@@ -13,6 +14,17 @@ export default async function StudentPage() {
   if (!access.student) redirect("/");
   const data = await getStudentPortalData();
   if (!data) redirect("/");
+
+  // غياب الاشتراك حالة واجهة مقصودة، ولا تُقرأ أي بيانات طالب قبل التأكد من الاستحقاق.
+  if (!data.entitled) {
+    return (
+      <PortalNotEntitled
+        portal="student"
+        audienceName={data.student.full_name}
+        audienceIdentifier={data.student.code}
+      />
+    );
+  }
 
   const now = new Date();
   const upcoming = data.sessions.filter((session) => new Date(session.starts_at) >= now).slice(0,4);

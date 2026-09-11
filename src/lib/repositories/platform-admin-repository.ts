@@ -25,7 +25,8 @@ export type RepositoryTenantRow = {
   id: string;
   name: string;
   slug: string;
-  account_type: string;
+  tenant_type: string;
+  product_level: string;
   created_by: string;
   created_at: string;
   status: "active" | "suspended";

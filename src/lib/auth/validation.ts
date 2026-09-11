@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { productLevels } from "@/lib/tenant/product-level";
+import { tenantTypes } from "@/lib/tenant/tenant-type";
+
 export const authSubmissionSchema = z.object({
   email: z.string().trim().toLowerCase().email("أدخل بريدًا إلكترونيًا صحيحًا"),
   password: z.string().min(8, "كلمة المرور يجب ألا تقل عن 8 أحرف").max(72, "كلمة المرور طويلة جدًا"),
@@ -12,7 +15,8 @@ const internationalPhoneSchema = z
   .regex(/^\+[1-9]\d{7,14}$/, "اكتب الرقم مع كود الدولة، مثال: +201001234567");
 
 export const workspaceRequestSchema = z.object({
-  accountType: z.enum(["center", "independent_teacher"]),
+  tenantType: z.enum(tenantTypes),
+  requestedProductLevel: z.enum(productLevels),
   name: z.string().trim().min(2, "الاسم قصير جدًا").max(120, "الاسم طويل جدًا"),
   slug: z
     .string()

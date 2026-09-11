@@ -1,35 +1,49 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { resetCookieState } from "@/test/postgres/test-cookies";
 import { truncateAllTenantData, testSqlExecutor } from "@/test/postgres/test-database";
 import { createTenantWithOwner, createUser, makePlatformAdmin } from "@/test/postgres/fixtures";
+import { createPostgresSession } from "@/lib/auth/postgres-auth";
 import { PostgresPlatformAdminRepository } from "@/lib/repositories/postgres-platform-admin-repository";
-import type { CurrentUserProvider, CurrentUserIdentity } from "@/lib/auth/current-user-provider";
+import { PostgresCurrentUserProvider } from "@/lib/auth/postgres-current-user-provider";
 
 const sql = testSqlExecutor();
 
-function providerFor(user: CurrentUserIdentity | null): CurrentUserProvider {
-  return { getCurrentUser: async () => user };
+/**
+ * الهوية تُشتق من الجلسة لا من حقن يدوي، لأن نطاق المنصة يُفتح من مسار
+ * `withPlatformScope` الذي يقرأ الكوكي. هذا يختبر المسار الحقيقي لا محاكاة له.
+ */
+async function loginAs(userId: string | null) {
+  resetCookieState();
+  if (userId) await createPostgresSession(sql, userId);
+}
+
+function repository() {
+  return new PostgresPlatformAdminRepository(sql, new PostgresCurrentUserProvider());
 }
 
 afterEach(async () => {
   await truncateAllTenantData();
+  resetCookieState();
 });
 
 describe("PostgresPlatformAdminRepository (real database)", () => {
   it("reports unauthenticated when there is no current user", async () => {
-    const repo = new PostgresPlatformAdminRepository(sql, providerFor(null));
-    await expect(repo.getCurrentPlatformAdminAccess()).resolves.toEqual({ status: "unauthenticated" });
+    await loginAs(null);
+    await expect(repository().getCurrentPlatformAdminAccess()).resolves.toEqual({ status: "unauthenticated" });
   });
 
   it("reports forbidden for a signed-in user who is not a platform admin", async () => {
     const user = await createUser(sql);
-    const repo = new PostgresPlatformAdminRepository(sql, providerFor(user));
+    await loginAs(user.id);
+    const repo = repository();
     await expect(repo.getCurrentPlatformAdminAccess()).resolves.toEqual({ status: "forbidden" });
   });
 
   it("reports authorized for a platform admin", async () => {
     const user = await createUser(sql);
     await makePlatformAdmin(sql, user.id);
-    const repo = new PostgresPlatformAdminRepository(sql, providerFor(user));
+    await loginAs(user.id);
+    const repo = repository();
     await expect(repo.getCurrentPlatformAdminAccess()).resolves.toEqual({ status: "authorized", user });
   });
 
@@ -39,7 +53,8 @@ describe("PostgresPlatformAdminRepository (real database)", () => {
     const admin = await createUser(sql);
     await makePlatformAdmin(sql, admin.id);
 
-    const repo = new PostgresPlatformAdminRepository(sql, providerFor(admin));
+    await loginAs(admin.id);
+    const repo = repository();
     const overview = await repo.getOverviewMetrics();
     expect(overview.totalTenants).toBe(2);
     expect(overview.memberships).toBe(2);
@@ -60,7 +75,8 @@ describe("PostgresPlatformAdminRepository (real database)", () => {
       [admin.id, tenant.id],
     );
 
-    const repo = new PostgresPlatformAdminRepository(sql, providerFor(admin));
+    await loginAs(admin.id);
+    const repo = repository();
     const audit = await repo.listPlatformAudit();
     const entry = audit.find((row) => row.entity_id === tenant.id);
     expect(entry).toBeDefined();

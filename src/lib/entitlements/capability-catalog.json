@@ -1,0 +1,202 @@
+[
+  {
+    "key": "ops.core",
+    "kind": "feature",
+    "includedFromLevel": "operations",
+    "titleAr": "تشغيل العمليات",
+    "descriptionAr": "الطلاب وأولياء الأمور والمجموعات والجداول والقاعات والحضور والرسوم والأقساط والمدفوعات والمتأخرات والمصروفات والإشعارات والتقارير التشغيلية والمالية والفريق.",
+    "sortOrder": 100
+  },
+  {
+    "key": "platform.portal.student",
+    "kind": "feature",
+    "includedFromLevel": "management_platform",
+    "titleAr": "بوابة الطالب",
+    "descriptionAr": "حساب للطالب يعرض جدوله وحضوره واشتراكاته ومدفوعاته ونتائجه ضمن حدود علاقته المحمية بمساحة العمل.",
+    "sortOrder": 200
+  },
+  {
+    "key": "platform.portal.guardian",
+    "kind": "feature",
+    "includedFromLevel": "management_platform",
+    "titleAr": "بوابة ولي الأمر",
+    "descriptionAr": "حساب لولي الأمر يعرض أبناءه المرتبطين به فقط وما يخصهم من حضور واشتراكات ونتائج وتنبيهات.",
+    "sortOrder": 210
+  },
+  {
+    "key": "platform.portal.staff",
+    "kind": "feature",
+    "includedFromLevel": "management_platform",
+    "titleAr": "بوابة المدرس والموظف",
+    "descriptionAr": "تجربة موسّعة للمدرس والموظف داخل المنصة تتجاوز شاشات التشغيل الأساسية.",
+    "sortOrder": 220
+  },
+  {
+    "key": "platform.homework",
+    "kind": "feature",
+    "includedFromLevel": "management_platform",
+    "titleAr": "الواجبات والتسليمات",
+    "descriptionAr": "إسناد واجبات وتسليمها وتصحيحها مع ملفات خاصة لكل تسليم.",
+    "sortOrder": 230
+  },
+  {
+    "key": "platform.exams",
+    "kind": "feature",
+    "includedFromLevel": "management_platform",
+    "titleAr": "الاختبارات",
+    "descriptionAr": "بنك أسئلة واختبارات بوقت محدد ومحاولات وتصحيح آلي وتسليم النتائج.",
+    "sortOrder": 240
+  },
+  {
+    "key": "platform.results",
+    "kind": "feature",
+    "includedFromLevel": "management_platform",
+    "titleAr": "النتائج والتقييم",
+    "descriptionAr": "إصدار النتائج وتقارير التقييم للطالب وولي الأمر والمدرس دون تعديل نتائج قديمة.",
+    "sortOrder": 250
+  },
+  {
+    "key": "platform.materials",
+    "kind": "feature",
+    "includedFromLevel": "management_platform",
+    "titleAr": "الملفات والمواد",
+    "descriptionAr": "رفع المواد التعليمية وتخزينها بشكل خاص وإتاحتها لمن له صلاحية عبر روابط موقعة.",
+    "sortOrder": 260
+  },
+  {
+    "key": "platform.progress",
+    "kind": "feature",
+    "includedFromLevel": "management_platform",
+    "titleAr": "متابعة تقدم الطالب",
+    "descriptionAr": "صورة متابعة تعليمية متصلة تربط الحضور والواجبات والاختبارات في مسار واحد.",
+    "sortOrder": 270
+  },
+  {
+    "key": "platform.notifications",
+    "kind": "feature",
+    "includedFromLevel": "management_platform",
+    "titleAr": "الإشعارات التعليمية",
+    "descriptionAr": "تنبيهات داخل المنصة للواجبات والنتائج والمتابعة التعليمية.",
+    "sortOrder": 280
+  },
+  {
+    "key": "learning.courses",
+    "kind": "feature",
+    "includedFromLevel": "learning_platform",
+    "titleAr": "الكورسات والدروس",
+    "descriptionAr": "بناء كورسات ووحدات ودروس وربطها بالجمهور المناسب مع دورة حياة نشر وأرشفة.",
+    "sortOrder": 300
+  },
+  {
+    "key": "learning.content",
+    "kind": "feature",
+    "includedFromLevel": "learning_platform",
+    "titleAr": "المحتوى والمواد الرقمية",
+    "descriptionAr": "إدارة المحتوى الرقمي وصلاحيات الوصول إليه حسب الاشتراك والتسجيل.",
+    "sortOrder": 310
+  },
+  {
+    "key": "learning.video",
+    "kind": "feature",
+    "includedFromLevel": "learning_platform",
+    "titleAr": "محتوى الفيديو",
+    "descriptionAr": "استضافة وتشغيل محمي للفيديو مع رموز تشغيل قصيرة العمر من الخادم.",
+    "sortOrder": 320
+  },
+  {
+    "key": "learning.enrollment",
+    "kind": "feature",
+    "includedFromLevel": "learning_platform",
+    "titleAr": "التسجيل في الكورسات الرقمية",
+    "descriptionAr": "تسجيل مستقل عن تسجيل المجموعات الحضورية، لا يخلط طالب السنتر بطالب التعلم الرقمي.",
+    "sortOrder": 330
+  },
+  {
+    "key": "learning.progress",
+    "kind": "feature",
+    "includedFromLevel": "learning_platform",
+    "titleAr": "تتبع تقدم التعلم",
+    "descriptionAr": "قياس تقدم الطالب داخل الكورس وإكمال الدروس وتحليل نقاط الضعف.",
+    "sortOrder": 340
+  },
+  {
+    "key": "learning.live",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "الجلسات المباشرة",
+    "descriptionAr": "جدولة جلسات مباشرة وربطها بالطالب والمجموعة دون بناء بث مملوك.",
+    "sortOrder": 400
+  },
+  {
+    "key": "branding.custom_domain",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "دومين مخصص",
+    "descriptionAr": "تشغيل المنصة على دومين المساحة الخاصة بعد التحقق منه، على نفس التطبيق ونفس البنية.",
+    "sortOrder": 410
+  },
+  {
+    "key": "branding.white_label",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "هوية كاملة",
+    "descriptionAr": "إخفاء هوية سبورتي بالكامل واستخدام اسم المساحة وشعارها وألوانها.",
+    "sortOrder": 420
+  },
+  {
+    "key": "comms.whatsapp",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "قناة واتساب",
+    "descriptionAr": "إرسال التنبيهات عبر واتساب بقوالب معتمدة وسجل إرسال وحالة تسليم.",
+    "sortOrder": 430
+  },
+  {
+    "key": "comms.sms",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "قناة SMS",
+    "descriptionAr": "إرسال الرسائل النصية للحالات المعتمدة مع احترام موافقة المستخدم.",
+    "sortOrder": 440
+  },
+  {
+    "key": "storage.extra",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "مساحة تخزين إضافية",
+    "descriptionAr": "زيادة سقف التخزين للملفات والمواد التعليمية.",
+    "sortOrder": 450
+  },
+  {
+    "key": "reporting.advanced",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "تقارير متقدمة",
+    "descriptionAr": "تقارير وتصديرات موسّعة تتجاوز التقارير التشغيلية والمالية الأساسية.",
+    "sortOrder": 460
+  },
+  {
+    "key": "ops.extra_branches",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "فروع إضافية",
+    "descriptionAr": "زيادة عدد الفروع المسموح بها فوق حد المستوى الأساسي.",
+    "sortOrder": 470
+  },
+  {
+    "key": "staff.extra",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "مستخدمون إضافيون",
+    "descriptionAr": "زيادة عدد الموظفين والمدرسين الذين لهم دخول إلى المساحة.",
+    "sortOrder": 480
+  },
+  {
+    "key": "ops.online_payments",
+    "kind": "addon",
+    "includedFromLevel": null,
+    "titleAr": "الدفع الإلكتروني",
+    "descriptionAr": "تحصيل إلكتروني مع مزود دفع ومطابقة تلقائية للتحصيل بعد اعتماد المزود.",
+    "sortOrder": 490
+  }
+]

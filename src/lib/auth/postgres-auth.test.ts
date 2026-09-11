@@ -13,7 +13,8 @@ vi.mock("next/headers", () => ({
 
 import { hashPassword } from "./password";
 import { authenticatePostgresUser, clearPostgresSession, createPostgresSession, getPostgresAccountAccess, getPostgresCurrentUser } from "./postgres-auth";
-import type { SqlExecutor, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
+import type { AccessScopedSqlExecutor, SqlExecutor, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
+import { withAccessContexts } from "@/test/unit/access-context-double";
 
 class AuthSql implements TransactionalSqlExecutor {
   passwordDigest: string | null = null;
@@ -23,22 +24,32 @@ class AuthSql implements TransactionalSqlExecutor {
   sessionCreated = false;
   platformAdmin = true;
   async query<Row extends Record<string, unknown> = Record<string, unknown>>(text: string, values: readonly unknown[] = []) {
-    if (text.includes("password_digest")) {
+    if (text.includes("login_lookup") || text.includes("password_digest")) {
       const matchesUser = String(values[0]).toLowerCase() === this.user?.email.toLowerCase();
-      return { rows: matchesUser && this.user && this.passwordDigest ? [{ ...this.user, password_digest: this.passwordDigest } as unknown as Row] : [], rowCount: matchesUser && this.user && this.passwordDigest ? 1 : 0 };
+      return { rows: matchesUser && this.user && this.passwordDigest ? [{ user_id: this.user.id, email: this.user.email, password_digest: this.passwordDigest } as unknown as Row] : [], rowCount: matchesUser && this.user && this.passwordDigest ? 1 : 0 };
     }
     if (text.includes("from public.platform_admins")) return { rows: this.platformAdmin ? [{ user_id: "user-id" } as unknown as Row] : [], rowCount: this.platformAdmin ? 1 : 0 };
     if (text.includes("insert into public.auth_sessions")) { this.sessionCreated = true; return { rows: [], rowCount: 1 }; }
     if (text.includes("update public.auth_sessions") && text.includes("revoked_at")) { this.sessionRevoked = true; return { rows: [], rowCount: 1 }; }
-    if (text.includes("from public.auth_sessions")) {
+    if (text.includes("private.current_app_user_id")) {
       if (this.sessionRevoked || this.sessionExpired || !this.user?.active || !cookieState.token) return { rows: [], rowCount: 0 };
-      return { rows: [{ session_id: "session-id", id: "user-id", email: "admin@example.com" } as unknown as Row], rowCount: 1 };
+      return { rows: [{ id: "user-id", email: "admin@example.com" } as unknown as Row], rowCount: 1 };
     }
     return { rows: [], rowCount: 0 };
   }
   async transaction<Result>(operation: (sql: SqlExecutor) => Promise<Result>): Promise<Result> {
     return operation(this);
   }
+  async withSession<Result>(_digest: string, operation: (sql: AccessScopedSqlExecutor) => Promise<Result>): Promise<Result> {
+    return operation(withAccessContexts(this) as unknown as AccessScopedSqlExecutor);
+  }
+  async withoutSession<Result>(operation: (sql: AccessScopedSqlExecutor) => Promise<Result>): Promise<Result> {
+    return operation(withAccessContexts(this) as unknown as AccessScopedSqlExecutor);
+  }
+  async enterTenantScope(): Promise<void> {}
+  async leaveTenantScope(): Promise<void> {}
+  async enterPlatformScope(): Promise<void> {}
+  async leavePlatformScope(): Promise<void> {}
 }
 
 beforeEach(() => {

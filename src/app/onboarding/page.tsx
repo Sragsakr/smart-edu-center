@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { getCurrentAccountAccess } from "@/lib/auth/account-access";
+import { productLevelDescriptionsAr, productLevelLabelsAr, productLevels } from "@/lib/tenant/product-level";
 import { submitWorkspaceRequest } from "./actions";
 
 export default async function OnboardingPage({
@@ -42,15 +43,18 @@ export default async function OnboardingPage({
           </p>
         ) : null}
         <fieldset>
-          <legend className="mb-2 text-sm font-bold">نوع الحساب</legend>
+          <legend className="mb-2 text-sm font-bold">نوع النشاط</legend>
+          <p className="mb-3 text-xs leading-6 text-[#777386]">
+            يحدد شكل الكتالوج والتنقل فقط، ولا يمنعك من شراء أي مستوى منتج.
+          </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="cursor-pointer rounded-xl border p-4 text-sm has-[:checked]:border-[#6547d9] has-[:checked]:bg-[#f5f2ff]">
               <input
                 className="ml-2"
                 type="radio"
-                name="account_type"
+                name="tenant_type"
                 value="center"
-                defaultChecked={rejectedRequest?.account_type !== "independent_teacher"}
+                defaultChecked={rejectedRequest?.tenant_type !== "teacher"}
               />
               سنتر تعليمي
               <span className="mt-1 block text-xs text-[#777386]">فروع، موظفون وعدة مدرسين</span>
@@ -59,13 +63,43 @@ export default async function OnboardingPage({
               <input
                 className="ml-2"
                 type="radio"
-                name="account_type"
-                value="independent_teacher"
-                defaultChecked={rejectedRequest?.account_type === "independent_teacher"}
+                name="tenant_type"
+                value="teacher"
+                defaultChecked={rejectedRequest?.tenant_type === "teacher"}
               />
               مدرس مستقل
               <span className="mt-1 block text-xs text-[#777386]">مجموعات وطلاب تحت اسمك</span>
             </label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend className="mb-2 text-sm font-bold">مستوى المنتج المطلوب</legend>
+          <p className="mb-3 text-xs leading-6 text-[#777386]">
+            كل مستوى يشمل ما قبله. يمكنك الترقية لاحقًا على نفس المساحة ونفس البيانات.
+          </p>
+          <div className="space-y-3">
+            {productLevels.map((level, index) => (
+              <label
+                key={level}
+                className="block cursor-pointer rounded-xl border p-4 text-sm has-[:checked]:border-[#6547d9] has-[:checked]:bg-[#f5f2ff]"
+              >
+                <input
+                  className="ml-2"
+                  type="radio"
+                  name="requested_product_level"
+                  value={level}
+                  defaultChecked={
+                    rejectedRequest
+                      ? rejectedRequest.requested_product_level === level
+                      : index === 0
+                  }
+                />
+                {productLevelLabelsAr[level]}
+                <span className="mt-1 block text-xs leading-6 text-[#777386]">
+                  {productLevelDescriptionsAr[level]}
+                </span>
+              </label>
+            ))}
           </div>
         </fieldset>
         <label htmlFor="workspace-name" className="block text-sm font-bold">

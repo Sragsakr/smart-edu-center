@@ -14,18 +14,18 @@ export async function setTenantStatus(formData: FormData) {
 
   const { sql, user } = await requirePostgresPlatformAdmin();
   try {
-    await sql.transaction(async (transaction) => {
-      const result = await transaction.query(
+    {
+      const result = await sql.query(
         "update public.tenants set status = $1, updated_at = now() where id = $2 and status <> $1",
         [nextStatus, tenantId],
       );
       if (result.rowCount !== 1) throw new Error("tenant status did not change");
-      await transaction.query(
+      await sql.query(
         `insert into public.platform_audit_logs (actor_user_id, action, entity_type, entity_id, details)
          values ($1, 'tenant.status_changed', 'tenant', $2, $3::jsonb)`,
         [user.id, tenantId, JSON.stringify({ status: nextStatus })],
       );
-    });
+    }
   } catch {
     redirect(`/platform-admin/tenants?error=${encodeURIComponent("تعذر تحديث حالة المساحة")}`);
   }

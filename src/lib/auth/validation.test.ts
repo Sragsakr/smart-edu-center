@@ -6,7 +6,8 @@ import {
 } from "./validation";
 
 const validWorkspaceRequest = {
-  accountType: "center",
+  tenantType: "center",
+  requestedProductLevel: "operations",
   name: "سنتر التفوق",
   slug: "al-tafawoq",
   mobilePhone: "+201001234567",
@@ -40,8 +41,12 @@ describe("account input validation", () => {
 
   it.each([
     {
-      scenario: "unsupported account type",
-      request: { ...validWorkspaceRequest, accountType: "student" },
+      scenario: "unsupported customer type",
+      request: { ...validWorkspaceRequest, tenantType: "student" },
+    },
+    {
+      scenario: "unsupported product level",
+      request: { ...validWorkspaceRequest, requestedProductLevel: "enterprise" },
     },
     {
       scenario: "malformed slug",
@@ -62,14 +67,16 @@ describe("account input validation", () => {
   it("normalizes a valid workspace request", () => {
     expect(
       workspaceRequestSchema.parse({
-        accountType: "center",
+        tenantType: "teacher",
+        requestedProductLevel: "learning_platform",
         name: "  سنتر التفوق  ",
         slug: "  AL-TAFAWOQ  ",
         mobilePhone: "  +201001234567  ",
         whatsappPhone: "  +201009876543  ",
       }),
     ).toEqual({
-      accountType: "center",
+      tenantType: "teacher",
+      requestedProductLevel: "learning_platform",
       name: "سنتر التفوق",
       slug: "al-tafawoq",
       mobilePhone: "+201001234567",

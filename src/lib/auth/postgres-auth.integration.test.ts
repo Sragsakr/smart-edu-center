@@ -6,10 +6,15 @@ import {
   authenticatePostgresUser,
   clearPostgresSession,
   createPostgresSession,
-  getPostgresCurrentUser,
 } from "@/lib/auth/postgres-auth";
+import { withSessionUser } from "@/lib/auth/session-context";
 
 const sql = testSqlExecutor();
+
+/** يحل الهوية من الجلسة بنفس المسار الذي يستخدمه التطبيق: داخل سياق RLS. */
+function currentSessionUser() {
+  return withSessionUser(async ({ user }) => user);
+}
 
 beforeEach(() => {
   resetCookieState();
@@ -43,12 +48,12 @@ describe("PostgreSQL Fresh Auth (real database)", () => {
     expect(stored.rows).toHaveLength(1);
     expect(stored.rows[0]?.token_digest).not.toContain(user.id);
 
-    const current = await getPostgresCurrentUser(sql);
+    const current = await currentSessionUser();
     expect(current).toEqual({ id: user.id, email: user.email });
   });
 
   it("returns null when there is no session cookie", async () => {
-    await expect(getPostgresCurrentUser(sql)).resolves.toBeNull();
+    await expect(currentSessionUser()).resolves.toBeNull();
   });
 
   it("rejects an expired session", async () => {
@@ -58,13 +63,13 @@ describe("PostgreSQL Fresh Auth (real database)", () => {
       "update public.auth_sessions set created_at = now() - interval '2 hours', expires_at = now() - interval '1 hour' where user_id = $1",
       [user.id],
     );
-    await expect(getPostgresCurrentUser(sql)).resolves.toBeNull();
+    await expect(currentSessionUser()).resolves.toBeNull();
   });
 
   it("rejects a revoked session and logout revokes the active session", async () => {
     const user = await createUser(sql, { email: "revoked@example.test" });
     await createPostgresSession(sql, user.id);
-    await expect(getPostgresCurrentUser(sql)).resolves.not.toBeNull();
+    await expect(currentSessionUser()).resolves.not.toBeNull();
 
     await clearPostgresSession(sql);
     const revoked = await sql.query<{ revoked_at: string | null }>(
@@ -72,19 +77,19 @@ describe("PostgreSQL Fresh Auth (real database)", () => {
       [user.id],
     );
     expect(revoked.rows[0]?.revoked_at).not.toBeNull();
-    await expect(getPostgresCurrentUser(sql)).resolves.toBeNull();
+    await expect(currentSessionUser()).resolves.toBeNull();
   });
 
   it("rejects a session token that does not exist", async () => {
     setSessionCookie("not-a-real-token");
-    await expect(getPostgresCurrentUser(sql)).resolves.toBeNull();
+    await expect(currentSessionUser()).resolves.toBeNull();
   });
 
   it("does not resolve a session belonging to a since-deactivated user", async () => {
     const user = await createUser(sql, { email: "deactivated-after-login@example.test" });
     await createPostgresSession(sql, user.id);
     await sql.query("update public.app_users set active = false where id = $1", [user.id]);
-    await expect(getPostgresCurrentUser(sql)).resolves.toBeNull();
+    await expect(currentSessionUser()).resolves.toBeNull();
   });
 
   it("issues independent tokens across repeated logins (no fixation)", async () => {

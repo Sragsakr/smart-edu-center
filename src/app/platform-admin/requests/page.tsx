@@ -2,6 +2,8 @@ import { Check } from "lucide-react";
 import { redirect } from "next/navigation";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { listPendingWorkspaceRequests } from "@/lib/auth/account-access";
+import { productLevelLabelsAr } from "@/lib/tenant/product-level";
+import { tenantTypeLabelsAr } from "@/lib/tenant/tenant-type";
 import { approveWorkspaceRequest, rejectWorkspaceRequest } from "./actions";
 import { PlatformPageHeader } from "@/components/platform-page-header";
 
@@ -56,9 +58,15 @@ export default async function PlatformRequestsPage({
                 </div>
                 <dl className="mt-5 grid gap-3 rounded-2xl bg-[#f8f7fb] p-4 text-sm sm:grid-cols-2 xl:grid-cols-5">
                   <div>
-                    <dt className="text-xs text-[#777386]">نوع الحساب</dt>
+                    <dt className="text-xs text-[#777386]">نوع النشاط</dt>
                     <dd className="mt-1 font-bold">
-                      {request.account_type === "center" ? "سنتر تعليمي" : "مدرس مستقل"}
+                      {tenantTypeLabelsAr[request.tenant_type]}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[#777386]">مستوى المنتج المطلوب</dt>
+                    <dd className="mt-1 font-bold">
+                      {productLevelLabelsAr[request.requested_product_level]}
                     </dd>
                   </div>
                   <div>

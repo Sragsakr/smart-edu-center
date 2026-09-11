@@ -1,10 +1,12 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { consumePostgresPasswordReset } from "@/lib/auth/postgres-password-recovery";
 import { firstValidationMessage, passwordResetRedemptionSchema } from "@/lib/auth/validation";
 import { applicationSql } from "@/lib/database/application-sql";
+import { buildRateLimitRules, clientAddress, consumeRateLimit, describeRetryAfter } from "@/lib/security/rate-limit";
 
 function resetError(message: string): never {
   redirect(`/reset-password?error=${encodeURIComponent(message)}`);
@@ -18,6 +20,19 @@ export async function resetPasswordWithCode(formData: FormData) {
     passwordConfirmation: formData.get("password_confirmation"),
   });
   if (!parsedSubmission.success) resetError(firstValidationMessage(parsedSubmission.error));
+
+  // أخطر مسار تخمين: كود الاستعادة قصير. الحدّ هنا قبل أي محاولة مطابقة.
+  const decision = await consumeRateLimit(applicationSql(), {
+    scope: "password_reset_redeem",
+    rules: buildRateLimitRules({
+      scope: "password_reset_redeem",
+      account: parsedSubmission.data.email,
+      address: clientAddress(await headers()),
+    }),
+  });
+  if (!decision.allowed) {
+    resetError(`${decision.message} (${describeRetryAfter(decision.retryAfterSeconds)})`);
+  }
 
   const consumed = await consumePostgresPasswordReset(
     applicationSql(),
