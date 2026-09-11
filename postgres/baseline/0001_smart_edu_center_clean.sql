@@ -919,6 +919,30 @@ $$;
 
 revoke all on function private.portal_invitation_by_token(text) from public;
 
+-- تُرجع دعوة الموظفين من بصمة رمزها بلا سياق مساحة، لأن صفحة الدعوة يفتحها زائر
+-- لا عضوية له بعد. سياسات `invitations` كلها مشروطة بسياق مساحة، فقراءة الجدول
+-- مباشرة من هذه اللحظة ترجع صفر صفوف — والدالة المحدودة تكسر الحلقة بلا توسيع
+-- أي سياسة: لا تكشف إلا الصف المطابق للرمز، وبالأعمدة اللازمة وحدها.
+create or replace function private.invitation_by_token(p_token_digest text)
+returns table (
+  id uuid,
+  tenant_id uuid,
+  invitee_email citext,
+  role public.member_role,
+  status public.invitation_status,
+  expires_at timestamptz,
+  account_exists boolean
+)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select i.id, i.tenant_id, i.invitee_email, i.role, i.status, i.expires_at,
+         exists(select 1 from public.app_users u where lower(u.email::text) = lower(i.invitee_email::text))
+  from public.invitations i
+  where i.token_hash = p_token_digest
+  limit 1
+$$;
+
+revoke all on function private.invitation_by_token(text) from public;
+
 revoke all on function private.session_user_id(text) from public;
 revoke all on function private.login_lookup(citext) from public;
 revoke all on function private.workspace_request_owner(uuid) from public;

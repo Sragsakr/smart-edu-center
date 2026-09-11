@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { hashPassword } from "./password";
 import { withSessionUser } from "@/lib/auth/session-context";
@@ -15,6 +15,7 @@ import { activeEntitlementKeys } from "@/lib/entitlements/entitlement-service";
 import type {
   AccessScopedSqlExecutor,
   SqlExecutor,
+  TransactionalSqlExecutor,
 } from "@/lib/database/sql-executor";
 import type { TeamWorkspaceData } from "@/lib/team-access";
 
@@ -41,7 +42,11 @@ export async function requirePostgresTenantCapability<Result>(
   operation: (context: { sql: AccessScopedSqlExecutor; userId: string; role: MemberRole }) => Promise<Result>,
 ): Promise<Result> {
   if (!tenantId) throw new Error("مساحة العمل غير محددة");
-  const resolved = await withSessionUser(async ({ sql, user }) => {
+
+  // العملية تُنفَّذ **داخل** callback الجلسة. تنفيذها بعد رجوعه يعني أن الـcommit قد
+  // وقع وسياق المساحة صُفِّر، فأي قراءة لاحقة ترجع صفر صفوف — ويرفضها المُنفّذ صراحةً.
+  // والغلاف يفصل «لا جلسة» عن نتيجة العملية، لأن النتيجة قد تكون فارغة بطبيعتها.
+  const outcome = await withSessionUser(async ({ sql, user }) => {
     await sql.enterTenantScope(tenantId);
     const result = await sql.query<{ role: MemberRole }>(
       `select role::text as role
@@ -50,14 +55,15 @@ export async function requirePostgresTenantCapability<Result>(
        limit 1`,
       [tenantId, user.id],
     );
-    return { sql, userId: user.id, role: result.rows[0]?.role as MemberRole | undefined };
+    const role = result.rows[0]?.role;
+    if (!role) throw new Error("ليس لديك وصول إلى مساحة العمل المطلوبة");
+    if (capabilityDecision(role, capability) !== "allow") {
+      throw new Error("ليس لديك صلاحية لتنفيذ هذه العملية");
+    }
+    return { value: await operation({ sql, userId: user.id, role }) };
   });
-  if (!resolved) throw new Error("Unauthenticated");
-  if (!resolved.role) throw new Error("ليس لديك وصول إلى مساحة العمل المطلوبة");
-  if (capabilityDecision(resolved.role, capability) !== "allow") {
-    throw new Error("ليس لديك صلاحية لتنفيذ هذه العملية");
-  }
-  return operation({ sql: resolved.sql, userId: resolved.userId, role: resolved.role });
+  if (!outcome) throw new Error("Unauthenticated");
+  return outcome.value;
 }
 
 export async function getPostgresTeamWorkspaceData(
@@ -147,11 +153,20 @@ export type PostgresInvitationPreview = {
 export async function getPostgresInvitationPreview(sql: SqlExecutor, rawToken: string): Promise<PostgresInvitationPreview | null> {
   if (!rawToken || rawToken.length < 32) return null;
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-  const result = await sql.query<{ id: string; tenant_id: string; invitee_email: string; role: MemberRole; status: PostgresInvitationPreview["status"]; expires_at: string; account_exists: boolean }>(
-    `select i.id, i.tenant_id, i.invitee_email, i.role::text as role, i.status::text as status,
-            i.expires_at::text as expires_at,
-            exists(select 1 from public.app_users u where lower(u.email) = lower(i.invitee_email)) as account_exists
-     from public.invitations i where i.token_hash = $1 limit 1`,
+  // القراءة تمر بالدالة المحدودة: سياسات `invitations` مشروطة بسياق مساحة، وصفحة
+  // الدعوة تُفتح بلا أي سياق، فقراءة الجدول مباشرة ترجع صفر صفوف دائمًا.
+  const result = await sql.query<{
+    id: string;
+    tenant_id: string;
+    invitee_email: string;
+    role: MemberRole;
+    status: PostgresInvitationPreview["status"];
+    expires_at: string;
+    account_exists: boolean;
+  }>(
+    `select i.id, i.tenant_id, i.invitee_email::text as invitee_email, i.role::text as role,
+            i.status::text as status, i.expires_at::text as expires_at, i.account_exists
+     from private.invitation_by_token($1) i`,
     [tokenHash],
   );
   const invitation = result.rows[0];
@@ -168,82 +183,142 @@ export async function getPostgresInvitationPreview(sql: SqlExecutor, rawToken: s
   };
 }
 
+/** يحلّ دعوة الموظفين من رمزها بلا سياق مساحة، بأقل أعمدة ممكنة. */
+async function resolveInvitationByToken(
+  sql: AccessScopedSqlExecutor,
+  tokenHash: string,
+): Promise<{ id: string; tenantId: string; inviteeEmail: string; role: MemberRole }> {
+  const result = await sql.query<{
+    id: string;
+    tenant_id: string;
+    invitee_email: string;
+    role: MemberRole;
+    status: string;
+    expires_at: string;
+  }>(
+    `select id, tenant_id, invitee_email::text as invitee_email, role::text as role,
+            status::text as status, expires_at::text as expires_at
+     from private.invitation_by_token($1)`,
+    [tokenHash],
+  );
+  const invitation = result.rows[0];
+  if (!invitation) throw new Error("رابط الدعوة غير صالح");
+  if (invitation.status !== "pending") throw new Error("رابط الدعوة غير صالح أو تم استخدامه من قبل");
+  if (new Date(invitation.expires_at).getTime() <= Date.now()) throw new Error("انتهت صلاحية الدعوة");
+  return {
+    id: invitation.id,
+    tenantId: invitation.tenant_id,
+    inviteeEmail: invitation.invitee_email,
+    role: invitation.role,
+  };
+}
+
+/**
+ * يقفل الدعوة بعد الدخول إلى المساحة ويُعيد التحقق من حالتها.
+ *
+ * `FOR UPDATE` يطبّق سياسة UPDATE المشروطة بسياق مساحة، فلا يُستخدم في خطوة
+ * حل الرمز. وإعادة التحقق تمنع سباق طلبين يقبلان الرمز نفسه.
+ */
+async function lockInvitationInTenant(
+  sql: AccessScopedSqlExecutor,
+  tokenHash: string,
+): Promise<{ id: string; tenantId: string; role: MemberRole }> {
+  const result = await sql.query<{
+    id: string;
+    tenant_id: string;
+    role: MemberRole;
+    status: string;
+    expires_at: string;
+  }>(
+    `select id, tenant_id, role::text as role, status::text as status, expires_at::text as expires_at
+     from public.invitations where token_hash = $1 for update`,
+    [tokenHash],
+  );
+  const invitation = result.rows[0];
+  if (!invitation) throw new Error("رابط الدعوة غير صالح");
+  if (invitation.status !== "pending") throw new Error("رابط الدعوة غير صالح أو تم استخدامه من قبل");
+  if (new Date(invitation.expires_at).getTime() <= Date.now()) throw new Error("انتهت صلاحية الدعوة");
+  return { id: invitation.id, tenantId: invitation.tenant_id, role: invitation.role };
+}
+
+/** إنشاء حساب جديد من دعوة ثم ربطه بالمساحة، في معاملة وسياق واحدين. */
 export async function registerAndAcceptPostgresInvitation(
-  sql: SqlExecutor,
+  sql: TransactionalSqlExecutor,
   email: string,
   password: string,
   rawToken: string,
 ): Promise<{ id: string; email: string }> {
   const passwordDigest = await hashPassword(password);
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-  return (async (transaction: SqlExecutor) => {
-    const userResult = await transaction.query<{ id: string; email: string }>(
-      `insert into public.app_users (id, email, active)
-       values (gen_random_uuid(), $1, true)
-       returning id, email`,
-      [email.trim().toLowerCase()],
-    );
-    const user = userResult.rows[0];
-    if (!user) throw new Error("تعذر إنشاء الحساب من الدعوة");
-    await transaction.query(
-      `insert into public.auth_password_credentials (user_id, password_digest)
-       values ($1, $2)`,
-      [user.id, passwordDigest],
-    );
-    const invitationResult = await transaction.query<{ id: string; tenant_id: string; invitee_email: string; role: MemberRole; status: string; expires_at: string }>(
-      `select id, tenant_id, invitee_email, role::text as role, status::text as status, expires_at
-       from public.invitations where token_hash = $1 for update`,
-      [tokenHash],
-    );
-    const invitation = invitationResult.rows[0];
-    if (!invitation || invitation.status !== "pending") throw new Error("رابط الدعوة غير صالح أو تم استخدامه من قبل");
-    if (new Date(invitation.expires_at).getTime() <= Date.now()) throw new Error("انتهت صلاحية الدعوة");
-    if (invitation.invitee_email.toLowerCase() !== user.email.toLowerCase()) throw new Error("هذه الدعوة موجهة إلى بريد إلكتروني آخر");
-    await transaction.query(
-      `insert into public.memberships (tenant_id, user_id, role, active)
-       values ($1, $2, $3, true)`,
-      [invitation.tenant_id, user.id, invitation.role],
-    );
-    await transaction.query(
-      `update public.invitations set status = 'accepted', accepted_by = $1, accepted_at = now(), updated_at = now() where id = $2`,
-      [user.id, invitation.id],
-    );
-    await insertTeamAudit(transaction, invitation.tenant_id, user.id, "membership.invitation.accepted", invitation.id, { email: user.email });
-    return user;
-  })(sql)
-}
+  const normalizedEmail = email.trim().toLowerCase();
+  const userId = randomUUID();
 
-export async function acceptPostgresInvitation(
-  sql: SqlExecutor,
-  rawToken: string,
-  userId: string,
-  email: string,
-): Promise<void> {
-  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-  return (async (transaction: SqlExecutor) => {
-    const result = await transaction.query<{ id: string; tenant_id: string; invitee_email: string; role: MemberRole; status: string; expires_at: string }>(
-      `select id, tenant_id, invitee_email, role::text as role, status::text as status, expires_at
-       from public.invitations where token_hash = $1 for update`,
-      [tokenHash],
+  return sql.withoutSession(async (scoped) => {
+    const resolved = await resolveInvitationByToken(scoped, tokenHash);
+    if (resolved.inviteeEmail.trim().toLowerCase() !== normalizedEmail) {
+      throw new Error("هذه الدعوة موجهة إلى بريد إلكتروني آخر");
+    }
+
+    await scoped.enterTenantScope(resolved.tenantId);
+    const invitation = await lockInvitationInTenant(scoped, tokenHash);
+
+    // بلا RETURNING: قراءة صف app_users العائد تحتاج هوية لا وجود لها بعد.
+    await scoped.query(`insert into public.app_users (id, email, active) values ($1, $2, true)`, [
+      userId,
+      normalizedEmail,
+    ]);
+    await scoped.query(
+      `insert into public.auth_password_credentials (user_id, password_digest) values ($1, $2)`,
+      [userId, passwordDigest],
     );
-    const invitation = result.rows[0];
-    if (!invitation || invitation.status !== "pending") throw new Error("رابط الدعوة غير صالح أو تم استخدامه من قبل");
-    if (new Date(invitation.expires_at).getTime() <= Date.now()) throw new Error("انتهت صلاحية الدعوة");
-    if (invitation.invitee_email.toLowerCase() !== email.toLowerCase()) throw new Error("هذه الدعوة موجهة إلى بريد إلكتروني آخر");
-    await transaction.query(
-      `insert into public.memberships (tenant_id, user_id, role, active)
-       values ($1, $2, $3, true)
-       on conflict (tenant_id, user_id) do update set role = excluded.role, active = true, updated_at = now()`,
-      [invitation.tenant_id, userId, invitation.role],
+    await scoped.query(
+      `insert into public.memberships (tenant_id, user_id, role, active) values ($1, $2, $3, true)`,
+      [invitation.tenantId, userId, invitation.role],
     );
-    await transaction.query(
+    await scoped.query(
       `update public.invitations
        set status = 'accepted', accepted_by = $1, accepted_at = now(), updated_at = now()
        where id = $2`,
       [userId, invitation.id],
     );
-    await insertTeamAudit(transaction, invitation.tenant_id, userId, "membership.invitation.accepted", invitation.id, { email });
-  })(sql)
+    await insertTeamAudit(scoped, invitation.tenantId, userId, "membership.invitation.accepted", invitation.id, {
+      email: normalizedEmail,
+    });
+    return { id: userId, email: normalizedEmail };
+  });
+}
+
+/** يقبل حسابًا موجودًا في مساحة الدعوة، في معاملة وسياق واحدين. */
+export async function acceptPostgresInvitation(
+  scoped: AccessScopedSqlExecutor,
+  rawToken: string,
+  userId: string,
+  email: string,
+): Promise<void> {
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+
+  const resolved = await resolveInvitationByToken(scoped, tokenHash);
+    if (resolved.inviteeEmail.trim().toLowerCase() !== email.trim().toLowerCase()) {
+      throw new Error("هذه الدعوة موجهة إلى بريد إلكتروني آخر");
+    }
+
+    await scoped.enterTenantScope(resolved.tenantId);
+    const invitation = await lockInvitationInTenant(scoped, tokenHash);
+    await scoped.query(
+      `insert into public.memberships (tenant_id, user_id, role, active)
+       values ($1, $2, $3, true)
+       on conflict (tenant_id, user_id) do update set role = excluded.role, active = true, updated_at = now()`,
+      [invitation.tenantId, userId, invitation.role],
+    );
+    await scoped.query(
+      `update public.invitations
+       set status = 'accepted', accepted_by = $1, accepted_at = now(), updated_at = now()
+       where id = $2`,
+      [userId, invitation.id],
+    );
+  await insertTeamAudit(scoped, invitation.tenantId, userId, "membership.invitation.accepted", invitation.id, {
+    email,
+  });
 }
 
 export async function ensurePostgresInvitableEmail(sql: SqlExecutor, email: string): Promise<void> {

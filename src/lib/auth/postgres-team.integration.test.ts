@@ -132,7 +132,7 @@ describe("Team & invitation flows (real database)", () => {
     const existing = await createUser(sql);
     const { rawToken } = await createPostgresInvitation(sql, tenant.id, owner.id, existing.email, "accountant", futureDate());
 
-    await acceptPostgresInvitation(sql, rawToken, existing.id, existing.email);
+    await sql.withoutSession((scoped) => acceptPostgresInvitation(scoped, rawToken, existing.id, existing.email));
 
     const users = await sql.query("select 1 from public.app_users where email = $1", [existing.email]);
     expect(users.rowCount).toBe(1);

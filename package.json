@@ -19,7 +19,7 @@
     "provision:app-role": "node postgres/scripts/provision-app-role.mjs",
     "backup:database": "node postgres/scripts/backup-database.mjs",
     "restore:drill": "node postgres/scripts/restore-drill.mjs",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run check:migrations && npm run check:secrets && npm run build && npm run check:client-secrets && npm run check:runtime-dependencies"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run test:integration && npm run check:migrations && npm run check:secrets && npm run build && npm run check:client-secrets && npm run check:runtime-dependencies"
   },
   "dependencies": {
     "lucide-react": "^1.41.0",

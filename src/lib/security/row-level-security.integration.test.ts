@@ -63,6 +63,58 @@ afterEach(async () => {
 });
 
 describe("RLS is enforced for the runtime role", () => {
+  it("allows self-signup without RETURNING but refuses reading the new row before identity exists", async () => {
+    const email = "rls.signup@example.test";
+
+    // التسجيل يولّد UUID في التطبيق ويضيف بلا RETURNING: لا توجد هوية بعد تسمح
+    // بقراءة صف app_users. إضافة RETURNING هنا يجب أن تفشل؛ توسيع سياسة SELECT
+    // لحلها سيكشف صفوف حسابات بلا داعٍ.
+    await expect(
+      asAppRole({}, (client) =>
+        client.query("insert into public.app_users (id, email) values (gen_random_uuid(), $1)", [email]),
+      ),
+    ).resolves.toBeTruthy();
+
+    expect(await countAs("app_users", {})).toBe(0);
+
+    await expect(
+      asAppRole({}, (client) =>
+        client.query(
+          "insert into public.app_users (id, email) values (gen_random_uuid(), $1) returning id",
+          ["rls.returning@example.test"],
+        ),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("reveals a staff invitation only through its exact token digest before tenant scope is known", async () => {
+    const fixture = await createTenantWithOwner(ownerSql, { tenantName: "Invite Token Scope" });
+    await createUser(ownerSql, { email: "invite.scope@example.test" });
+    const digest = "a".repeat(64);
+    await ownerSql.query(
+      `insert into public.invitations
+         (tenant_id, invitee_email, role, token_hash, created_by, expires_at)
+       values ($1, 'invite.scope@example.test', 'teacher', $2, $3, now() + interval '1 day')`,
+      [fixture.tenant.id, digest, fixture.owner.id],
+    );
+
+    expect(await countAs("invitations", {})).toBe(0);
+
+    const matched = await asAppRole({}, (client) =>
+      client.query<{ invitee_email: string; account_exists: boolean }>(
+        "select invitee_email::text as invitee_email, account_exists from private.invitation_by_token($1)",
+        [digest],
+      ),
+    );
+    expect(matched.rows.map((row) => row.invitee_email)).toEqual(["invite.scope@example.test"]);
+    expect(matched.rows[0]?.account_exists).toBe(true);
+
+    const wrong = await asAppRole({}, (client) =>
+      client.query("select id from private.invitation_by_token($1)", ["b".repeat(64)]),
+    );
+    expect(wrong.rowCount).toBe(0);
+  });
+
   it("cannot read any tenant row without an access context", async () => {
     await createTenantWithOwner(ownerSql, { tenantName: "Isolation A" });
     await createTenantWithOwner(ownerSql, { tenantName: "Isolation B" });

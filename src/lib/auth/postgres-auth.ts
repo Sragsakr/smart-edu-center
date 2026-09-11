@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 
 import type {
@@ -91,6 +91,12 @@ export async function getPostgresCurrentUser(
  *
  * يعمل بلا جلسة بطبيعته (لا هوية بعد)، والسياسة تسمح بالإضافة فقط حين لا توجد
  * جلسة صالحة — فلا يستطيع حساب موثّق إنشاء حسابات أخرى من هذا المسار.
+ *
+ * **بلا `RETURNING` عمدًا.** صف `app_users` محمي بسياسة قراءة تشترط هوية
+ * (`current_app_user_id` أو جلسة صالحة أو نطاق منصة)، وهذه اللحظة تسبق وجود أي
+ * منها. و`INSERT ... RETURNING` يحتاج قراءة الصف العائد، فتفشل العملية كلها برسالة
+ * مضلّلة عن RLS رغم أن الإضافة نفسها مسموحة. لذلك يُولَّد المعرّف في التطبيق
+ * ويُعاد مباشرة — بلا توسيع أي سياسة ولا كشف أي صف.
  */
 export async function registerPostgresUser(
   sql: TransactionalSqlExecutor,
@@ -98,21 +104,15 @@ export async function registerPostgresUser(
   password: string,
 ): Promise<AuthUserRow> {
   const passwordDigest = await hashPassword(password);
+  const userId = randomUUID();
   return sql.withoutSession(async (transaction) => {
-    const userResult = await transaction.query<AuthUserRow>(
-      `insert into public.app_users (id, email)
-       values (gen_random_uuid(), $1)
-       returning id, email::text as email`,
-      [email],
-    );
-    const user = userResult.rows[0];
-    if (!user) throw new Error("user creation failed");
+    await transaction.query(`insert into public.app_users (id, email) values ($1, $2)`, [userId, email]);
     await transaction.query(
       `insert into public.auth_password_credentials (user_id, password_digest)
        values ($1, $2)`,
-      [user.id, passwordDigest],
+      [userId, passwordDigest],
     );
-    return user;
+    return { id: userId, email };
   });
 }
 

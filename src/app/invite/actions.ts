@@ -78,7 +78,7 @@ export async function loginAndAcceptInvitation(formData: FormData) {
   const user = await authenticatePostgresUser(sql, invitation.email, password);
   if (!user) inviteError(token, "كلمة المرور غير صحيحة");
   try {
-    await acceptPostgresInvitation(sql, token, user.id, user.email);
+    await sql.withoutSession((scoped) => acceptPostgresInvitation(scoped, token, user.id, user.email));
     await createPostgresSession(sql, user.id);
   } catch (error) {
     inviteError(token, error instanceof Error ? error.message : "تعذر قبول الدعوة");
