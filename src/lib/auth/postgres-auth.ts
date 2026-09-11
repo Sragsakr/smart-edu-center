@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import type {
   AccessScopedSqlExecutor,
@@ -9,6 +9,7 @@ import type {
   TransactionalSqlExecutor,
 } from "@/lib/database/sql-executor";
 import { digestSessionToken, SESSION_COOKIE } from "@/lib/auth/session-context";
+import { clientAddress } from "@/lib/security/rate-limit";
 import { hashPassword, verifyPassword } from "./password";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -39,30 +40,65 @@ async function setSessionCookie(token: string, expiresAt: Date): Promise<void> {
   cookieStore.set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
 }
 
+/**
+ * يسجّل بيانات الجهاز للجلسة.
+ *
+ * بلا هذا التسجيل تظهر قائمة الأجهزة فارغة، لأن الجدول كان يُكتب بلا `user_agent`
+ * ولا `ip_address`. و`x-forwarded-for` مدخل غير موثوق، فلا يُخزَّن إلا إن كان
+ * عنوانًا صالحًا فعلًا؛ وإلا يُترك `null` بدل تخزين نص لا معنى له في عمود `inet`.
+ */
+async function sessionDeviceHeaders(): Promise<{ userAgent: string | null; ipAddress: string | null }> {
+  const requestHeaders = await headers();
+  const userAgent = requestHeaders.get("user-agent")?.trim() ?? "";
+  const rawAddress = clientAddress(requestHeaders);
+  return {
+    userAgent: userAgent ? userAgent.slice(0, 400) : null,
+    ipAddress: isStorableAddress(rawAddress) ? rawAddress : null,
+  };
+}
+
+/** عنوان واحد فقط يُخزَّن: IPv4 أو IPv6 بلا منفذ وبلا نص وهمي. */
+function isStorableAddress(value: string): boolean {
+  if (!value || value === "unknown") return false;
+  return /^[0-9a-fA-F:.]+$/.test(value) && (value.includes(".") || value.includes(":"));
+}
+
 export async function createPostgresSession(
   sql: SqlExecutor,
   userId: string,
 ): Promise<void> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const device = await sessionDeviceHeaders();
   await sql.query(
-    `insert into public.auth_sessions (user_id, token_digest, expires_at)
-     values ($1, $2, $3)`,
-    [userId, digestSessionToken(token), expiresAt],
+    `insert into public.auth_sessions (user_id, token_digest, expires_at, user_agent, ip_address)
+     values ($1, $2, $3, $4, $5)`,
+    [userId, digestSessionToken(token), expiresAt, device.userAgent, device.ipAddress],
   );
   await setSessionCookie(token, expiresAt);
 }
 
-export async function clearPostgresSession(sql: SqlExecutor): Promise<void> {
+/**
+ * يسحب الجلسة الحالية ويمحو الكوكي.
+ *
+ * الإبطال يجري **داخل سياق الجلسة** (`withSession`) لا خارجه: `auth_sessions`
+ * صارت محميّة بـRLS، واستعلام بلا سياق لا يجد صفًا فيحدّث صفرًا — أي خروج صامت
+ * يبدو ناجحًا والجلسة ما زالت صالحة. والسياق يمنح أيضًا بصمة الرمز التي تمر بها
+ * سياسة التحديث.
+ */
+export async function clearPostgresSession(sql: TransactionalSqlExecutor): Promise<void> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (token) {
-    await sql.query(
-      `update public.auth_sessions
-       set revoked_at = now(), last_seen_at = now()
-       where token_digest = $1 and revoked_at is null`,
-      [digestSessionToken(token)],
-    );
+  const digest = token ? digestSessionToken(token) : null;
+  if (digest) {
+    await sql.withSession(digest, async (sessionSql) => {
+      await sessionSql.query(
+        `update public.auth_sessions
+         set revoked_at = now(), last_seen_at = now()
+         where token_digest = $1 and revoked_at is null`,
+        [digest],
+      );
+    });
   }
   cookieStore.delete(SESSION_COOKIE);
 }

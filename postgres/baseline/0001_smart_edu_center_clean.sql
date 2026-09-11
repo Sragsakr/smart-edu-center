@@ -1128,9 +1128,75 @@ create policy capability_catalog_platform_update on public.capability_catalog
 create policy capability_catalog_platform_delete on public.capability_catalog
   for delete using (private.has_platform_scope());
 
--- جداول المصادقة (`auth_sessions`, `auth_password_credentials`) خارج RLS عمدًا:
--- لا تحمل tenant_id ولا بيانات أعمال، ومحتواها بصمات فقط، وقراءتها مبنية على
--- حيازة الرمز لا على هوية معروفة. تبقى محميّة بـrevoke وبالبحث بالبصمة.
+-- `auth_sessions`: صارت داخل RLS.
+--
+-- القرار الأصلي في `adr/0007` §٦ أبقاها خارجه لأن قراءتها كانت بحيازة الرمز لا
+-- بهوية معروفة. مهمة إدارة الأجهزة (`P02-08`) أضافت مسار قراءة **بالهوية**
+-- («جلساتي»)، فسقط التبرير، وصار ترك الجدول بلا سياسة يعني أن استعلامًا بنسيان
+-- فلتر المستخدم يقرأ جلسات الجميع مع عناوينهم وأجهزتهم.
+--
+-- والسياسات تغطي ثلاثة مسارات حقيقية معًا:
+--   1. **الهوية:** صاحب الجلسة يقرأ جلساته ويسحبها.
+--   2. **بصمة الرمز:** حائز الرمز يقرأ جلسته قبل أن تُعرف هويته (مسار bootstrap)،
+--      وهو نفس نمط `portal_invitations_token_read`.
+--   3. **استعادة كلمة المرور:** إبطال جلسات صاحب الحساب بعد التحقق من الكود.
+--
+-- المرجع: docs/adr/0007
+alter table public.auth_sessions enable row level security;
+alter table public.auth_sessions force row level security;
+
+-- شرط القراءة يشمل مسار الاستعادة عمدًا: `UPDATE ... WHERE` يُرشَّح بسياسات
+-- **SELECT** أيضًا لا بسياسة UPDATE وحدها، لأن قراءة الصف للعثور عليه تسبق تحديثه.
+-- لولا الفرع الأخير لأبطل تغييرُ كلمة المرور صفرًا من الجلسات بدل أن يُبطلها كلها
+-- — وهي ثغرة صامتة: الاستعادة تنجح والجلسات المسروقة تبقى صالحة.
+create policy auth_sessions_own_read on public.auth_sessions
+  for select using (
+    private.has_platform_scope()
+    or user_id = private.current_app_user_id()
+    or token_digest = nullif(current_setting('app.session_digest', true), '')
+    or user_id = nullif(current_setting('app.password_reset_user_id', true), '')::uuid
+  );
+
+-- **بلا فرع بصمة الرمز في الكتابة عمدًا.** إضافته كانت تسمح لحائز رمز جلسة
+-- **مسحوبة** أن يُعيد إحياءها (`set revoked_at = null`)، فيُستعاد وصول أُبطل —
+-- وهو نقض مباشر لشرط البوابة: الجلسة المسحوبة لا تمنح صلاحيات.
+--
+-- ولا يحتاج أي مسار تطبيقي هذا الفرع: كل كتابة تجري داخل `withSession`، وفيه
+-- تُحلّ الهوية من البصمة نفسها، فيُغطيها شرط `user_id`. وإن كانت الجلسة مسحوبة
+-- أو منتهية فالهوية تُحلّ إلى `null` فيُرفض التعديل — وهو المطلوب بالضبط.
+--
+-- أما فرع القراءة فيبقى: حائز الرمز يقرأ صفّه ليُعرف، وهو قراءة لا كتابة.
+create policy auth_sessions_own_update on public.auth_sessions
+  for update using (
+    private.has_platform_scope()
+    or user_id = private.current_app_user_id()
+    or user_id = nullif(current_setting('app.password_reset_user_id', true), '')::uuid
+  )
+  with check (
+    private.has_platform_scope()
+    or user_id = private.current_app_user_id()
+    or user_id = nullif(current_setting('app.password_reset_user_id', true), '')::uuid
+  );
+
+-- إنشاء الجلسة يسبق وجود أي هوية: لا هوية محلولة ولا بصمة في السياق بعد.
+-- الشرط لا يقرأ جدولًا، فلا يخاطر بعلّة recursion كما لو استدعى `session_user_id`.
+create policy auth_sessions_login_insert on public.auth_sessions
+  for insert with check (
+    private.has_platform_scope()
+    or user_id = private.current_app_user_id()
+    or (
+      private.current_app_user_id() is null
+      and nullif(current_setting('app.session_digest', true), '') is null
+    )
+  );
+
+create policy auth_sessions_platform_delete on public.auth_sessions
+  for delete using (private.has_platform_scope());
+
+-- `auth_password_credentials` تبقى خارج RLS: لا قراءة بالهوية عليها إطلاقًا.
+-- الدخول يمر بـ`private.login_lookup` (security definer) ويبحث بالبريد قبل وجود
+-- هوية، والتغيير والاستعادة يكتبان بمعرّف المستخدم. وبصمة كلمة المرور لا تُعرض
+-- في أي واجهة، فلا مسار قراءة يحتاج سياسة.
 -- المرجع: docs/adr/0007
 
 -- Authorization is enforced by the application layer for this self-managed PostgreSQL target.

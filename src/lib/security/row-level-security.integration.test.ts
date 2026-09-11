@@ -17,15 +17,39 @@ import { addMembership, createBranch, createGuardian, createStudent, createTenan
 
 const ownerSql = testSqlExecutor();
 
+/** ينشئ جلسة بمالك قاعدة البيانات، لأن الاختبار يستهدف قراءتها بدور التطبيق لا إنشاءها. */
+async function insertSession(
+  sql: ReturnType<typeof testSqlExecutor>,
+  userId: string,
+  tokenDigest: string,
+  userAgent: string | null,
+): Promise<void> {
+  await sql.query(
+    `insert into public.auth_sessions (user_id, token_digest, expires_at, user_agent)
+     values ($1, $2, now() + interval '1 day', $3)`,
+    [userId, tokenDigest, userAgent],
+  );
+}
+
 function appConnectionUrl(): string {
   const url = process.env.TEST_DATABASE_URL;
   if (!url) throw new Error("TEST_DATABASE_URL is required for the RLS enforcement tests");
   return appRoleUrl(url).url;
 }
 
+type AppRoleContext = {
+  userId?: string;
+  tenantId?: string;
+  platform?: boolean;
+  /** بصمة رمز الجلسة: مسار bootstrap الذي يقرأ به حائز الرمز جلسته قبل معرفة هويته. */
+  sessionDigest?: string;
+  /** يُضبط بعد التحقق من كود الاستعادة، فيسمح بإبطال جلسات صاحب الحساب. */
+  passwordResetUserId?: string;
+};
+
 /** يفتح اتصالًا بدور التطبيق وينفّذ عملية داخل سياق وصول محدَّد. */
 async function asAppRole<Result>(
-  context: { userId?: string; tenantId?: string; platform?: boolean },
+  context: AppRoleContext,
   operation: (client: Client) => Promise<Result>,
 ): Promise<Result> {
   const client = new Client({ connectionString: appConnectionUrl() });
@@ -37,6 +61,14 @@ async function asAppRole<Result>(
       await client.query("select set_config('app.current_tenant_id', $1, true)", [context.tenantId]);
     }
     if (context.platform) await client.query("select set_config('app.platform_scope', 'on', true)");
+    if (context.sessionDigest) {
+      await client.query("select set_config('app.session_digest', $1, true)", [context.sessionDigest]);
+    }
+    if (context.passwordResetUserId) {
+      await client.query("select set_config('app.password_reset_user_id', $1, true)", [
+        context.passwordResetUserId,
+      ]);
+    }
     const result = await operation(client);
     await client.query("commit");
     return result;
@@ -48,10 +80,7 @@ async function asAppRole<Result>(
   }
 }
 
-async function countAs(
-  table: string,
-  context: { userId?: string; tenantId?: string; platform?: boolean },
-): Promise<number> {
+async function countAs(table: string, context: AppRoleContext): Promise<number> {
   const result = await asAppRole(context, (client) =>
     client.query(`select count(*)::int as count from public.${table}`),
   );
@@ -63,6 +92,118 @@ afterEach(async () => {
 });
 
 describe("RLS is enforced for the runtime role", () => {
+  it("shows an account only its own sessions, by identity and never by a missing filter", async () => {
+    const mine = await createUser(ownerSql);
+    const other = await createUser(ownerSql);
+    await insertSession(ownerSql, mine.id, "a".repeat(64), "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0");
+    await insertSession(ownerSql, other.id, "b".repeat(64), "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15");
+
+    // بلا سياق: صفر، ولو نسي الاستعلام فلتر المستخدم.
+    expect(await countAs("auth_sessions", {})).toBe(0);
+    expect(await countAs("auth_sessions", { userId: mine.id })).toBe(1);
+    // ونطاق المنصة وحده يرى الجميع.
+    expect(await countAs("auth_sessions", { platform: true })).toBe(2);
+  });
+
+  it("lets the holder of a token digest read exactly that session before identity is known", async () => {
+    const user = await createUser(ownerSql);
+    const digest = "c".repeat(64);
+    await insertSession(ownerSql, user.id, digest, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0");
+
+    const byDigest = await asAppRole({ sessionDigest: digest }, (client) =>
+      client.query("select id from public.auth_sessions"),
+    );
+    expect(byDigest.rowCount).toBe(1);
+
+    const byWrongDigest = await asAppRole({ sessionDigest: "d".repeat(64) }, (client) =>
+      client.query("select id from public.auth_sessions"),
+    );
+    expect(byWrongDigest.rowCount).toBe(0);
+  });
+
+  it("refuses revoking another account's session even with an explicit session id", async () => {
+    const mine = await createUser(ownerSql);
+    const other = await createUser(ownerSql);
+    await insertSession(ownerSql, other.id, "e".repeat(64), null);
+
+    const affected = await asAppRole({ userId: mine.id }, (client) =>
+      client.query("update public.auth_sessions set revoked_at = now() where user_id = $1", [other.id]),
+    );
+    expect(affected.rowCount).toBe(0);
+
+    const sessions = await countAs("auth_sessions", { userId: other.id });
+    expect(sessions).toBe(1);
+  });
+
+  it("allows revoking the whole account only after the recovery code was verified", async () => {
+    const user = await createUser(ownerSql);
+    await insertSession(ownerSql, user.id, "f".repeat(64), null);
+
+    // بلا إثبات استعادة: لا وصول.
+    const withoutProof = await asAppRole({}, (client) =>
+      client.query("update public.auth_sessions set revoked_at = now() where user_id = $1", [user.id]),
+    );
+    expect(withoutProof.rowCount).toBe(0);
+
+    // بعد التحقق يُضبط الإعداد، فيقع الإبطال كاملًا كما يقتضي تغيير كلمة المرور.
+    const withProof = await asAppRole({ passwordResetUserId: user.id }, (client) =>
+      client.query("update public.auth_sessions set revoked_at = now() where user_id = $1 and revoked_at is null", [
+        user.id,
+      ]),
+    );
+    expect(withProof.rowCount).toBe(1);
+  });
+
+  it("does not let a revoked session bring itself back to life", async () => {
+    const user = await createUser(ownerSql);
+    const digest = "7".repeat(64);
+    await insertSession(ownerSql, user.id, digest, null);
+    await ownerSql.query("update public.auth_sessions set revoked_at = now() where token_digest = $1", [digest]);
+
+    // حائز رمز جلسة مسحوبة لا يملك إلا بصمتها، ولا هوية محلولة لها. ولو مُنع من
+    // الكتابة لكان قادرًا على `set revoked_at = null` فيستعيد وصولًا أُبطل.
+    const resurrect = await asAppRole({ sessionDigest: digest }, (client) =>
+      client.query("update public.auth_sessions set revoked_at = null where token_digest = $1", [digest]),
+    );
+    expect(resurrect.rowCount).toBe(0);
+
+    const stillRevoked = await ownerSql.query<{ revoked_at: string | null }>(
+      "select revoked_at::text as revoked_at from public.auth_sessions where token_digest = $1",
+      [digest],
+    );
+    expect(stillRevoked.rows[0]?.revoked_at).not.toBeNull();
+
+    // والجلسة المسحوبة لا تُحلّ إلى هوية أصلًا، فلا تمنح أي صلاحية بعدها.
+    const resolved = await asAppRole({ sessionDigest: digest }, (client) =>
+      client.query<{ user_id: string | null }>("select private.session_user_id($1) as user_id", [digest]),
+    );
+    expect(resolved.rows[0]?.user_id).toBeNull();
+  });
+
+  it("refuses creating a session on behalf of another account", async () => {
+    const mine = await createUser(ownerSql);
+    const other = await createUser(ownerSql);
+
+    // إنشاء الجلسة يسبق وجود الهوية، فالسياسة تسمح بالإضافة المباحة فقط.
+    await expect(
+      asAppRole({}, (client) =>
+        client.query(
+          "insert into public.auth_sessions (user_id, token_digest, expires_at) values ($1, $2, now() + interval '1 day')",
+          [other.id, "1".repeat(64)],
+        ),
+      ),
+    ).resolves.toBeTruthy();
+
+    await expect(
+      asAppRole({ userId: mine.id }, (client) =>
+        client.query(
+          "insert into public.auth_sessions (user_id, token_digest, expires_at) values ($1, $2, now() + interval '1 day')",
+          [other.id, "2".repeat(64)],
+        ),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
   it("allows self-signup without RETURNING but refuses reading the new row before identity exists", async () => {
     const email = "rls.signup@example.test";
 

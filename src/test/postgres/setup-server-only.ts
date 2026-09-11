@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 import { assertSafeTestDatabase } from "../../../postgres/scripts/reset-test-database.mjs";
 import { cookieState } from "./test-cookies";
+import { requestState } from "./test-request";
 
 vi.mock("server-only", () => ({}));
 
@@ -17,6 +18,14 @@ const { url } = assertSafeTestDatabase({
 process.env.DATABASE_URL = url;
 
 vi.mock("next/headers", () => ({
+  // الترويسات تحتاجها `createPostgresSession` لتسجيل بيانات الجهاز. الافتراضي
+  // فارغ، ويضبطه الاختبار عبر `setRequestDevice` عندما يكون وصف الجهاز هو المقصود.
+  headers: vi.fn(async () => {
+    const requestHeaders = new Headers();
+    if (requestState.userAgent) requestHeaders.set("user-agent", requestState.userAgent);
+    if (requestState.ipAddress) requestHeaders.set("x-forwarded-for", requestState.ipAddress);
+    return requestHeaders;
+  }),
   cookies: vi.fn(async () => ({
     get: (name: string) => (name === "saboraty_session" && cookieState.token ? { value: cookieState.token } : undefined),
     set: (_name: string, value: string) => {

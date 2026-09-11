@@ -33,6 +33,13 @@ export async function currentSessionDigest(): Promise<string | null> {
 export type AuthenticatedSession = {
   sql: AccessScopedSqlExecutor;
   user: { id: string; email: string };
+  /**
+   * بصمة الرمز للجلسة الحالية.
+   *
+   * تُمرَّر لأن من يحتاج تمييز «هذا الجهاز» عن بقية أجهزة المستخدم — كقائمة
+   * الأجهزة وسحب البقية — لا يملك طريقة أخرى لمعرفة أي جلسة تقرأ الآن.
+   */
+  digest: string;
 };
 
 /** صف المستخدم نفسه — متاح للهوية الموثقة بسياسة `app_users_own_row`. */
@@ -45,12 +52,19 @@ async function loadSessionUser(
   return result.rows[0] ?? null;
 }
 
-async function touchLastSeen(sql: AccessScopedSqlExecutor, userId: string): Promise<void> {
+/**
+ * يحدّث «آخر نشاط» **للجلسة الحالية وحدها**.
+ *
+ * تختاره بصمة الرمز لا معرّف المستخدم: التحديث بمعرّف المستخدم كان يطبع وقت
+ * «الآن» على كل أجهزة المستخدم مع كل طلب، فيفقد عمود «آخر نشاط» معناه في قائمة
+ * الأجهزة ويصير كل جهاز يبدو نشطًا للتو.
+ */
+async function touchLastSeen(sql: AccessScopedSqlExecutor, sessionDigest: string): Promise<void> {
   await sql.query(
     `update public.auth_sessions
      set last_seen_at = now()
-     where user_id = $1 and revoked_at is null and expires_at > now()`,
-    [userId],
+     where token_digest = $1 and revoked_at is null and expires_at > now()`,
+    [sessionDigest],
   );
 }
 
@@ -68,8 +82,8 @@ export async function withSessionUser<Result>(
   const result = await applicationSql().withSession(digest, async (sql) => {
     const user = await loadSessionUser(sql);
     if (!user) return null;
-    await touchLastSeen(sql, user.id);
-    return operation({ sql, user });
+    await touchLastSeen(sql, digest);
+    return operation({ sql, user, digest });
   });
   return result;
 }
@@ -116,9 +130,9 @@ export async function withPlatformScope<Result>(
     );
     if (admin.rowCount === 0) return { status: "forbidden" } as const;
 
-    await touchLastSeen(sql, user.id);
+    await touchLastSeen(sql, digest);
     await sql.enterPlatformScope();
-    return { status: "authorized", value: await operation({ sql, user }) } as const;
+    return { status: "authorized", value: await operation({ sql, user, digest }) } as const;
   });
   return outcome;
 }

@@ -3,7 +3,8 @@ import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { hashPassword } from "@/lib/auth/password";
-import type { SqlExecutor } from "@/lib/database/sql-executor";
+import { revokeAllAccountSessions } from "@/lib/auth/account-sessions";
+import type { SqlExecutor, TransactionalSqlExecutor } from "@/lib/database/sql-executor";
 
 type PasswordResetRow = {
   id: string;
@@ -140,20 +141,32 @@ async function recordPasswordResetAudit(
   );
 }
 
+/**
+ * يستهلك كود الاستعادة: يغيّر كلمة المرور، ويُبطل **كل** جلسات صاحب الحساب.
+ *
+ * إبطال الجلسات شرط أمني لا تفصيل: من استعاد كلمة المرور يريد أن يخرج أي مستخدم
+ * آخر دخل الحساب قبله. ولأن `auth_sessions` محميّة بـRLS، يحتاج هذا التحديث سياقًا
+ * يسمح به؛ فيُضبط `app.password_reset_user_id` **بعد** التحقق من الكود، ولمستخدم
+ * الطلب وحده.
+ *
+ * وهذا يستلزم معاملة حقيقية لا بديلًا يشبهها: الإعداد `LOCAL` يُصفَّر مع نهاية
+ * المعاملة، وضبطه خارج معاملة يجعله يبقى على اتصال الـpool فيتسرّب إلى طلب آخر.
+ */
 export async function consumePostgresPasswordReset(
-  sql: SqlExecutor,
+  sql: TransactionalSqlExecutor,
   email: string,
   recoveryCode: string,
   password: string,
 ): Promise<boolean> {
   const passwordDigest = await hashPassword(password);
-  return (async (transaction: SqlExecutor) => {
+  return sql.transaction(async (transaction) => {
     const request = await findLatestReset(transaction, email);
     if (!request) return false;
     if (!isValidRecoveryCode(request, recoveryCode)) {
       await recordFailedRecoveryAttempt(transaction, request);
       return false;
     }
+    await transaction.query(`select set_config('app.password_reset_user_id', $1, true)`, [request.user_id]);
     await transaction.query(
       `update public.auth_password_credentials
        set password_digest = $1, password_changed_at = now()
@@ -166,13 +179,10 @@ export async function consumePostgresPasswordReset(
        where id = $1`,
       [request.id],
     );
-    await transaction.query(
-      `update public.auth_sessions set revoked_at = now()
-       where user_id = $1 and revoked_at is null`,
-      [request.user_id],
-    );
+    // القاعدة نفسها التي يستخدمها سحب الأجهزة: إبطال فعلي لكل جلسة قائمة.
+    await revokeAllAccountSessions(transaction, { userId: request.user_id });
     return true;
-  })(sql)
+  });
 }
 
 async function recordFailedRecoveryAttempt(
