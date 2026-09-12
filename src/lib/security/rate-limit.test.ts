@@ -125,3 +125,26 @@ describe("describeRetryAfter", () => {
     expect(describeRetryAfter(-5)).toContain("1 ثانية");
   });
 });
+
+describe("password change scope", () => {
+  /**
+   * تغيير كلمة المرور يتحقق من الكلمة الحالية، فمن سرق جلسة قد يحاول تخمينها من هذا
+   * المسار. ولهذا يُحدّ كبقية مسارات تخمين الأسرار، لا كمسارات التسليم.
+   */
+  it("is limited, because the endpoint guesses the current password", () => {
+    expect(rateLimitScopes).toContain("password_change");
+    expect(rateLimitPolicies.password_change.limit).toBeLessThanOrEqual(10);
+  });
+
+  it("keeps its ceiling no looser than the code-redemption path", () => {
+    expect(rateLimitPolicies.password_change.limit).toBeLessThanOrEqual(
+      rateLimitPolicies.password_reset_redeem.limit,
+    );
+  });
+
+  it("has its own bucket, so exhausting it cannot lock out login", () => {
+    expect(bucketKey("password_change", "owner@example.test")).not.toBe(
+      bucketKey("login", "owner@example.test"),
+    );
+  });
+});

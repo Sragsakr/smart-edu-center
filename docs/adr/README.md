@@ -13,3 +13,4 @@
 | [0005](0005-canonical-baseline-and-disposable-reset.md) | Baseline كانوني واحد وReset قابل للتنفيذ قبل Schema Freeze | Accepted |
 | [0006](0006-private-storage-contract.md) | عقد التخزين الخاص ومزوّده | Accepted |
 | [0007](0007-tenant-isolation-row-level-security.md) | عزل الـTenants بـRLS بسياق معاملة واحد | Accepted |
+| [0008](0008-platform-impersonation-scope.md) | تخفي إدارة المنصة وحدوده | Accepted — قرار مالك بتجاوز توصية هندسية |

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { Bell, BookOpen, CalendarCheck, ChevronDown, GraduationCap, LayoutDashboard, Menu, MessageCircle, MonitorSmartphone, MoreHorizontal, Settings, Users, UsersRound, Wallet, X } from "lucide-react";
+import { Bell, BookOpen, CalendarCheck, ChevronDown, GraduationCap, KeyRound, LayoutDashboard, Menu, MessageCircle, MonitorSmartphone, MoreHorizontal, Settings, Users, UsersRound, Wallet, X } from "lucide-react";
 
 import { signOut } from "@/app/auth/actions";
 import { ActionSubmitButton } from "@/app/team/team-client";
@@ -19,6 +19,7 @@ const items = [
   { label: "الإعدادات", icon: Settings, href: "/" },
   { label: "الفريق والدعوات", icon: UsersRound, href: "/team" },
   { label: "الأجهزة والجلسات", icon: MonitorSmartphone, href: "/account/sessions" },
+  { label: "كلمة المرور", icon: KeyRound, href: "/account/password" },
 ] as const;
 
 function Logo() {

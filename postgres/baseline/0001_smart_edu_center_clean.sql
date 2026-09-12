@@ -943,6 +943,22 @@ $$;
 
 revoke all on function private.invitation_by_token(text) from public;
 
+-- تُرجع بصمة كلمة مرور **صاحب الجلسة الحالية وحده**.
+--
+-- `auth_password_credentials` خارج RLS عن قصد ([`adr/0007`] §٦)، فلا تمنعه سياسة من
+-- قراءة صف أي حساب. وتغيير كلمة المرور يحتاج التحقق من الكلمة الحالية، وهو تحقق
+-- يستلزم البصمة. فالدالة تضيّق القراءة إلى الهوية المحلولة من الجلسة وحدها:
+-- لا تقبل معرّفًا، فلا يمكن استعمالها لسؤال أي حساب آخر.
+create or replace function private.current_password_digest() returns text
+language sql stable security definer set search_path = public, pg_temp as $$
+  select c.password_digest
+  from public.auth_password_credentials c
+  where c.user_id = private.current_app_user_id()
+  limit 1
+$$;
+
+revoke all on function private.current_password_digest() from public;
+
 revoke all on function private.session_user_id(text) from public;
 revoke all on function private.login_lookup(citext) from public;
 revoke all on function private.workspace_request_owner(uuid) from public;

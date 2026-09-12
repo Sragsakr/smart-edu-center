@@ -138,6 +138,7 @@ Anything that presents the product to a user (landing page, pricing) must label 
 - `students.user_id` and `guardians.user_id` are written **only** through the trusted portal-claim flow (`portal_invitations`): token possession **and** a verified-email match **and** an unclaimed record, all three together. Never write that column from a generic CRUD path — it decides who can enter a portal under that person's name.
 - `SELECT ... FOR UPDATE` applies the **UPDATE** policy, not just SELECT. Any locking read must therefore run inside a tenant context; a token-only path cannot lock a row.
 - Access context lives exactly as long as its transaction. `set_config(..., true)` is `LOCAL`, so it is cleared at `COMMIT`/`ROLLBACK`. Every authorization helper in `src/lib/authorization/server.ts` therefore takes an **operation callback** and runs it inside the same transaction; the scoped executor throws `access context expired` if used after the transaction ends, instead of silently returning zero rows.
+- A password change must verify the current password through a narrow function that takes **no identifier** (`private.current_password_digest()`), so it can only ever read the session holder's credential. `auth_password_credentials` stays outside RLS, so without that narrowing any account's digest could be asked for. A successful change revokes every *other* session and keeps the current one.
 - Deactivating a membership must block every sensitive action in that workspace on the very next request, with no cache and no session revocation. Sessions belong to the account, not to a membership, so deactivating in one workspace must leave the same identity's other workspaces fully working.
 - Every tenant-sensitive Server Action goes through the single unified guard (`requirePostgresTenantCapability` / `requireTenantCapability`); it verifies the membership is **active**, applies the capability, and opens the tenant scope inside one transaction. A hand-rolled role check that reads `role` but not `active` is how a deactivated owner once transferred ownership. Never duplicate that guard.
 - RLS owns tenant isolation, not membership state. `active` is business state that management screens legitimately read — the team page must list deactivated members to reactivate them. Enforcing it in RLS would hide those rows and break that screen, so it stays at the DAL entry point.
@@ -148,6 +149,21 @@ Anything that presents the product to a user (landing page, pricing) must label 
 - A workspace must always keep at least one active owner. Enforced in the database by the deferred constraint trigger `memberships_require_active_owner` (a row-level `CHECK` cannot express this invariant, and a unique index would forbid duplicates rather than absence), and made legible by `src/lib/auth/tenant-ownership.ts`. Deactivation of an owner is allowed only while another active owner remains.
 - Parent access is relationship-scoped: guardian RLS may read only students linked through `student_guardians` and only data belonging to those children.
 - LMS enablement must eventually come from an explicit product entitlement, not tenant type or user role.
+
+## Platform impersonation
+
+Platform Staff may act on behalf of any user, with no exception, including changing a password, an email, or transferring ownership. This is an explicit owner decision, recorded in [`docs/adr/0008`](docs/adr/0008-platform-impersonation-scope.md) together with the accepted risks. It overrides the narrower constraint that earlier appeared in the plan line for `P15-06`.
+
+Six boundaries are **correctness requirements, not limitations**, and none of them may be dropped:
+
+1. Audit names **both** parties — the platform admin and the impersonated user. Without this the log states the user did something they did not do, which corrupts evidence rather than merely omitting it.
+2. A reason is required at the start, and the audit records both the start and the end.
+3. The session expires on its own; never an unbounded session.
+4. A visible banner shows for the whole session.
+5. A platform admin cannot impersonate another platform admin.
+6. Platform routes stay unreachable from inside an impersonation session.
+
+Revisit is mandatory at `P16-03` and at the first real Production customer.
 
 ## Cross-tenant surface (IDOR/BOLA)
 

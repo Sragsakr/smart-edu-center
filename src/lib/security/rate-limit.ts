@@ -21,6 +21,7 @@ export const rateLimitScopes = [
   "signup",
   "password_reset_request",
   "password_reset_redeem",
+  "password_change",
   "invite_accept",
   "bootstrap",
 ] as const;
@@ -86,6 +87,15 @@ export const rateLimitPolicies: Record<RateLimitScope, RateLimitPolicy> = {
     windowSeconds: 15 * 60,
     message: "محاولات إدخال كود كثيرة لهذا الحساب. انتظر قليلًا ثم حاول مرة أخرى",
     addressMessage: "محاولات إدخال أكواد كثيرة من هذا المصدر. انتظر قليلًا ثم حاول مرة أخرى",
+  },
+  password_change: {
+    // تغيير كلمة المرور يتحقق من الكلمة الحالية، فمن سرق جلسة قد يحاول تخمينها.
+    // الحدّ هنا يقيّد ذلك دون أن يزعج من يغيّرها عن قصد مرة أو مرتين.
+    limit: 5,
+    addressLimit: 20,
+    windowSeconds: 15 * 60,
+    message: "محاولات تغيير كلمة المرور كثيرة لهذا الحساب. انتظر قليلًا ثم حاول مرة أخرى",
+    addressMessage: "محاولات تغيير كلمات مرور كثيرة من هذا المصدر. انتظر قليلًا ثم حاول مرة أخرى",
   },
   invite_accept: {
     limit: 12,
