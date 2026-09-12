@@ -149,6 +149,12 @@ Anything that presents the product to a user (landing page, pricing) must label 
 - Parent access is relationship-scoped: guardian RLS may read only students linked through `student_guardians` and only data belonging to those children.
 - LMS enablement must eventually come from an explicit product entitlement, not tenant type or user role.
 
+## Cross-tenant surface (IDOR/BOLA)
+
+Every Server Action and Route Handler is enumerated in [`docs/CROSS_TENANT_MATRIX.md`](docs/CROSS_TENANT_MATRIX.md) with the identifiers it accepts from the client and the path that refuses them. Read it before adding an action that takes a resource id, and add a row plus a test case first.
+
+An identifier supplied by the client never grants access by itself. Each refusal test proves **two** things: the refusal, and that the target resource is unchanged — refusing after writing is a failure, not a success. Hiding a control is not a boundary.
+
 ## Security invariants
 
 - Tenant and relationship isolation are mandatory in both DAL filters and database RLS.
