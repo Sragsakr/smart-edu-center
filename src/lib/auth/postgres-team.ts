@@ -5,6 +5,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "./password";
 import { withSessionUser } from "@/lib/auth/session-context";
 import { capabilityReport } from "@/lib/authorization/access-contract";
+import { ROLE_AUTHORITY_MESSAGE, canAssignRole } from "@/lib/authorization/role-authority";
 import {
   capabilityDecision,
   tenantCapabilities,
@@ -28,6 +29,16 @@ export function tokenPair(): { raw: string; hash: string } {
 
 export function assertAssignableRole(role: string): asserts role is MemberRole {
   if (!ASSIGNABLE_ROLES.has(role as MemberRole)) throw new Error("اختر صلاحية صحيحة");
+}
+
+/**
+ * يتحقق من أن الفاعل يملك سلطة منح الدور المطلوب، لا من أن الدور قيمة صحيحة فقط.
+ *
+ * الفحصان منفصلان عمدًا: `assertAssignableRole` تخصّ صحة المدخل، وهذه تخصّ السلطة.
+ * وخلطُهما هو ما أتاح لمشرف أن يدعو مشرفًا آخر.
+ */
+export function assertRoleAuthority(actorRole: MemberRole, targetRole: MemberRole): void {
+  if (!canAssignRole(actorRole, targetRole)) throw new Error(ROLE_AUTHORITY_MESSAGE);
 }
 
 /**
@@ -371,9 +382,10 @@ export async function insertTeamAudit(
 }
 
 export async function updatePostgresInvitation(
-  sql: SqlExecutor,
+  sql: AccessScopedSqlExecutor,
   tenantId: string,
   userId: string,
+  actorRole: MemberRole,
   invitationId: string,
   mode: "resend" | "revoke",
 ): Promise<{ rawToken?: string; email?: string; role?: MemberRole }> {
@@ -384,6 +396,9 @@ export async function updatePostgresInvitation(
   );
   const invitation = current.rows[0];
   if (!invitation || invitation.status !== "pending") throw new Error("الدعوة غير قابلة للتعديل");
+  // نفس سقف السلطة على الإنشاء: من لا يستطيع منح دور لا يستطيع إدارته بعد إنشائه.
+  // ولولا هذا لكان مشرفٌ يلغي دعوة مشرف آخر أو يعيد إرسالها، وهو ما تنص المصفوفة على منعه.
+  assertRoleAuthority(actorRole, invitation.role);
   if (mode === "revoke") {
     await sql.query(
       `update public.invitations set status = 'revoked', revoked_at = now(), updated_at = now()

@@ -29,6 +29,8 @@
 |---|---|---|---|
 | `createInvitation` | `tenant_id`, `email`, `role` | `tenant_id` لمساحة أخرى | لا صف دعوة يُنشأ في المساحة الأخرى |
 | `createInvitation` | `role` | `role = owner` | لا دعوة بصف مالك (الملكية لها مسار مستقل) |
+| `createInvitation` | `role` | `role = admin` من فاعل `admin` | لا دعوة تُنشأ (سقف سلطة الدور) |
+| `resendInvitation`, `revokeInvitation` | `invitation_id` | دعوة بدور أعلى من سلطة الفاعل | الحالة والرمز والدور كما هي |
 | `resendInvitation` | `tenant_id`, `invitation_id` | دعوة مساحة أخرى | الحالة والرمز والصلاحية كما هي |
 | `revokeInvitation` | `tenant_id`, `invitation_id` | دعوة مساحة أخرى | تبقى `pending` |
 | `deactivateMembership` | `tenant_id`, `user_id` | عضو مساحة أخرى | العضوية `active = true` |
@@ -70,6 +72,16 @@
 | `/api/readiness` | اكتمال المخطط | لا بيانات مساحة ولا مستخدمين |
 
 لا يحمل أي منهما معرّف مساحة، ولا يُعيد صفوفًا من جداول الأعمال.
+
+## سقف سلطة الدور
+
+سطح آخر غير العبور بين المساحات لكنه من نفس العائلة: **دور يستطيع منح دور أعلى من سلطته**. القاعدة في `src/lib/authorization/role-authority.ts`، وتُطبَّق عند إنشاء الدعوة وعند إدارتها، ومحروسة باختبار مطابقة على جدول `RBAC_MATRIX.md` §5.
+
+| الفاعل | يمنح | لا يمنح |
+|---|---|---|
+| `owner` | `admin`, `teacher`, `receptionist`, `accountant` | `owner` (له مسار مستقل) |
+| `admin` | `teacher`, `receptionist`, `accountant` | `admin`, `owner` |
+| البقية | لا شيء | الكل |
 
 ## ما لا تُثبته هذه المصفوفة
 

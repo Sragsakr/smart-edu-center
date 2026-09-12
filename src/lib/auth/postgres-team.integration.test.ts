@@ -78,14 +78,18 @@ describe("Team & invitation flows (real database)", () => {
     const invitationRow = await sql.query<{ id: string }>("select id from public.invitations where invitee_email = $1", [email]);
     const invitationId = invitationRow.rows[0]!.id;
 
-    const resent = await updatePostgresInvitation(sql, tenant.id, owner.id, invitationId, "resend");
+    const resent = await sql.withoutSession((scoped) =>
+      updatePostgresInvitation(scoped, tenant.id, owner.id, "owner", invitationId, "resend"),
+    );
     expect(resent.rawToken).toBeDefined();
     expect(resent.rawToken).not.toBe(created.rawToken);
 
     const oldTokenPreview = await getPostgresInvitationPreview(sql, created.rawToken);
     expect(oldTokenPreview).toBeNull();
 
-    await updatePostgresInvitation(sql, tenant.id, owner.id, invitationId, "revoke");
+    await sql.withoutSession((scoped) =>
+      updatePostgresInvitation(scoped, tenant.id, owner.id, "owner", invitationId, "revoke"),
+    );
     const revokedPreview = await getPostgresInvitationPreview(sql, resent.rawToken!);
     expect(revokedPreview?.status).toBe("revoked");
 

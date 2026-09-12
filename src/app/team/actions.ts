@@ -8,6 +8,7 @@ import type { MemberRole, TenantCapability } from "@/lib/authorization/policy";
 import type { AccessScopedSqlExecutor } from "@/lib/database/sql-executor";
 import {
   assertAssignableRole,
+  assertRoleAuthority,
   createPostgresInvitation,
   ensurePostgresInvitableEmail,
   requirePostgresTenantCapability,
@@ -58,7 +59,9 @@ export async function createInvitation(formData: FormData) {
   let rawToken: string;
   try {
     assertAssignableRole(role);
-    rawToken = await withTeamContext(tenantId, "invitations.create", async ({ sql, userId }) => {
+    rawToken = await withTeamContext(tenantId, "invitations.create", async ({ sql, userId, role: actorRole }) => {
+      // السلطة على الدور تُفحص داخل السياق: دور الفاعل معروف هنا وحده.
+      assertRoleAuthority(actorRole, role);
       await ensurePostgresInvitableEmail(sql, email);
       const created = await createPostgresInvitation(sql, tenantId, userId, email, role, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
       return created.rawToken;
@@ -77,8 +80,8 @@ export async function resendInvitation(formData: FormData) {
   const invitationId = String(formData.get("invitation_id") ?? "");
   let rawToken: string | undefined;
   try {
-    rawToken = await withTeamContext(tenantId, "invitations.resend", async ({ sql, userId }) =>
-      (await updatePostgresInvitation(sql, tenantId, userId, invitationId, "resend")).rawToken,
+    rawToken = await withTeamContext(tenantId, "invitations.resend", async ({ sql, userId, role }) =>
+      (await updatePostgresInvitation(sql, tenantId, userId, role, invitationId, "resend")).rawToken,
     );
   } catch (error) {
     fail(tenantId, errorMessage(error));
@@ -93,8 +96,8 @@ export async function revokeInvitation(formData: FormData) {
   const tenantId = String(formData.get("tenant_id") ?? "");
   const invitationId = String(formData.get("invitation_id") ?? "");
   try {
-    await withTeamContext(tenantId, "invitations.revoke", ({ sql, userId }) =>
-      updatePostgresInvitation(sql, tenantId, userId, invitationId, "revoke"),
+    await withTeamContext(tenantId, "invitations.revoke", ({ sql, userId, role }) =>
+      updatePostgresInvitation(sql, tenantId, userId, role, invitationId, "revoke"),
     );
   } catch (error) {
     fail(tenantId, errorMessage(error));

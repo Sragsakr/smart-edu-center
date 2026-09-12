@@ -420,3 +420,116 @@ describe("public API routes expose no tenant or account data", () => {
     expect(readiness.length).toBe(0);
   });
 });
+
+describe("no role can grant a role above its own authority", () => {
+  /** مساحة فيها مالك ومشرف، والمشرف هو الفاعل. */
+  async function seedAdminActor() {
+    const { tenant, owner } = await createTenantWithOwner(sql, {
+      tenantName: "Escalation Guard",
+      productLevel: "management_platform",
+    });
+    await grantEntitlements(sql, tenant.id, "management_platform");
+    const admin = await createUser(sql);
+    await addMembership(sql, tenant.id, admin.id, "admin");
+    await signInAs(admin.id);
+    return { tenant, owner, admin };
+  }
+
+  it("refuses an admin inviting another admin", async () => {
+    const { tenant } = await seedAdminActor();
+
+    const outcome = await callAction(createInvitation, {
+      tenant_id: tenant.id,
+      email: "peer.admin@example.test",
+      role: "admin",
+    });
+
+    expect(outcome.redirectedTo).toContain("error=");
+    const created = await sql.query<{ n: number }>(
+      "select count(*)::int as n from public.invitations where invitee_email = 'peer.admin@example.test'",
+    );
+    expect(created.rows[0]?.n).toBe(0);
+  });
+
+  it("still lets an admin invite the operational roles", async () => {
+    const { tenant } = await seedAdminActor();
+
+    const outcome = await callAction(createInvitation, {
+      tenant_id: tenant.id,
+      email: "plain.teacher@example.test",
+      role: "teacher",
+    });
+
+    expect(outcome.redirectedTo).toContain("invite=");
+    const created = await sql.query<{ role: string }>(
+      "select role::text as role from public.invitations where invitee_email = 'plain.teacher@example.test'",
+    );
+    expect(created.rows[0]?.role).toBe("teacher");
+  });
+
+  it("refuses an admin resending or revoking an admin invitation created by the owner", async () => {
+    const { tenant, owner, admin } = await seedAdminActor();
+    const peer = await createPostgresInvitation(
+      sql,
+      tenant.id,
+      owner.id,
+      "owner.made.admin@example.test",
+      "admin",
+      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    );
+
+    const resend = await callAction(resendInvitation, { tenant_id: tenant.id, invitation_id: peer.id });
+    expect(resend.redirectedTo).toContain("error=");
+
+    const revoke = await callAction(revokeInvitation, { tenant_id: tenant.id, invitation_id: peer.id });
+    expect(revoke.redirectedTo).toContain("error=");
+
+    // الدعوة كما أنشأها المالك: معلّقة، وبرمزها الأصلي، ودورها admin.
+    const after = await sql.query<{ status: string; role: string; token_hash: string }>(
+      "select status::text as status, role::text as role, token_hash from public.invitations where id = $1",
+      [peer.id],
+    );
+    expect(after.rows[0]?.status).toBe("pending");
+    expect(after.rows[0]?.role).toBe("admin");
+    expect(admin.id).toBeTruthy();
+  });
+
+  it("still lets the owner manage the admin invitation it created", async () => {
+    const { tenant, owner, admin } = await seedAdminActor();
+    await signInAs(owner.id);
+    const peer = await createPostgresInvitation(
+      sql,
+      tenant.id,
+      owner.id,
+      "owner.manages@example.test",
+      "admin",
+      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    );
+
+    const outcome = await callAction(revokeInvitation, { tenant_id: tenant.id, invitation_id: peer.id });
+
+    expect(outcome.redirectedTo).toContain("success=");
+    const after = await sql.query<{ status: string }>(
+      "select status::text as status from public.invitations where id = $1",
+      [peer.id],
+    );
+    expect(after.rows[0]?.status).toBe("revoked");
+    expect(admin.id).toBeTruthy();
+  });
+
+  it("refuses an admin granting ownership by invitation", async () => {
+    const { tenant } = await seedAdminActor();
+
+    const outcome = await callAction(createInvitation, {
+      tenant_id: tenant.id,
+      email: "wannabe.owner@example.test",
+      role: "owner",
+    });
+
+    expect(outcome.redirectedTo).toContain("error=");
+    const created = await sql.query<{ n: number }>(
+      "select count(*)::int as n from public.invitations where invitee_email = 'wannabe.owner@example.test'",
+    );
+    expect(created.rows[0]?.n).toBe(0);
+  });
+});

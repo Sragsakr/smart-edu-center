@@ -8,6 +8,7 @@ function entitlementKeys(): string[] {
   return capabilityCatalog.map((entry) => entry.key);
 }
 import type { CapabilityDecision } from "./policy";
+import { assignableRolesFor, canAssignRole } from "./role-authority";
 
 /**
  * مطابقة `docs/RBAC_MATRIX.md` §4 بالكود.
@@ -179,5 +180,32 @@ describe("capability hygiene", () => {
     }
     expect(teacherDeclared.size).toBeGreaterThan(10);
     expect(teacherDeclared.size).toBeLessThan(tenantCapabilities.length);
+  });
+});
+
+describe("role authority matches docs/RBAC_MATRIX.md section 5 (Memberships / team)", () => {
+  /**
+   * الجدول ينص: `owner` يدير كل الأدوار، و`admin` يدير `teacher/receptionist/accountant`
+   * ولا يرفع مشرفًا آخر، و«لا يوجد Self role escalation لأي دور». وهذه القاعدة كانت
+   * غائبة عن الكود، فأُضيفت في `role-authority.ts`. والاختبار يمنع انحرافها لاحقًا.
+   */
+  const matrixTable: Record<MemberRole, readonly MemberRole[]> = {
+    owner: ["admin", "teacher", "receptionist", "accountant"],
+    admin: ["teacher", "receptionist", "accountant"],
+    teacher: [],
+    receptionist: [],
+    accountant: [],
+  };
+
+  for (const actorRole of memberRoles) {
+    it(`keeps ${actorRole} within the roles the matrix allows it to assign`, () => {
+      expect([...assignableRolesFor(actorRole)]).toEqual(matrixTable[actorRole]);
+    });
+  }
+
+  it("denies every role the power to escalate itself", () => {
+    for (const actorRole of memberRoles) {
+      expect(canAssignRole(actorRole, actorRole)).toBe(false);
+    }
   });
 });
